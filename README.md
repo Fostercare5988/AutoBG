@@ -4,9 +4,7 @@
 [![Interface](https://img.shields.io/badge/interface-1.12.1%20%2F%20OctoWOW-orange.svg)](https://github.com/fostercare123/AutoBG)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/fostercare123/AutoBG)
 
-**AutoBG** is a high-performance, lightweight World of Warcraft addon built from scratch for **Vanilla 1.12.1** and modern enhanced clients (such as **OctoWOW**, **SuperWoW**, and **NamPower**). 
-
-It automates queue handling, provides objective capture timers with faction color-coding, tracks Warsong Gulch Flag Carriers with interactive unit frames, and synchronizes the global 30-second Spirit Healer wave across all battlegrounds.
+**AutoBG** is a lightweight World of Warcraft addon built from scratch for **Vanilla 1.12.1** and modern enhanced clients. 
 
 ---
 
