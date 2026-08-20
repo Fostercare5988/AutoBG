@@ -1,0 +1,13 @@
+## Interface: 11200
+## Title: AutoBG
+## Notes: Automated Battleground queue manager, multi-source objective timers, and Warsong Flag Carrier tracker for WoW 1.12.1 (Vanilla & OctoWOW).
+## Author: fostercare123
+## Version: 1.0.0
+## SavedVariables: AutoBG_Settings
+## X-Category: Battlegrounds & PvP
+## X-Website: https://github.com/fostercare123/AutoBG
+
+AutoBG.lua
+AutoBG_Options.lua
+AutoBG_Timers.lua
+AutoBG_FC.lua
