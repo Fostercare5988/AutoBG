@@ -77,8 +77,61 @@ local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minW
     return frame
 end
 
+local function CreateRespawnFrame(name, xOffset, yOffset)
+    local frame = CreateFrame("Frame", name, UIParent)
+    frame:SetWidth(110)
+    frame:SetHeight(38)
+    frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
+    frame:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    frame:SetBackdropColor(0, 0, 0, 0.8)
+    frame:EnableMouse(true)
+    frame:SetMovable(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function() this:StartMoving() end)
+    frame:SetScript("OnDragStop", function()
+        this:StopMovingOrSizing()
+        if AutoBG_SavePosition then
+            AutoBG_SavePosition(this, name)
+        end
+    end)
+    frame:Hide()
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    title:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -6)
+    title:SetText("Respawn")
+
+    local timeText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    timeText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -6)
+    timeText:SetText("0:30")
+
+    local bar = CreateFrame("StatusBar", name .. "Bar", frame)
+    bar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 8, 7)
+    bar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 7)
+    bar:SetHeight(8)
+    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    bar:SetMinMaxValues(0, 30)
+    bar:SetValue(30)
+    bar:SetStatusBarColor(0.1, 0.85, 0.1)
+
+    local barBg = bar:CreateTexture(nil, "BACKGROUND")
+    barBg:SetAllPoints(bar)
+    barBg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    barBg:SetVertexColor(0.2, 0.2, 0.2, 0.8)
+
+    frame.title = title
+    frame.timeText = timeText
+    frame.bar = bar
+
+    return frame
+end
+
 local QueueFrame = CreateDraggableTimerFrame("AutoBG_QueueFrame", "BG Queues", -220, -100, 130)
-local RespawnFrame = CreateDraggableTimerFrame("AutoBG_RespawnFrame", "Respawn", 0, -100, 80)
+local RespawnFrame = CreateRespawnFrame("AutoBG_RespawnFrame", 0, -100)
 local NodeFrame = CreateDraggableTimerFrame("AutoBG_NodeFrame", "AB Nodes", 220, -100, 160)
 local AVNodeFrame = CreateDraggableTimerFrame("AutoBG_AVNodeFrame", "AV Nodes", 220, -150, 160)
 local WSGFlagFrame = CreateDraggableTimerFrame("AutoBG_WSGFlagFrame", "WSG Timers", -110, -150, 140)
@@ -306,10 +359,8 @@ ControllerFrame:SetScript("OnUpdate", function()
     WSGFlagFrame:UpdateSize(wsgIndex)
 
     -- 4. Respawn Timer (Spirit Healer 30s Multi-Source Synchronized Wave)
-    local respawnIndex = 1
     local isInstance, instanceType = IsInInstance()
     local inBG = (isInstance and instanceType == "pvp")
-    local isDead = UnitIsDead("player") or UnitIsGhost("player")
 
     if inBG then
         local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
@@ -334,33 +385,43 @@ ControllerFrame:SetScript("OnUpdate", function()
 
     if AutoBG_Settings.RessTimer then
         if isTestAll then
-            local fs = RespawnFrame:GetOrCreateFontString(1)
-            fs:SetText("|cFF00FF000:30|r")
-            fs:Show()
-            respawnIndex = 2
+            RespawnFrame.timeText:SetText("|cFF00FF000:24|r")
+            RespawnFrame.bar:SetValue(24)
+            RespawnFrame.bar:SetStatusBarColor(0.1, 0.9, 0.2)
+            RespawnFrame:Show()
         elseif inBG and spiritHealerSyncTime > 0 then
             local elapsedSinceSync = now - spiritHealerSyncTime
             local remaining = 30 - math.mod(elapsedSinceSync, 30)
-            local fs = RespawnFrame:GetOrCreateFontString(1)
             local numRemaining = math.ceil(remaining)
             if numRemaining <= 0 then numRemaining = 30 end
 
-            local color = "|cFF00FF00"
-            if isDead then
-                color = "|cFF00FF00"
-            elseif numRemaining <= 2 then
-                color = "|cFFFF8000" -- Orange: Imminent wave!
-            elseif numRemaining <= 5 then
-                color = "|cFFFFFF00" -- Yellow: Wave approaching
+            RespawnFrame.bar:SetValue(remaining)
+
+            local r, g, b, colorCode
+            if numRemaining > 10 then
+                r, g, b = 0.1, 0.9, 0.2
+                colorCode = "|cFF00FF00"
+            elseif numRemaining > 5 then
+                r, g, b = 1.0, 0.85, 0.0
+                colorCode = "|cFFFFFF00"
+            elseif numRemaining > 2 then
+                r, g, b = 1.0, 0.5, 0.0
+                colorCode = "|cFFFF8000"
+            else
+                r, g, b = 1.0, 0.15, 0.15
+                colorCode = "|cFFFF2020"
             end
 
+            RespawnFrame.bar:SetStatusBarColor(r, g, b)
             local prefix = spiritHealerSynced and "" or "~"
-            fs:SetText(color .. prefix .. FormatTime(numRemaining) .. "|r")
-            fs:Show()
-            respawnIndex = 2
+            RespawnFrame.timeText:SetText(colorCode .. prefix .. FormatTime(numRemaining) .. "|r")
+            RespawnFrame:Show()
+        else
+            RespawnFrame:Hide()
         end
+    else
+        RespawnFrame:Hide()
     end
-    RespawnFrame:UpdateSize(respawnIndex)
 
     -- 5. Queue Timers
     local queueIndex = 1
@@ -453,50 +514,31 @@ local function ParseCombatMessage(msg, ev)
         assaultingFaction = "Alliance"
     end
 
-    -- Node Assaults / Claims (AB: 60s, AV: 300s)
-    if string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "claims") or string.find(lowerMsg, "under attack") or string.find(lowerMsg, "claimed") then
-        if isAB or (not isAV and not isWSG) then
-            local abNode = FindABNode(msg)
-            if abNode and AutoBG_Settings.ABTimers then
-                timers.AB[abNode] = { expire = GetTime() + 60, faction = assaultingFaction }
-            end
-        end
-
-        if isAV or (not isAB and not isWSG) then
-            local avNode = FindAVNode(msg)
-            if avNode and AutoBG_Settings.AVTimers then
-                timers.AV[avNode] = { expire = GetTime() + 300, faction = assaultingFaction }
-            end
+    -- Arathi Basin Node Capture Timers (60s - ONLY in Arathi Basin)
+    if AutoBG_Settings.ABTimers and isAB then
+        local matchedAB = FindABNode(msg)
+        if matchedAB and (string.find(lowerMsg, "claims") or string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "taken") or string.find(lowerMsg, "captured")) then
+            timers.AB[matchedAB] = { expire = GetTime() + 60, faction = assaultingFaction }
         end
     end
 
-    -- Node Defended / Taken / Destroyed / Controlled
-    if string.find(lowerMsg, "taken") or string.find(lowerMsg, "defended") or string.find(lowerMsg, "destroyed") or string.find(lowerMsg, "captured") or string.find(lowerMsg, "controls") then
-        if isAB or (not isAV and not isWSG) then
-            local abNode = FindABNode(msg)
-            if abNode then
-                timers.AB[abNode] = nil
-            end
-        end
-
-        if isAV or (not isAB and not isWSG) then
-            local avNode = FindAVNode(msg)
-            if avNode then
-                timers.AV[avNode] = nil
-            end
+    -- Alterac Valley Node Capture Timers (300s - ONLY in Alterac Valley)
+    if AutoBG_Settings.AVTimers and isAV then
+        local matchedAV = FindAVNode(msg)
+        if matchedAV and (string.find(lowerMsg, "claims") or string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "taken") or string.find(lowerMsg, "under attack")) then
+            timers.AV[matchedAV] = { expire = GetTime() + 300, faction = assaultingFaction }
         end
     end
 
-    -- BG Start Countdowns
-    if (ev == "CHAT_MSG_BG_SYSTEM_NEUTRAL" or ev == "CHAT_MSG_SYSTEM") and
-       (string.find(lowerMsg, "begins") or string.find(lowerMsg, "starts") or string.find(lowerMsg, "gates")) then
-        if string.find(lowerMsg, "2 minute") then
+    -- Match Start Universal Countdown
+    if string.find(lowerMsg, "minute") or string.find(lowerMsg, "seconds") or string.find(lowerMsg, "second") then
+        if string.find(lowerMsg, "2 minute") or string.find(lowerMsg, "two minute") then
             timers.Global["Match Starts"] = GetTime() + 120
         elseif string.find(lowerMsg, "1 minute") or string.find(lowerMsg, "one minute") then
             timers.Global["Match Starts"] = GetTime() + 60
-        elseif string.find(lowerMsg, "30 second") or string.find(lowerMsg, "thirty second") then
+        elseif string.find(lowerMsg, "30 second") then
             timers.Global["Match Starts"] = GetTime() + 30
-        elseif string.find(lowerMsg, "15 second") or string.find(lowerMsg, "fifteen second") then
+        elseif string.find(lowerMsg, "15 second") then
             timers.Global["Match Starts"] = GetTime() + 15
         end
     end
@@ -522,8 +564,8 @@ local function ParseCombatMessage(msg, ev)
     end
 
     -- Multi-Source Spirit Healer Wave Sync (Aura Gain & Combat Log)
-    if string.find(lowerMsg, "spirit healing") or string.find(lowerMsg, "honorless target") or string.find(lowerMsg, "resurrection sickness") then
-        if AutoBG_Settings.RessTimer then
+    if string.find(lowerMsg, "spirit healing") or string.find(lowerMsg, "honorless target") or string.find(lowerMsg, "resurrection sickness") or string.find(lowerMsg, "resurrected by spirit") then
+        if AutoBG_Settings and AutoBG_Settings.RessTimer then
             spiritHealerSyncTime = GetTime()
             spiritHealerSynced = true
         end
@@ -531,7 +573,7 @@ local function ParseCombatMessage(msg, ev)
 
     -- Sync Spirit Healer timer when BG begins
     if string.find(lowerMsg, "begun!") or string.find(lowerMsg, "has begun") or string.find(lowerMsg, "gates are open") or string.find(lowerMsg, "gates have opened") then
-        if AutoBG_Settings.RessTimer then
+        if AutoBG_Settings and AutoBG_Settings.RessTimer then
             spiritHealerSyncTime = GetTime()
             spiritHealerSynced = true
         end
@@ -552,6 +594,11 @@ EventFrame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS")
 EventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_SELF")
 EventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_PARTY")
 EventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
+EventFrame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_CREATURE_BUFF")
+EventFrame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_PARTY_BUFF")
+EventFrame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_HOSTILEPLAYER_BUFF")
+EventFrame:RegisterEvent("PLAYER_UNGHOST")
+EventFrame:RegisterEvent("PLAYER_ALIVE")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 EventFrame:SetScript("OnEvent", function()
@@ -579,6 +626,18 @@ EventFrame:SetScript("OnEvent", function()
         else
             spiritHealerSyncTime = 0
             spiritHealerSynced = false
+        end
+    elseif ev == "PLAYER_UNGHOST" or ev == "PLAYER_ALIVE" then
+        local isInstance, instanceType = IsInInstance()
+        if isInstance and instanceType == "pvp" then
+            local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
+            if healerTime and healerTime > 0 then
+                spiritHealerSyncTime = GetTime() - (30 - healerTime)
+                spiritHealerSynced = true
+            elseif ev == "PLAYER_UNGHOST" then
+                spiritHealerSyncTime = GetTime()
+                spiritHealerSynced = true
+            end
         end
     else
         ParseCombatMessage(a1, ev)
