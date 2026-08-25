@@ -368,6 +368,20 @@ local function HandleMatchEnd()
     end
 end
 
+-- Hook StaticPopup_Show to intercept and auto-confirm CONFIRM_BATTLEFIELD_ENTRY with 0ms delay
+local orig_StaticPopup_Show = StaticPopup_Show
+StaticPopup_Show = function(which, text_arg1, text_arg2, data)
+    if which == "CONFIRM_BATTLEFIELD_ENTRY" and AutoBG_Settings and AutoBG_Settings.AutoAccept then
+        local id = data or 1
+        AcceptBattlefieldPort(id, 1)
+        print("|cFF00FF00AutoBG:|r Instant Auto-Accepted " .. (text_arg1 or "Battleground") .. "!")
+        return nil
+    end
+    if orig_StaticPopup_Show then
+        return orig_StaticPopup_Show(which, text_arg1, text_arg2, data)
+    end
+end
+
 frame:SetScript("OnEvent", function()
     local ev = event
     local a1 = arg1
@@ -467,6 +481,12 @@ frame:SetScript("OnEvent", function()
                         AcceptBattlefieldPort(id, 1)
                         if StaticPopup_Hide then
                             StaticPopup_Hide("CONFIRM_BATTLEFIELD_ENTRY")
+                        end
+                        for s = 1, 4 do
+                            local dlg = getglobal("StaticPopup" .. s)
+                            if dlg and dlg:IsShown() and dlg.which == "CONFIRM_BATTLEFIELD_ENTRY" then
+                                dlg:Hide()
+                            end
                         end
                         print("|cFF00FF00AutoBG:|r Instant Auto-Accepted " .. (mapName or "Battleground") .. "!")
                     end
