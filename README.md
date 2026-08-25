@@ -71,6 +71,7 @@ Type `/abg` or `/autobg` in chat to open the graphical configuration panel.
 | Command | Description |
 | :--- | :--- |
 | `/abg` | Open or close the graphical settings window |
+| `/abg q` | Instantly re-queue for the last played BG (or `/click AutoBG_QuickQueueButton`) |
 | `/abg s` | Toggle Loud Sound Alerts |
 | `/abg f` | Toggle Taskbar Flashing |
 | `/abg a` | Toggle Auto-Accept Queue Pop |
@@ -81,6 +82,9 @@ Type `/abg` or `/autobg` in chat to open the graphical configuration panel.
 | `/abg stealth` | Toggle Hide Stealth / Stance Bar |
 | `/abg test` | Toggle Test Mode (unlocks all frames to reposition) |
 | `/abg reset` | Reset all settings and frame positions to default |
+
+> [!TIP]
+> **One-Click Rejoin Macro**: You can create a 1-line macro `/click AutoBG_QuickQueueButton` or `/abg q` and place it on your action bar to instantly queue up from anywhere.
 
 ---
 

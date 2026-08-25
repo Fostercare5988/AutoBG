@@ -272,28 +272,52 @@ local function GetBGMapIndex(bgName)
     end
 end
 
-local function AutoBG_TriggerBattlegroundFinder(bgName)
-    if not bgName or not AutoBG_Settings or not AutoBG_Settings.AutoRejoin then return end
+local function FindAndClickMenuButton(cleanName)
+    local targetLower = string.lower(cleanName)
 
-    local mapId, cleanName = GetBGMapIndex(bgName)
-    pendingAutoRejoin = cleanName
-
-    print("|cFF00FF00AutoBG:|r Auto-rejoining " .. cleanName .. " via Battleground Finder...")
-
-    -- 1. Direct 1.12 client request (triggers BATTLEFIELDS_SHOW packet)
-    if RequestBattlefieldList then
-        RequestBattlefieldList(mapId)
+    -- 1. Check standard DropDownList buttons
+    for listIdx = 1, 3 do
+        for btnIdx = 1, 10 do
+            local btn = getglobal("DropDownList" .. listIdx .. "Button" .. btnIdx)
+            if btn and btn:IsShown() then
+                local text = btn:GetText()
+                if not text then
+                    local textObj = getglobal("DropDownList" .. listIdx .. "Button" .. btnIdx .. "NormalText")
+                    if textObj and textObj.GetText then text = textObj:GetText() end
+                end
+                if text and string.find(string.lower(text), targetLower) then
+                    btn:Click()
+                    return true
+                end
+            end
+        end
     end
 
-    -- 2. Search and click menu item if OctoWOW Battleground Finder menu is open
-    local function searchAndClick(parent)
-        if not parent or not parent.GetChildren then return false end
-        local children = { parent:GetChildren() }
+    -- 2. Check all visible frames on UIParent for matching text
+    local function searchFrame(f)
+        if not f or not f.GetChildren then return false end
+        local children = { f:GetChildren() }
         for i = 1, table.getn(children) do
             local child = children[i]
-            if child and child.GetText and child:GetText() then
-                local text = child:GetText()
-                if string.find(string.lower(text), string.lower(cleanName)) then
+            if child and child:IsShown() then
+                local childText = nil
+                if child.GetText and child:GetText() then
+                    childText = child:GetText()
+                else
+                    local regions = { child:GetRegions() }
+                    for r = 1, table.getn(regions) do
+                        local reg = regions[r]
+                        if reg and reg.GetText and reg:GetText() then
+                            local t = reg:GetText()
+                            if string.find(string.lower(t), targetLower) then
+                                childText = t
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if childText and string.find(string.lower(childText), targetLower) then
                     if child.Click then
                         child:Click()
                         return true
@@ -302,31 +326,78 @@ local function AutoBG_TriggerBattlegroundFinder(bgName)
                         return true
                     end
                 end
+
+                if searchFrame(child) then
+                    return true
+                end
             end
         end
         return false
     end
 
-    searchAndClick(UIParent)
+    return searchFrame(UIParent)
+end
 
-    -- 3. If needed, click the Battleground Finder minimap button to open dropdown
-    local function findMinimapButton()
-        if not Minimap or not Minimap.GetChildren then return nil end
-        local mmChildren = { Minimap:GetChildren() }
-        for i = 1, table.getn(mmChildren) do
-            local btn = mmChildren[i]
-            if btn then
-                local name = btn:GetName() or ""
-                local lowerName = string.lower(name)
-                if string.find(lowerName, "battleground") or string.find(lowerName, "bg") or string.find(lowerName, "finder") or string.find(lowerName, "pvp") then
-                    return btn
+local function FindBattlegroundFinderButton()
+    -- 1. Check known button names
+    local candidates = {
+        "BattlegroundFinderButton", "BGFinderButton", "BattlegroundFinder", "BGFinder",
+        "OctoBGButton", "OctoBGFinder", "PVPMinimapButton", "MiniMapBattlefieldFrame",
+        "MiniMapBattlegroundFrame", "BattlefieldMinimapButton", "BGFinderMinimapButton",
+        "BattlegroundFinderMinimapButton", "OctoMinimapButton", "OctoPVPButton"
+    }
+    for _, name in ipairs(candidates) do
+        local f = getglobal(name)
+        if f and f:IsShown() then return f end
+    end
+
+    -- 2. Scan Minimap, MinimapCluster, and UIParent for buttons with bannerpvp texture
+    local parentsToScan = { Minimap, MinimapCluster, MinimapBackdrop, UIParent }
+    for _, p in ipairs(parentsToScan) do
+        if p and p.GetChildren then
+            local children = { p:GetChildren() }
+            for i = 1, table.getn(children) do
+                local child = children[i]
+                if child and child:IsShown() and child.GetObjectType and child:GetObjectType() == "Button" then
+                    local regions = { child:GetRegions() }
+                    for r = 1, table.getn(regions) do
+                        local reg = regions[r]
+                        if reg and reg.GetTexture and reg:GetTexture() then
+                            local tex = string.lower(reg:GetTexture())
+                            if string.find(tex, "bannerpvp") or string.find(tex, "battleground") then
+                                return child
+                            end
+                        end
+                    end
+                    local name = child:GetName() or ""
+                    local lowerName = string.lower(name)
+                    if string.find(lowerName, "battleground") or string.find(lowerName, "bgfinder") or string.find(lowerName, "pvp") then
+                        return child
+                    end
                 end
             end
         end
-        return nil
+    end
+    return nil
+end
+
+function AutoBG_TriggerBattlegroundFinder(bgName)
+    if not bgName then bgName = lastPlayedBG or "Warsong Gulch" end
+    local mapId, cleanName = GetBGMapIndex(bgName)
+    pendingAutoRejoin = cleanName
+
+    -- 1. Direct 1.12 client request (if server supports remote CMSG_BATTLEFIELD_LIST)
+    if RequestBattlefieldList then
+        RequestBattlefieldList(mapId)
     end
 
-    local mmBtn = findMinimapButton()
+    -- 2. If dropdown menu is already open, click the battleground
+    if FindAndClickMenuButton(cleanName) then
+        return
+    end
+
+    -- 3. Click the Minimap button to open dropdown, then click the battleground
+    local mmBtn = FindBattlegroundFinderButton()
     if mmBtn then
         if mmBtn.Click then
             mmBtn:Click()
@@ -334,15 +405,36 @@ local function AutoBG_TriggerBattlegroundFinder(bgName)
             mmBtn:GetScript("OnClick")()
         end
 
-        AutoBG_TimerAfter(0.15, function()
-            searchAndClick(UIParent)
+        AutoBG_TimerAfter(0.08, function()
+            FindAndClickMenuButton(cleanName)
+        end)
+        AutoBG_TimerAfter(0.25, function()
+            FindAndClickMenuButton(cleanName)
         end)
     end
 end
 
+-- Global Macro Button: /click AutoBG_QuickQueueButton or /abg q
+local quickQueueBtn = CreateFrame("Button", "AutoBG_QuickQueueButton", UIParent)
+quickQueueBtn:SetScript("OnClick", function()
+    local bg = lastPlayedBG or "Warsong Gulch"
+    print("|cFF00FF00AutoBG:|r Manual quick-rejoin triggered for |cFFFFFF00" .. bg .. "|r...")
+    AutoBG_TriggerBattlegroundFinder(bg)
+end)
+
 local function HandleMatchEnd()
     if hasHandledEnd then return end
     hasHandledEnd = true
+
+    -- Ensure lastPlayedBG is captured
+    local zone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+    if zone ~= "" then
+        lastPlayedBG = zone
+    end
+    if AutoBG_Settings and AutoBG_Settings.AutoRejoin and lastPlayedBG then
+        local _, cleanName = GetBGMapIndex(lastPlayedBG)
+        pendingAutoRejoin = cleanName
+    end
 
     -- Instant leave
     if AutoBG_Settings and AutoBG_Settings.AutoLeave then
@@ -396,8 +488,21 @@ frame:SetScript("OnEvent", function()
             -- Outside BG: if a match just ended, automatically re-open Battleground Finder to join next game
             if hasHandledEnd and lastPlayedBG and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
                 local bgToQueue = lastPlayedBG
-                AutoBG_TimerAfter(0.25, function()
-                    AutoBG_TriggerBattlegroundFinder(bgToQueue)
+                -- Staggered post-loading screen attempts
+                AutoBG_TimerAfter(0.3, function()
+                    if pendingAutoRejoin then
+                        AutoBG_TriggerBattlegroundFinder(bgToQueue)
+                    end
+                end)
+                AutoBG_TimerAfter(0.8, function()
+                    if pendingAutoRejoin then
+                        AutoBG_TriggerBattlegroundFinder(bgToQueue)
+                    end
+                end)
+                AutoBG_TimerAfter(1.5, function()
+                    if pendingAutoRejoin then
+                        AutoBG_TriggerBattlegroundFinder(bgToQueue)
+                    end
                 end)
             else
                 hasHandledEnd = false
@@ -606,6 +711,10 @@ SlashCmdList["AUTOBG"] = function(msg)
         print("|cFF00FF00AutoBG:|r Hide Stealth/Stance Bar is now " .. (AutoBG_Settings.HideStanceBar and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
         if AutoBG_UpdateStanceBar then AutoBG_UpdateStanceBar() end
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
+    elseif cmd == "q" or cmd == "queue" then
+        local bg = lastPlayedBG or "Warsong Gulch"
+        print("|cFF00FF00AutoBG:|r Manual quick-rejoin triggered for |cFFFFFF00" .. bg .. "|r...")
+        AutoBG_TriggerBattlegroundFinder(bg)
     elseif cmd == "reset" then
         AutoBG_Settings = nil
         print("|cFF00FF00AutoBG:|r Settings reset to default. Reloading UI...")
@@ -613,6 +722,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "help" then
         print("|cFF00FF00AutoBG Commands:|r")
         print("  |cFFFFFF00/abg|r - Open options window")
+        print("  |cFFFFFF00/abg q|r - Instantly re-queue for last played BG")
         print("  |cFFFFFF00/abg s|r - Toggle sound alerts")
         print("  |cFFFFFF00/abg f|r - Toggle taskbar flashing")
         print("  |cFFFFFF00/abg a|r - Toggle auto-accept queue pop")
