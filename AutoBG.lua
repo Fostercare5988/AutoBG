@@ -286,56 +286,62 @@ local function FindAndClickMenuButton(cleanName)
                     if textObj and textObj.GetText then text = textObj:GetText() end
                 end
                 if text and string.find(string.lower(text), targetLower) then
-                    btn:Click()
-                    return true
+                    if btn.Click then btn:Click() return true end
                 end
             end
         end
     end
 
-    -- 2. Check all visible frames on UIParent for matching text
-    local function searchFrame(f)
-        if not f or not f.GetChildren then return false end
+    -- 2. Check visible Button frames only (skips non-Buttons and chat frames)
+    local function searchFrame(f, depth)
+        if not f or not f.GetChildren or (depth and depth > 4) then return false end
         local children = { f:GetChildren() }
         for i = 1, table.getn(children) do
             local child = children[i]
             if child and child:IsShown() then
-                local childText = nil
-                if child.GetText and child:GetText() then
-                    childText = child:GetText()
-                else
-                    local regions = { child:GetRegions() }
-                    for r = 1, table.getn(regions) do
-                        local reg = regions[r]
-                        if reg and reg.GetText and reg:GetText() then
-                            local t = reg:GetText()
-                            if string.find(string.lower(t), targetLower) then
-                                childText = t
-                                break
+                local name = child:GetName() or ""
+                if not string.find(name, "ChatFrame") and not string.find(name, "Tooltip") and not string.find(name, "WorldFrame") then
+                    local objType = (child.GetObjectType and child:GetObjectType()) or ""
+                    if objType == "Button" or objType == "CheckButton" then
+                        local childText = child.GetText and child:GetText()
+                        if not childText then
+                            local regions = { child:GetRegions() }
+                            for r = 1, table.getn(regions) do
+                                local reg = regions[r]
+                                if reg and reg.GetText and reg:GetText() then
+                                    local t = reg:GetText()
+                                    if string.find(string.lower(t), targetLower) then
+                                        childText = t
+                                        break
+                                    end
+                                end
+                            end
+                        end
+
+                        if childText and string.find(string.lower(childText), targetLower) then
+                            if child.Click then
+                                child:Click()
+                                return true
+                            end
+                            local onClick = nil
+                            pcall(function() onClick = child:GetScript("OnClick") end)
+                            if onClick then
+                                onClick()
+                                return true
                             end
                         end
                     end
-                end
 
-                if childText and string.find(string.lower(childText), targetLower) then
-                    if child.Click then
-                        child:Click()
-                        return true
-                    elseif child:GetScript("OnClick") then
-                        child:GetScript("OnClick")()
+                    if searchFrame(child, (depth or 0) + 1) then
                         return true
                     end
-                end
-
-                if searchFrame(child) then
-                    return true
                 end
             end
         end
         return false
     end
 
-    return searchFrame(UIParent)
+    return searchFrame(UIParent, 0)
 end
 
 local function FindBattlegroundFinderButton()
@@ -358,21 +364,24 @@ local function FindBattlegroundFinderButton()
             local children = { p:GetChildren() }
             for i = 1, table.getn(children) do
                 local child = children[i]
-                if child and child:IsShown() and child.GetObjectType and child:GetObjectType() == "Button" then
-                    local regions = { child:GetRegions() }
-                    for r = 1, table.getn(regions) do
-                        local reg = regions[r]
-                        if reg and reg.GetTexture and reg:GetTexture() then
-                            local tex = string.lower(reg:GetTexture())
-                            if string.find(tex, "bannerpvp") or string.find(tex, "battleground") then
-                                return child
+                if child and child:IsShown() then
+                    local objType = (child.GetObjectType and child:GetObjectType()) or ""
+                    if objType == "Button" or objType == "CheckButton" then
+                        local regions = { child:GetRegions() }
+                        for r = 1, table.getn(regions) do
+                            local reg = regions[r]
+                            if reg and reg.GetTexture and reg:GetTexture() then
+                                local tex = string.lower(reg:GetTexture())
+                                if string.find(tex, "bannerpvp") or string.find(tex, "battleground") then
+                                    return child
+                                end
                             end
                         end
-                    end
-                    local name = child:GetName() or ""
-                    local lowerName = string.lower(name)
-                    if string.find(lowerName, "battleground") or string.find(lowerName, "bgfinder") or string.find(lowerName, "pvp") then
-                        return child
+                        local name = child:GetName() or ""
+                        local lowerName = string.lower(name)
+                        if string.find(lowerName, "battleground") or string.find(lowerName, "bgfinder") or string.find(lowerName, "pvp") then
+                            return child
+                        end
                     end
                 end
             end
@@ -401,8 +410,10 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
     if mmBtn then
         if mmBtn.Click then
             mmBtn:Click()
-        elseif mmBtn:GetScript("OnClick") then
-            mmBtn:GetScript("OnClick")()
+        else
+            local onClick = nil
+            pcall(function() onClick = mmBtn:GetScript("OnClick") end)
+            if onClick then onClick() end
         end
 
         AutoBG_TimerAfter(0.08, function()
