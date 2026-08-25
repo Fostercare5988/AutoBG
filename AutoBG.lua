@@ -92,6 +92,7 @@ local defaultSettings = {
     HideCastbar = false,
     HideStanceBar = false,
     TestAllTimers = false,
+    LastPlayedBG = nil,
     Positions = {},
 }
 
@@ -428,19 +429,32 @@ end
 -- Global Macro Button: /click AutoBG_QuickQueueButton or /abg q
 local quickQueueBtn = CreateFrame("Button", "AutoBG_QuickQueueButton", UIParent)
 quickQueueBtn:SetScript("OnClick", function()
-    local bg = lastPlayedBG or "Warsong Gulch"
-    print("|cFF00FF00AutoBG:|r Manual quick-rejoin triggered for |cFFFFFF00" .. bg .. "|r...")
-    AutoBG_TriggerBattlegroundFinder(bg)
+    local bg = (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
+    if bg then
+        print("|cFF00FF00AutoBG:|r Quick-queue triggered for |cFFFFFF00" .. bg .. "|r...")
+        AutoBG_TriggerBattlegroundFinder(bg)
+    else
+        print("|cFF00FF00AutoBG:|r No previous BG recorded. Opening Battleground Finder...")
+        print("  |cFFFFFF00Tip:|r Use |cFFFFFF00/abg q ab|r, |cFFFFFF00/abg q wsg|r, |cFFFFFF00/abg q av|r, or |cFFFFFF00/abg q tg|r")
+        local mmBtn = FindBattlegroundFinderButton()
+        if mmBtn then
+            if mmBtn.Click then mmBtn:Click()
+            else pcall(function() if mmBtn:GetScript("OnClick") then mmBtn:GetScript("OnClick")() end end) end
+        end
+    end
 end)
 
 local function HandleMatchEnd()
     if hasHandledEnd then return end
     hasHandledEnd = true
 
-    -- Ensure lastPlayedBG is captured
+    -- Ensure lastPlayedBG is captured and persisted across sessions
     local zone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
     if zone ~= "" then
         lastPlayedBG = zone
+        if AutoBG_Settings then
+            AutoBG_Settings.LastPlayedBG = zone
+        end
     end
     if AutoBG_Settings and AutoBG_Settings.AutoRejoin and lastPlayedBG then
         local _, cleanName = GetBGMapIndex(lastPlayedBG)
@@ -492,13 +506,17 @@ frame:SetScript("OnEvent", function()
             local zone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
             if zone ~= "" then
                 lastPlayedBG = zone
+                if AutoBG_Settings then
+                    AutoBG_Settings.LastPlayedBG = zone
+                end
             end
             hasHandledEnd = false
             pendingAutoRejoin = nil
         else
             -- Outside BG: if a match just ended, automatically re-open Battleground Finder to join next game
-            if hasHandledEnd and lastPlayedBG and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
-                local bgToQueue = lastPlayedBG
+            local targetRejoin = lastPlayedBG or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG)
+            if hasHandledEnd and targetRejoin and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
+                local bgToQueue = targetRejoin
                 -- Staggered post-loading screen attempts
                 AutoBG_TimerAfter(0.3, function()
                     if pendingAutoRejoin then
@@ -680,9 +698,18 @@ end
 SLASH_AUTOBG1 = "/abg"
 SLASH_AUTOBG2 = "/autobg"
 SlashCmdList["AUTOBG"] = function(msg)
-    local cmd = ""
+    local raw = ""
     if msg then
-        cmd = string.lower(string.gsub(msg, "^%s*(.-)%s*$", "%1"))
+        raw = string.gsub(msg, "^%s*(.-)%s*$", "%1")
+    end
+
+    local cmd, arg = "", ""
+    local space = string.find(raw, " ")
+    if space then
+        cmd = string.lower(string.sub(raw, 1, space - 1))
+        arg = string.lower(string.gsub(string.sub(raw, space + 1), "^%s*(.-)%s*$", "%1"))
+    else
+        cmd = string.lower(raw)
     end
 
     if cmd == "s" or cmd == "sound" then
@@ -697,9 +724,9 @@ SlashCmdList["AUTOBG"] = function(msg)
         AutoBG_Settings.AutoAccept = not AutoBG_Settings.AutoAccept
         print("|cFF00FF00AutoBG:|r Auto-Accept Queue Pop is now " .. (AutoBG_Settings.AutoAccept and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
-    elseif cmd == "j" or cmd == "rejoin" or cmd == "requeue" then
+    elseif cmd == "j" or cmd == "autorejoin" then
         AutoBG_Settings.AutoRejoin = not AutoBG_Settings.AutoRejoin
-        print("|cFF00FF00AutoBG:|r Auto-Rejoin BG is now " .. (AutoBG_Settings.AutoRejoin and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        print("|cFF00FF00AutoBG:|r Auto-Rejoin BG on Exit is now " .. (AutoBG_Settings.AutoRejoin and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "l" or cmd == "leave" then
         AutoBG_Settings.AutoLeave = not AutoBG_Settings.AutoLeave
@@ -722,10 +749,41 @@ SlashCmdList["AUTOBG"] = function(msg)
         print("|cFF00FF00AutoBG:|r Hide Stealth/Stance Bar is now " .. (AutoBG_Settings.HideStanceBar and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
         if AutoBG_UpdateStanceBar then AutoBG_UpdateStanceBar() end
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
-    elseif cmd == "q" or cmd == "queue" then
-        local bg = lastPlayedBG or "Warsong Gulch"
-        print("|cFF00FF00AutoBG:|r Manual quick-rejoin triggered for |cFFFFFF00" .. bg .. "|r...")
-        AutoBG_TriggerBattlegroundFinder(bg)
+    elseif cmd == "q" or cmd == "queue" or cmd == "join" or cmd == "rejoin" or cmd == "requeue" then
+        local targetBG = nil
+        if arg ~= "" then
+            if string.find(arg, "wsg") or string.find(arg, "war") then
+                targetBG = "Warsong Gulch"
+            elseif string.find(arg, "ab") or string.find(arg, "ara") then
+                targetBG = "Arathi Basin"
+            elseif string.find(arg, "av") or string.find(arg, "alt") then
+                targetBG = "Alterac Valley"
+            elseif string.find(arg, "tg") or string.find(arg, "thorn") or string.find(arg, "gorge") then
+                targetBG = "Thorn Gorge"
+            elseif string.find(arg, "arena") then
+                targetBG = "Arena"
+            end
+        end
+
+        if not targetBG then
+            targetBG = (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
+        end
+
+        if targetBG then
+            if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = targetBG end
+            print("|cFF00FF00AutoBG:|r Quick-queue triggered for |cFFFFFF00" .. targetBG .. "|r...")
+            AutoBG_TriggerBattlegroundFinder(targetBG)
+        else
+            print("|cFF00FF00AutoBG:|r No previous BG recorded. Opening Battleground Finder...")
+            print("  |cFFFFFF00Tip:|r Use |cFFFFFF00/abg q ab|r, |cFFFFFF00/abg q wsg|r, |cFFFFFF00/abg q av|r, or |cFFFFFF00/abg q tg|r")
+            local mmBtn = FindBattlegroundFinderButton()
+            if mmBtn then
+                if mmBtn.Click then mmBtn:Click()
+                else
+                    pcall(function() if mmBtn:GetScript("OnClick") then mmBtn:GetScript("OnClick")() end end)
+                end
+            end
+        end
     elseif cmd == "reset" then
         AutoBG_Settings = nil
         print("|cFF00FF00AutoBG:|r Settings reset to default. Reloading UI...")
@@ -733,7 +791,11 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "help" then
         print("|cFF00FF00AutoBG Commands:|r")
         print("  |cFFFFFF00/abg|r - Open options window")
-        print("  |cFFFFFF00/abg q|r - Instantly re-queue for last played BG")
+        print("  |cFFFFFF00/abg q|r - Quick-queue for last played BG")
+        print("  |cFFFFFF00/abg q ab|r - Quick-queue for Arathi Basin")
+        print("  |cFFFFFF00/abg q wsg|r - Quick-queue for Warsong Gulch")
+        print("  |cFFFFFF00/abg q av|r - Quick-queue for Alterac Valley")
+        print("  |cFFFFFF00/abg q tg|r - Quick-queue for Thorn Gorge")
         print("  |cFFFFFF00/abg s|r - Toggle sound alerts")
         print("  |cFFFFFF00/abg f|r - Toggle taskbar flashing")
         print("  |cFFFFFF00/abg a|r - Toggle auto-accept queue pop")
