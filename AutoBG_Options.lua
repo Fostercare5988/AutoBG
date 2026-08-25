@@ -1,7 +1,7 @@
 -- AutoBG Options Panel for WoW 1.12.1
 local panel = CreateFrame("Frame", "AutoBG_OptionsPanel", UIParent)
 panel:SetWidth(460)
-panel:SetHeight(415)
+panel:SetHeight(450)
 panel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 panel:SetFrameStrata("DIALOG")
 panel:SetToplevel(true)
@@ -102,7 +102,26 @@ headerAlerts:SetText("Alerts & Automation")
 local cbSound = CreateCheckbox("AutoBG_Opt_Sound", "Loud Sound Alerts", "Play a loud ready check sound when queues pop or end.", "NotifySound", headerAlerts, 0, -4)
 local cbFlash = CreateCheckbox("AutoBG_Opt_Flash", "Taskbar Flashing", "Flash the game window in taskbar on queue pop.", "FlashTaskbar", cbSound)
 local cbAccept = CreateCheckbox("AutoBG_Opt_Accept", "Auto-Accept Queue Pop", "Automatically accept the battleground queue and enter when ready.", "AutoAccept", cbFlash)
-local cbLeave = CreateCheckbox("AutoBG_Opt_Leave", "Auto-Leave BG on End", "Automatically leave the Battleground when the match finishes.", "AutoLeave", cbAccept)
+
+local sliderDelay = CreateFrame("Slider", "AutoBG_Slider_AcceptDelay", panel, "OptionsSliderTemplate")
+sliderDelay:SetPoint("TOPLEFT", cbAccept, "BOTTOMLEFT", 20, -14)
+sliderDelay:SetMinMaxValues(0, 30)
+sliderDelay:SetValueStep(1)
+sliderDelay:SetWidth(150)
+getglobal(sliderDelay:GetName() .. "Low"):SetText("0s")
+getglobal(sliderDelay:GetName() .. "High"):SetText("30s")
+getglobal(sliderDelay:GetName() .. "Text"):SetText("Enter Delay: Instant (0s)")
+sliderDelay:SetScript("OnValueChanged", function()
+    local val = math.floor(this:GetValue() + 0.5)
+    if AutoBG_Settings then AutoBG_Settings.AutoAcceptDelay = val end
+    if val == 0 then
+        getglobal(this:GetName() .. "Text"):SetText("Enter Delay: Instant (0s)")
+    else
+        getglobal(this:GetName() .. "Text"):SetText("Enter Delay: " .. val .. "s")
+    end
+end)
+
+local cbLeave = CreateCheckbox("AutoBG_Opt_Leave", "Auto-Leave BG on End", "Automatically leave the Battleground when the match finishes.", "AutoLeave", sliderDelay, -20, -18)
 local cbRejoin = CreateCheckbox("AutoBG_Opt_Rejoin", "Auto-Rejoin BG on Exit", "Automatically queue for the same Battleground after match exit via Battleground Finder.", "AutoRejoin", cbLeave)
 local cbRelease = CreateCheckbox("AutoBG_Opt_Release", "Auto-Release Spirit", "Automatically release spirit upon dying in BG (skips if Soulstone/Ankh ready).", "AutoRelease", cbRejoin)
 
@@ -180,6 +199,15 @@ function AutoBG_Options_Refresh()
         local cb = checkboxes[i]
         if cb and cb.settingKey then
             cb:SetChecked(AutoBG_Settings[cb.settingKey] and 1 or nil)
+        end
+    end
+    if AutoBG_Slider_AcceptDelay then
+        local delay = AutoBG_Settings.AutoAcceptDelay or 0
+        AutoBG_Slider_AcceptDelay:SetValue(delay)
+        if delay == 0 then
+            getglobal("AutoBG_Slider_AcceptDelayText"):SetText("Enter Delay: Instant (0s)")
+        else
+            getglobal("AutoBG_Slider_AcceptDelayText"):SetText("Enter Delay: " .. delay .. "s")
         end
     end
 end

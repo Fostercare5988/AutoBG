@@ -78,6 +78,7 @@ local defaultSettings = {
     NotifySound = true,
     FlashTaskbar = true,
     AutoAccept = false,
+    AutoAcceptDelay = 0,
     AutoLeave = true,
     AutoRejoin = false,
     ScoreColor = true,
@@ -368,14 +369,17 @@ local function HandleMatchEnd()
     end
 end
 
--- Hook StaticPopup_Show to intercept and auto-confirm CONFIRM_BATTLEFIELD_ENTRY with 0ms delay
+-- Hook StaticPopup_Show to intercept and auto-confirm CONFIRM_BATTLEFIELD_ENTRY with configurable delay
 local orig_StaticPopup_Show = StaticPopup_Show
 StaticPopup_Show = function(which, text_arg1, text_arg2, data)
     if which == "CONFIRM_BATTLEFIELD_ENTRY" and AutoBG_Settings and AutoBG_Settings.AutoAccept then
-        local id = data or 1
-        AcceptBattlefieldPort(id, 1)
-        print("|cFF00FF00AutoBG:|r Instant Auto-Accepted " .. (text_arg1 or "Battleground") .. "!")
-        return nil
+        local delay = AutoBG_Settings.AutoAcceptDelay or 0
+        if delay <= 0 then
+            local id = data or 1
+            AcceptBattlefieldPort(id, 1)
+            print("|cFF00FF00AutoBG:|r Instant Auto-Accepted " .. (text_arg1 or "Battleground") .. "!")
+            return nil
+        end
     end
     if orig_StaticPopup_Show then
         return orig_StaticPopup_Show(which, text_arg1, text_arg2, data)
@@ -453,7 +457,7 @@ frame:SetScript("OnEvent", function()
             if BattlefieldFrame and BattlefieldFrame:IsShown() then
                 HideUIPanel(BattlefieldFrame)
             end
-            print("|cFF00FF00AutoBG:|r Successfully joined queue for |cFFFFFF00" .. bgTitle .. "|r!")
+            print("|cFF00FF00AutoBG:|r Successfully queued for |cFFFFFF00" .. bgTitle .. "|r!")
             pendingAutoRejoin = nil
             hasHandledEnd = false
         end
@@ -476,19 +480,44 @@ frame:SetScript("OnEvent", function()
                 if not notifiedQueues[id] then
                     notifiedQueues[id] = true
 
-                    -- Instant Auto-Accept (0 ms delay)
+                    -- Auto-Accept with Configurable Delay
                     if AutoBG_Settings.AutoAccept then
-                        AcceptBattlefieldPort(id, 1)
-                        if StaticPopup_Hide then
-                            StaticPopup_Hide("CONFIRM_BATTLEFIELD_ENTRY")
-                        end
-                        for s = 1, 4 do
-                            local dlg = getglobal("StaticPopup" .. s)
-                            if dlg and dlg:IsShown() and dlg.which == "CONFIRM_BATTLEFIELD_ENTRY" then
-                                dlg:Hide()
+                        local delay = AutoBG_Settings.AutoAcceptDelay or 0
+                        local queueId = id
+                        local bgName = mapName or "Battleground"
+
+                        if delay <= 0 then
+                            -- Instant (0ms)
+                            AcceptBattlefieldPort(queueId, 1)
+                            if StaticPopup_Hide then
+                                StaticPopup_Hide("CONFIRM_BATTLEFIELD_ENTRY")
                             end
+                            for s = 1, 4 do
+                                local dlg = getglobal("StaticPopup" .. s)
+                                if dlg and dlg:IsShown() and dlg.which == "CONFIRM_BATTLEFIELD_ENTRY" then
+                                    dlg:Hide()
+                                end
+                            end
+                            print("|cFF00FF00AutoBG:|r Instant Auto-Accepted " .. bgName .. "!")
+                        else
+                            -- Delayed Accept (Wait X seconds)
+                            print("|cFF00FF00AutoBG:|r Queue popped for |cFFFFFF00" .. bgName .. "|r! Auto-entering in |cFFFFFF00" .. delay .. "s|r...")
+                            AutoBG_TimerAfter(delay, function()
+                                if GetBattlefieldStatus(queueId) == "confirm" then
+                                    AcceptBattlefieldPort(queueId, 1)
+                                    if StaticPopup_Hide then
+                                        StaticPopup_Hide("CONFIRM_BATTLEFIELD_ENTRY")
+                                    end
+                                    for s = 1, 4 do
+                                        local dlg = getglobal("StaticPopup" .. s)
+                                        if dlg and dlg:IsShown() and dlg.which == "CONFIRM_BATTLEFIELD_ENTRY" then
+                                            dlg:Hide()
+                                        end
+                                    end
+                                    print("|cFF00FF00AutoBG:|r Auto-Entered " .. bgName .. " after " .. delay .. "s delay!")
+                                end
+                            end)
                         end
-                        print("|cFF00FF00AutoBG:|r Instant Auto-Accepted " .. (mapName or "Battleground") .. "!")
                     end
 
                     if AutoBG_Settings.NotifySound then
@@ -698,6 +727,16 @@ SlashCmdList["AUTOBG"] = function(msg)
                 end
             end
         end
+    elseif cmd == "delay" or cmd == "acceptdelay" then
+        local val = tonumber(arg)
+        if val then
+            val = math.max(0, math.min(30, math.floor(val)))
+            AutoBG_Settings.AutoAcceptDelay = val
+            print("|cFF00FF00AutoBG:|r Auto-Accept Enter Delay set to |cFFFFFF00" .. (val == 0 and "Instant (0s)" or (val .. "s")) .. "|r")
+            if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
+        else
+            print("|cFF00FF00AutoBG:|r Current Auto-Accept Enter Delay: |cFFFFFF00" .. ((AutoBG_Settings.AutoAcceptDelay or 0) == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r (Use |cFFFFFF00/abg delay 5|r to change)")
+        end
     elseif cmd == "reset" then
         AutoBG_Settings = nil
         print("|cFF00FF00AutoBG:|r Settings reset to default. Reloading UI...")
@@ -710,9 +749,10 @@ SlashCmdList["AUTOBG"] = function(msg)
         print("  |cFFFFFF00/abg q wsg|r - Quick-queue for Warsong Gulch")
         print("  |cFFFFFF00/abg q av|r - Quick-queue for Alterac Valley")
         print("  |cFFFFFF00/abg q tg|r - Quick-queue for Thorn Gorge")
+        print("  |cFFFFFF00/abg a|r - Toggle auto-accept queue pop")
+        print("  |cFFFFFF00/abg delay <sec>|r - Set auto-accept delay (0=instant, up to 30s)")
         print("  |cFFFFFF00/abg s|r - Toggle sound alerts")
         print("  |cFFFFFF00/abg f|r - Toggle taskbar flashing")
-        print("  |cFFFFFF00/abg a|r - Toggle auto-accept queue pop")
         print("  |cFFFFFF00/abg l|r - Toggle auto-leave BG on end")
         print("  |cFFFFFF00/abg j|r - Toggle auto-rejoin BG after exit")
         print("  |cFFFFFF00/abg r|r - Toggle auto-release")
