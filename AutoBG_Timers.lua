@@ -137,12 +137,16 @@ ControllerFrame:SetScript("OnUpdate", function()
 
     local now = GetTime()
     local currentZone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+    local lowerZone = string.lower(currentZone)
+    local isAB = (string.find(lowerZone, "arathi") ~= nil)
+    local isAV = (string.find(lowerZone, "alterac") ~= nil)
+    local isWSG = (string.find(lowerZone, "warsong") ~= nil)
     local isTestAll = AutoBG_Settings.TestAllTimers
     local useColors = AutoBG_Settings.NodeColors
 
     -- 1. AB Node Timers
     local nodeIndex = 1
-    if AutoBG_Settings.ABTimers then
+    if AutoBG_Settings.ABTimers and (isTestAll or isAB) then
         if isTestAll then
             local fs = NodeFrame:GetOrCreateFontString(1)
             fs:SetText("|cFFFF4040Blacksmith: 0:59|r")
@@ -177,7 +181,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                     timers.AB[name] = nil
                 end
             end
-            if timers.Global["Match Starts"] and currentZone == "Arathi Basin" then
+            if timers.Global["Match Starts"] and isAB then
                 local remaining = math.floor(timers.Global["Match Starts"] - now)
                 if remaining > 0 then
                     local fs = NodeFrame:GetOrCreateFontString(nodeIndex)
@@ -189,12 +193,16 @@ ControllerFrame:SetScript("OnUpdate", function()
                 end
             end
         end
+    else
+        if not isTestAll then
+            timers.AB = {}
+        end
     end
     NodeFrame:UpdateSize(nodeIndex)
 
     -- 2. AV Node Timers
     local avIndex = 1
-    if AutoBG_Settings.AVTimers then
+    if AutoBG_Settings.AVTimers and (isTestAll or isAV) then
         if isTestAll then
             local fs = AVNodeFrame:GetOrCreateFontString(1)
             fs:SetText("|cFFFF4040Stonehearth Bunker: 4:59|r")
@@ -229,7 +237,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                     timers.AV[name] = nil
                 end
             end
-            if timers.Global["Match Starts"] and currentZone == "Alterac Valley" then
+            if timers.Global["Match Starts"] and isAV then
                 local remaining = math.floor(timers.Global["Match Starts"] - now)
                 if remaining > 0 then
                     local fs = AVNodeFrame:GetOrCreateFontString(avIndex)
@@ -241,12 +249,16 @@ ControllerFrame:SetScript("OnUpdate", function()
                 end
             end
         end
+    else
+        if not isTestAll then
+            timers.AV = {}
+        end
     end
     AVNodeFrame:UpdateSize(avIndex)
 
     -- 3. WSG Timers (Flags & Buffs)
     local wsgIndex = 1
-    if AutoBG_Settings.WSGTimers then
+    if AutoBG_Settings.WSGTimers and (isTestAll or isWSG) then
         if isTestAll then
             local fs = WSGFlagFrame:GetOrCreateFontString(1)
             fs:SetText("|cFF4090FFAlliance Flag: 0:23|r")
@@ -274,7 +286,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                     timers.WSG[name] = nil
                 end
             end
-            if timers.Global["Match Starts"] and currentZone == "Warsong Gulch" then
+            if timers.Global["Match Starts"] and isWSG then
                 local remaining = math.floor(timers.Global["Match Starts"] - now)
                 if remaining > 0 then
                     local fs = WSGFlagFrame:GetOrCreateFontString(wsgIndex)
@@ -285,6 +297,10 @@ ControllerFrame:SetScript("OnUpdate", function()
                     timers.Global["Match Starts"] = nil
                 end
             end
+        end
+    else
+        if not isTestAll then
+            timers.WSG = {}
         end
     end
     WSGFlagFrame:UpdateSize(wsgIndex)
@@ -408,6 +424,12 @@ end
 local function ParseCombatMessage(msg, ev)
     if not AutoBG_Settings or not msg then return end
 
+    local currentZone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+    local lowerZone = string.lower(currentZone)
+    local isAB = (string.find(lowerZone, "arathi") ~= nil)
+    local isAV = (string.find(lowerZone, "alterac") ~= nil)
+    local isWSG = (string.find(lowerZone, "warsong") ~= nil)
+
     local lowerMsg = string.lower(msg)
     local assaultingFaction = nil
     if string.find(lowerMsg, "horde") then
@@ -418,27 +440,35 @@ local function ParseCombatMessage(msg, ev)
 
     -- Node Assaults (AB: 60s, AV: 300s)
     if string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "claims") or string.find(lowerMsg, "under attack") then
-        local abNode = FindNode(msg, abNodes)
-        if abNode and AutoBG_Settings.ABTimers then
-            timers.AB[abNode] = { expire = GetTime() + 60, faction = assaultingFaction }
+        if isAB or (not isAV and not isWSG) then
+            local abNode = FindNode(msg, abNodes)
+            if abNode and AutoBG_Settings.ABTimers then
+                timers.AB[abNode] = { expire = GetTime() + 60, faction = assaultingFaction }
+            end
         end
 
-        local avNode = FindNode(msg, avNodes)
-        if avNode and AutoBG_Settings.AVTimers then
-            timers.AV[avNode] = { expire = GetTime() + 300, faction = assaultingFaction }
+        if isAV or (not isAB and not isWSG) then
+            local avNode = FindNode(msg, avNodes)
+            if avNode and AutoBG_Settings.AVTimers then
+                timers.AV[avNode] = { expire = GetTime() + 300, faction = assaultingFaction }
+            end
         end
     end
 
     -- Node Defended / Taken / Destroyed
     if string.find(lowerMsg, "taken") or string.find(lowerMsg, "defended") or string.find(lowerMsg, "destroyed") or string.find(lowerMsg, "captured") then
-        local abNode = FindNode(msg, abNodes)
-        if abNode then
-            timers.AB[abNode] = nil
+        if isAB or (not isAV and not isWSG) then
+            local abNode = FindNode(msg, abNodes)
+            if abNode then
+                timers.AB[abNode] = nil
+            end
         end
 
-        local avNode = FindNode(msg, avNodes)
-        if avNode then
-            timers.AV[avNode] = nil
+        if isAV or (not isAB and not isWSG) then
+            local avNode = FindNode(msg, avNodes)
+            if avNode then
+                timers.AV[avNode] = nil
+            end
         end
     end
 
@@ -456,8 +486,8 @@ local function ParseCombatMessage(msg, ev)
         end
     end
 
-    -- WSG Flag Respawns (23s)
-    if AutoBG_Settings.WSGTimers then
+    -- WSG Flag Respawns (23s) & Buffs (ONLY in Warsong Gulch)
+    if AutoBG_Settings.WSGTimers and isWSG then
         if string.find(lowerMsg, "captured the alliance flag") or string.find(lowerMsg, "captured the horde flag") then
             if string.find(lowerMsg, "alliance flag") then
                 timers.WSG["Alliance Flag"] = GetTime() + 23

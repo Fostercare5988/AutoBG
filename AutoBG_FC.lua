@@ -118,6 +118,8 @@ EventFrame:SetScript("OnEvent", function()
 
     local ev = event
     local msg = arg1
+    local currentZone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+    local isWSG = (string.find(string.lower(currentZone), "warsong") ~= nil)
 
     if ev == "PLAYER_ENTERING_WORLD" then
         AutoBG_LoadFCPositions()
@@ -128,7 +130,7 @@ EventFrame:SetScript("OnEvent", function()
         return
     end
 
-    if not msg then return end
+    if not isWSG or not msg then return end
 
     local _, _, a_picker = string.find(msg, "[Aa]lliance [Ff]lag was picked up by ([^!%.]+)")
     if a_picker then
@@ -163,7 +165,16 @@ Scanner:SetScript("OnUpdate", function()
         return
     end
 
+    local currentZone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+    local isWSG = (string.find(string.lower(currentZone), "warsong") ~= nil)
     local isTestAll = AutoBG_Settings.TestAllTimers
+
+    if not isTestAll and not isWSG then
+        if AllianceFC:IsShown() then AllianceFC:Hide() end
+        if HordeFC:IsShown() then HordeFC:Hide() end
+        return
+    end
+
     if isTestAll then
         AllianceFC:Show()
         AllianceFC.nameText:SetText("|cFFFF7D0AAlliance Druid|r")
