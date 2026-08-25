@@ -28,7 +28,7 @@ High-performance PvP automation and timer engine for World of Warcraft **Vanilla
 ### 1. Automation & Queue Engine
 - **Instant Match Exit**: Calls `LeaveBattlefield(0)` immediately upon match end detection.
 - **0ms Auto-Rejoin**: On zoning out of a battleground, directly queues into the next match via Battleground Finder.
-- **Auto-Accept**: Immediately confirms and enters battleground on queue pop.
+- **Auto-Accept & Delay**: Confirms queue pop instantly (0s) or after a configurable countdown (0–30s).
 - **Smart Spirit Release**: Auto-releases spirit inside battlegrounds while preserving Soulstones and Reincarnation (Ankh).
 - **Audio & Taskbar Alerts**: Ready-check audio triggers and OS taskbar flashing on queue pop.
 
@@ -70,6 +70,7 @@ Synchronizes the global 30-second server resurrection wave across four inputs:
 | `/abg q av` | Queue for Alterac Valley |
 | `/abg q tg` | Queue for Thorn Gorge |
 | `/abg a` | Toggle Auto-Accept queue pop |
+| `/abg delay <sec>` | Set Auto-Accept delay (0=instant, up to 30s) |
 | `/abg l` | Toggle Auto-Leave on match end |
 | `/abg j` | Toggle Auto-Rejoin on zone exit |
 | `/abg r` | Toggle Auto-Release on death |
