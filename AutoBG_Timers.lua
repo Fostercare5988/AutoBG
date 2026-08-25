@@ -401,8 +401,7 @@ function AutoBG_Timers_UpdateVisibility()
     -- Triggers update on next frame tick
 end
 
--- Node list definitions
-local abNodes = { "Blacksmith", "Lumber Mill", "Gold Mine", "Farm", "Stables" }
+-- Node list definitions & smart pattern matchers
 local avNodes = {
     "Iceblood Tower", "Tower Point", "East Frostwolf Tower", "West Frostwolf Tower",
     "Stonehearth Bunker", "Icewing Bunker", "Dun Baldar North Bunker", "Dun Baldar South Bunker",
@@ -410,10 +409,26 @@ local avNodes = {
     "Frostwolf Graveyard", "Stonehearth Graveyard", "Stormpike Aid Station"
 }
 
-local function FindNode(msg, nodeList)
+local function FindABNode(msg)
     local lowerMsg = string.lower(msg)
-    for i = 1, table.getn(nodeList) do
-        local node = nodeList[i]
+    if string.find(lowerMsg, "gold mine") or string.find(lowerMsg, "the mine") or string.find(lowerMsg, "mine!") or string.find(lowerMsg, " mine") then
+        return "Gold Mine"
+    elseif string.find(lowerMsg, "lumber mill") or string.find(lowerMsg, "the mill") or string.find(lowerMsg, "mill!") or string.find(lowerMsg, " mill") then
+        return "Lumber Mill"
+    elseif string.find(lowerMsg, "blacksmith") or string.find(lowerMsg, "the smith") or string.find(lowerMsg, "smith") then
+        return "Blacksmith"
+    elseif string.find(lowerMsg, "farm") then
+        return "Farm"
+    elseif string.find(lowerMsg, "stables") or string.find(lowerMsg, "stable") then
+        return "Stables"
+    end
+    return nil
+end
+
+local function FindAVNode(msg)
+    local lowerMsg = string.lower(msg)
+    for i = 1, table.getn(avNodes) do
+        local node = avNodes[i]
         if string.find(lowerMsg, string.lower(node)) then
             return node
         end
@@ -438,34 +453,34 @@ local function ParseCombatMessage(msg, ev)
         assaultingFaction = "Alliance"
     end
 
-    -- Node Assaults (AB: 60s, AV: 300s)
-    if string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "claims") or string.find(lowerMsg, "under attack") then
+    -- Node Assaults / Claims (AB: 60s, AV: 300s)
+    if string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "claims") or string.find(lowerMsg, "under attack") or string.find(lowerMsg, "claimed") then
         if isAB or (not isAV and not isWSG) then
-            local abNode = FindNode(msg, abNodes)
+            local abNode = FindABNode(msg)
             if abNode and AutoBG_Settings.ABTimers then
                 timers.AB[abNode] = { expire = GetTime() + 60, faction = assaultingFaction }
             end
         end
 
         if isAV or (not isAB and not isWSG) then
-            local avNode = FindNode(msg, avNodes)
+            local avNode = FindAVNode(msg)
             if avNode and AutoBG_Settings.AVTimers then
                 timers.AV[avNode] = { expire = GetTime() + 300, faction = assaultingFaction }
             end
         end
     end
 
-    -- Node Defended / Taken / Destroyed
-    if string.find(lowerMsg, "taken") or string.find(lowerMsg, "defended") or string.find(lowerMsg, "destroyed") or string.find(lowerMsg, "captured") then
+    -- Node Defended / Taken / Destroyed / Controlled
+    if string.find(lowerMsg, "taken") or string.find(lowerMsg, "defended") or string.find(lowerMsg, "destroyed") or string.find(lowerMsg, "captured") or string.find(lowerMsg, "controls") then
         if isAB or (not isAV and not isWSG) then
-            local abNode = FindNode(msg, abNodes)
+            local abNode = FindABNode(msg)
             if abNode then
                 timers.AB[abNode] = nil
             end
         end
 
         if isAV or (not isAB and not isWSG) then
-            local avNode = FindNode(msg, avNodes)
+            local avNode = FindAVNode(msg)
             if avNode then
                 timers.AV[avNode] = nil
             end
