@@ -257,171 +257,81 @@ end
 
 local PlayLoudNotification = AutoBG_PlayNotificationSound
 
-local function GetBGMapIndex(bgName)
-    if not bgName then return 1, "Warsong Gulch" end
+local function GetBGButtonIndex(bgName)
+    if not bgName then return 4, "Warsong Gulch" end
     local lower = string.lower(bgName)
     if string.find(lower, "arathi") or string.find(lower, "ab") then
-        return 2, "Arathi Basin"
+        return 5, "Arathi Basin"
     elseif string.find(lower, "alterac") or string.find(lower, "av") then
-        return 3, "Alterac Valley"
+        return 7, "Alterac Valley"
     elseif string.find(lower, "thorn") or string.find(lower, "gorge") or string.find(lower, "tg") then
-        return 4, "Thorn Gorge"
+        return 6, "Thorn Gorge"
     elseif string.find(lower, "arena") then
-        return 5, "Arena"
+        return 3, "Arena"
     else
-        return 1, "Warsong Gulch"
+        return 4, "Warsong Gulch"
     end
 end
 
-local function FindAndClickMenuButton(cleanName)
-    local targetLower = string.lower(cleanName)
-
-    -- 1. Check standard DropDownList buttons
-    for listIdx = 1, 3 do
-        for btnIdx = 1, 10 do
-            local btn = getglobal("DropDownList" .. listIdx .. "Button" .. btnIdx)
-            if btn and btn:IsShown() then
-                local text = btn:GetText()
-                if not text then
-                    local textObj = getglobal("DropDownList" .. listIdx .. "Button" .. btnIdx .. "NormalText")
-                    if textObj and textObj.GetText then text = textObj:GetText() end
-                end
-                if text and string.find(string.lower(text), targetLower) then
-                    if btn.Click then btn:Click() return true end
-                end
-            end
-        end
+local function ClickFrame(f)
+    if not f then return false end
+    if f.Click then
+        f:Click()
+        return true
     end
-
-    -- 2. Check visible Button frames only (skips non-Buttons and chat frames)
-    local function searchFrame(f, depth)
-        if not f or not f.GetChildren or (depth and depth > 4) then return false end
-        local children = { f:GetChildren() }
-        for i = 1, table.getn(children) do
-            local child = children[i]
-            if child and child:IsShown() then
-                local name = child:GetName() or ""
-                if not string.find(name, "ChatFrame") and not string.find(name, "Tooltip") and not string.find(name, "WorldFrame") then
-                    local objType = (child.GetObjectType and child:GetObjectType()) or ""
-                    if objType == "Button" or objType == "CheckButton" then
-                        local childText = child.GetText and child:GetText()
-                        if not childText then
-                            local regions = { child:GetRegions() }
-                            for r = 1, table.getn(regions) do
-                                local reg = regions[r]
-                                if reg and reg.GetText and reg:GetText() then
-                                    local t = reg:GetText()
-                                    if string.find(string.lower(t), targetLower) then
-                                        childText = t
-                                        break
-                                    end
-                                end
-                            end
-                        end
-
-                        if childText and string.find(string.lower(childText), targetLower) then
-                            if child.Click then
-                                child:Click()
-                                return true
-                            end
-                            local onClick = nil
-                            pcall(function() onClick = child:GetScript("OnClick") end)
-                            if onClick then
-                                onClick()
-                                return true
-                            end
-                        end
-                    end
-
-                    if searchFrame(child, (depth or 0) + 1) then
-                        return true
-                    end
-                end
-            end
-        end
-        return false
+    local onClick = nil
+    pcall(function() onClick = f:GetScript("OnClick") end)
+    if onClick then
+        onClick()
+        return true
     end
-
-    return searchFrame(UIParent, 0)
-end
-
-local function FindBattlegroundFinderButton()
-    -- 1. Check known button names
-    local candidates = {
-        "BattlegroundFinderButton", "BGFinderButton", "BattlegroundFinder", "BGFinder",
-        "OctoBGButton", "OctoBGFinder", "PVPMinimapButton", "MiniMapBattlefieldFrame",
-        "MiniMapBattlegroundFrame", "BattlefieldMinimapButton", "BGFinderMinimapButton",
-        "BattlegroundFinderMinimapButton", "OctoMinimapButton", "OctoPVPButton"
-    }
-    for _, name in ipairs(candidates) do
-        local f = getglobal(name)
-        if f and f:IsShown() then return f end
-    end
-
-    -- 2. Scan Minimap, MinimapCluster, and UIParent for buttons with bannerpvp texture
-    local parentsToScan = { Minimap, MinimapCluster, MinimapBackdrop, UIParent }
-    for _, p in ipairs(parentsToScan) do
-        if p and p.GetChildren then
-            local children = { p:GetChildren() }
-            for i = 1, table.getn(children) do
-                local child = children[i]
-                if child and child:IsShown() then
-                    local objType = (child.GetObjectType and child:GetObjectType()) or ""
-                    if objType == "Button" or objType == "CheckButton" then
-                        local regions = { child:GetRegions() }
-                        for r = 1, table.getn(regions) do
-                            local reg = regions[r]
-                            if reg and reg.GetTexture and reg:GetTexture() then
-                                local tex = string.lower(reg:GetTexture())
-                                if string.find(tex, "bannerpvp") or string.find(tex, "battleground") then
-                                    return child
-                                end
-                            end
-                        end
-                        local name = child:GetName() or ""
-                        local lowerName = string.lower(name)
-                        if string.find(lowerName, "battleground") or string.find(lowerName, "bgfinder") or string.find(lowerName, "pvp") then
-                            return child
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return nil
+    return false
 end
 
 function AutoBG_TriggerBattlegroundFinder(bgName)
-    if not bgName then bgName = lastPlayedBG or "Warsong Gulch" end
-    local mapId, cleanName = GetBGMapIndex(bgName)
+    local btnIdx, cleanName = GetBGButtonIndex(bgName)
     pendingAutoRejoin = cleanName
 
-    -- 1. Direct 1.12 client request (if server supports remote CMSG_BATTLEFIELD_LIST)
-    if RequestBattlefieldList then
-        RequestBattlefieldList(mapId)
-    end
-
-    -- 2. If dropdown menu is already open, click the battleground
-    if FindAndClickMenuButton(cleanName) then
+    -- 1. If dropdown is already open, click the exact button instantly
+    local targetBtn = getglobal("DropDownList1Button" .. btnIdx)
+    if targetBtn and targetBtn:IsShown() then
+        ClickFrame(targetBtn)
         return
     end
 
-    -- 3. Click the Minimap button to open dropdown, then click the battleground
-    local mmBtn = FindBattlegroundFinderButton()
+    -- 2. Direct click on TWMiniMapBattlefieldFrame
+    local mmBtn = getglobal("TWMiniMapBattlefieldFrame") or getglobal("MiniMapBattlefieldFrame")
     if mmBtn then
-        if mmBtn.Click then
-            mmBtn:Click()
-        else
-            local onClick = nil
-            pcall(function() onClick = mmBtn:GetScript("OnClick") end)
-            if onClick then onClick() end
-        end
+        ClickFrame(mmBtn)
+    end
 
-        AutoBG_TimerAfter(0.08, function()
-            FindAndClickMenuButton(cleanName)
-        end)
-        AutoBG_TimerAfter(0.25, function()
-            FindAndClickMenuButton(cleanName)
+    -- 3. Click the specific DropDown button immediately
+    local btn = getglobal("DropDownList1Button" .. btnIdx)
+    if btn and btn:IsShown() then
+        ClickFrame(btn)
+    else
+        -- 0.04s tick in case client requires 1 render frame to show dropdown
+        AutoBG_TimerAfter(0.04, function()
+            local b = getglobal("DropDownList1Button" .. btnIdx)
+            if b and b:IsShown() then
+                ClickFrame(b)
+            else
+                -- Fallback: check text across DropDownList1 buttons
+                for i = 1, 8 do
+                    local dropBtn = getglobal("DropDownList1Button" .. i)
+                    if dropBtn and dropBtn:IsShown() then
+                        local text = dropBtn:GetText()
+                        if not text then
+                            local textObj = getglobal("DropDownList1Button" .. i .. "NormalText")
+                            if textObj and textObj.GetText then text = textObj:GetText() end
+                        end
+                        if text and string.find(string.lower(text), string.lower(cleanName)) then
+                            ClickFrame(dropBtn)
+                            break
+                        end
+                    end
+                end
+            end
         end)
     end
 end
@@ -429,19 +339,9 @@ end
 -- Global Macro Button: /click AutoBG_QuickQueueButton or /abg q
 local quickQueueBtn = CreateFrame("Button", "AutoBG_QuickQueueButton", UIParent)
 quickQueueBtn:SetScript("OnClick", function()
-    local bg = (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
-    if bg then
-        print("|cFF00FF00AutoBG:|r Quick-queue triggered for |cFFFFFF00" .. bg .. "|r...")
-        AutoBG_TriggerBattlegroundFinder(bg)
-    else
-        print("|cFF00FF00AutoBG:|r No previous BG recorded. Opening Battleground Finder...")
-        print("  |cFFFFFF00Tip:|r Use |cFFFFFF00/abg q ab|r, |cFFFFFF00/abg q wsg|r, |cFFFFFF00/abg q av|r, or |cFFFFFF00/abg q tg|r")
-        local mmBtn = FindBattlegroundFinderButton()
-        if mmBtn then
-            if mmBtn.Click then mmBtn:Click()
-            else pcall(function() if mmBtn:GetScript("OnClick") then mmBtn:GetScript("OnClick")() end end) end
-        end
-    end
+    local bg = (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG or "Warsong Gulch"
+    print("|cFF00FF00AutoBG:|r Quick-queue triggered for |cFFFFFF00" .. bg .. "|r...")
+    AutoBG_TriggerBattlegroundFinder(bg)
 end)
 
 local function HandleMatchEnd()
@@ -457,7 +357,7 @@ local function HandleMatchEnd()
         end
     end
     if AutoBG_Settings and AutoBG_Settings.AutoRejoin and lastPlayedBG then
-        local _, cleanName = GetBGMapIndex(lastPlayedBG)
+        local _, cleanName = GetBGButtonIndex(lastPlayedBG)
         pendingAutoRejoin = cleanName
     end
 
@@ -513,22 +413,16 @@ frame:SetScript("OnEvent", function()
             hasHandledEnd = false
             pendingAutoRejoin = nil
         else
-            -- Outside BG: if a match just ended, automatically re-open Battleground Finder to join next game
+            -- Outside BG: if a match just ended, instantly trigger Battleground Finder
             local targetRejoin = lastPlayedBG or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG)
             if hasHandledEnd and targetRejoin and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
                 local bgToQueue = targetRejoin
-                -- Staggered post-loading screen attempts
+                AutoBG_TimerAfter(0.05, function()
+                    if pendingAutoRejoin then
+                        AutoBG_TriggerBattlegroundFinder(bgToQueue)
+                    end
+                end)
                 AutoBG_TimerAfter(0.3, function()
-                    if pendingAutoRejoin then
-                        AutoBG_TriggerBattlegroundFinder(bgToQueue)
-                    end
-                end)
-                AutoBG_TimerAfter(0.8, function()
-                    if pendingAutoRejoin then
-                        AutoBG_TriggerBattlegroundFinder(bgToQueue)
-                    end
-                end)
-                AutoBG_TimerAfter(1.5, function()
                     if pendingAutoRejoin then
                         AutoBG_TriggerBattlegroundFinder(bgToQueue)
                     end
