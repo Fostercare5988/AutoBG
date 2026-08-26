@@ -530,15 +530,16 @@ local function ParseCombatMessage(msg, ev)
         end
     end
 
-    -- Match Start Universal Countdown
-    if string.find(lowerMsg, "minute") or string.find(lowerMsg, "seconds") or string.find(lowerMsg, "second") then
+    -- Match Start Universal Countdown (Strictly for pre-match gate countdowns)
+    local isMatchStartMsg = (string.find(lowerMsg, "battle will begin") or string.find(lowerMsg, "battle begins") or string.find(lowerMsg, "until the battle begins") or string.find(lowerMsg, "arena battle will begin") or string.find(lowerMsg, "arena battle begins")) and not string.find(lowerMsg, "control") and not string.find(lowerMsg, "claims") and not string.find(lowerMsg, "unchallenged")
+    if isMatchStartMsg then
         if string.find(lowerMsg, "2 minute") or string.find(lowerMsg, "two minute") then
             timers.Global["Match Starts"] = GetTime() + 120
         elseif string.find(lowerMsg, "1 minute") or string.find(lowerMsg, "one minute") then
             timers.Global["Match Starts"] = GetTime() + 60
-        elseif string.find(lowerMsg, "30 second") then
+        elseif string.find(lowerMsg, "30 second") or string.find(lowerMsg, "thirty second") then
             timers.Global["Match Starts"] = GetTime() + 30
-        elseif string.find(lowerMsg, "15 second") then
+        elseif string.find(lowerMsg, "15 second") or string.find(lowerMsg, "fifteen second") then
             timers.Global["Match Starts"] = GetTime() + 15
         end
     end
