@@ -55,9 +55,19 @@ Synchronizes the global 30-second server resurrection wave with a live visual pr
 - **Stance / Stealth Bar**: Suppresses default `ShapeshiftBarFrame` and child action buttons.
 - **Draggable Frames**: Position persistence across all timer displays via `/abg test`.
 
+### 6. Interactive Chat Announcements
+- **CTRL + Left-Click**: Click any live timer (AB/AV node, WSG flag respawn, Spirit Healer wave, or queue wait time) to instantly broadcast its remaining time into **Battleground chat** (or Party/Raid).
+
 ---
 
 ## ⌨️ Commands & Macros
+
+### Shortcuts & Click Actions
+
+| Action | Result |
+| :--- | :--- |
+| `CTRL + Left-Click` on Timer | Broadcast timer countdown to Battleground / Raid chat |
+| `Left-Click Drag` on Frame | Move timer frame position (saved across sessions) |
 
 ### Slash Commands
 

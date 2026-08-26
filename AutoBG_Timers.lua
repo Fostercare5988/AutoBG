@@ -9,6 +9,18 @@ local timers = {
 local spiritHealerOffset = 0
 local spiritHealerSynced = false
 
+local function SendTimerAnnouncement(text)
+    if not text or text == "" then return end
+    local inInstance, instanceType = IsInInstance()
+    local chatType = (inInstance and instanceType == "pvp") and "BATTLEGROUND" or "RAID"
+    if GetNumRaidMembers() == 0 and GetNumPartyMembers() > 0 then
+        chatType = "PARTY"
+    elseif GetNumRaidMembers() == 0 and GetNumPartyMembers() == 0 and not (inInstance and instanceType == "pvp") then
+        chatType = "SAY"
+    end
+    SendChatMessage(text, chatType)
+end
+
 local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minWidth)
     local frame = CreateFrame("Frame", name, UIParent)
     frame:SetWidth(minWidth or 100)
@@ -38,36 +50,72 @@ local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minW
     title:SetText(titleText)
 
     frame.title = title
-    frame.activeStrings = {}
+    frame.activeRows = {}
 
-    function frame:GetOrCreateFontString(index)
-        if not self.activeStrings[index] then
-            local fs = self:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    function frame:GetOrCreateRow(index)
+        if not self.activeRows[index] then
+            local btn = CreateFrame("Button", self:GetName() .. "Row" .. index, self)
+            btn:SetHeight(14)
+            btn:SetWidth(self:GetWidth() - 16)
             if index == 1 then
-                fs:SetPoint("TOP", self, "TOP", 0, -28)
+                btn:SetPoint("TOP", self, "TOP", 0, -26)
             else
-                fs:SetPoint("TOP", self.activeStrings[index-1], "BOTTOM", 0, -5)
+                btn:SetPoint("TOP", self.activeRows[index-1], "BOTTOM", 0, -2)
             end
-            self.activeStrings[index] = fs
+            btn:EnableMouse(true)
+            btn:RegisterForClicks("LeftButtonUp")
+            btn:RegisterForDrag("LeftButton")
+            btn:SetScript("OnDragStart", function() this:GetParent():StartMoving() end)
+            btn:SetScript("OnDragStop", function()
+                this:GetParent():StopMovingOrSizing()
+                if AutoBG_SavePosition then
+                    AutoBG_SavePosition(this:GetParent(), this:GetParent():GetName())
+                end
+            end)
+            btn:SetScript("OnClick", function()
+                if IsControlKeyDown() and this.announceText then
+                    SendTimerAnnouncement(this.announceText)
+                end
+            end)
+            btn:SetScript("OnEnter", function()
+                if this.announceText and this.announceText ~= "" then
+                    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(this.announceText, 1, 1, 1)
+                    GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce to chat", 0.7, 0.7, 0.7)
+                    GameTooltip:Show()
+                end
+            end)
+            btn:SetScript("OnLeave", function()
+                GameTooltip:Hide()
+            end)
+
+            local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            fs:SetPoint("CENTER", btn, "CENTER", 0, 0)
+            btn.fs = fs
+
+            self.activeRows[index] = btn
         end
-        return self.activeStrings[index]
+        return self.activeRows[index]
     end
 
     function frame:UpdateSize(index)
         local maxWidth = self.title:GetStringWidth() + 30
-        local count = table.getn(self.activeStrings)
+        local count = table.getn(self.activeRows)
         for i = index, count do
-            self.activeStrings[i]:Hide()
+            self.activeRows[i]:Hide()
         end
 
         for i = 1, index - 1 do
-            local w = self.activeStrings[i]:GetStringWidth() + 30
+            local w = self.activeRows[i].fs:GetStringWidth() + 30
             if w > maxWidth then maxWidth = w end
         end
 
         if index > 1 then
             self:SetWidth(math.max(minWidth or 100, maxWidth))
-            self:SetHeight(32 + (index - 1) * 15)
+            self:SetHeight(30 + (index - 1) * 16)
+            for i = 1, index - 1 do
+                self.activeRows[i]:SetWidth(self:GetWidth() - 16)
+            end
             self:Show()
         else
             self:Hide()
@@ -78,7 +126,7 @@ local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minW
 end
 
 local function CreateRespawnFrame(name, xOffset, yOffset)
-    local frame = CreateFrame("Frame", name, UIParent)
+    local frame = CreateFrame("Button", name, UIParent)
     frame:SetWidth(110)
     frame:SetHeight(38)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
@@ -91,6 +139,7 @@ local function CreateRespawnFrame(name, xOffset, yOffset)
     frame:SetBackdropColor(0, 0, 0, 0.8)
     frame:EnableMouse(true)
     frame:SetMovable(true)
+    frame:RegisterForClicks("LeftButtonUp")
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function() this:StartMoving() end)
     frame:SetScript("OnDragStop", function()
@@ -98,6 +147,22 @@ local function CreateRespawnFrame(name, xOffset, yOffset)
         if AutoBG_SavePosition then
             AutoBG_SavePosition(this, name)
         end
+    end)
+    frame:SetScript("OnClick", function()
+        if IsControlKeyDown() and this.announceText then
+            SendTimerAnnouncement(this.announceText)
+        end
+    end)
+    frame:SetScript("OnEnter", function()
+        if this.announceText and this.announceText ~= "" then
+            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+            GameTooltip:SetText(this.announceText, 1, 1, 1)
+            GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce to chat", 0.7, 0.7, 0.7)
+            GameTooltip:Show()
+        end
+    end)
+    frame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
     end)
     frame:Hide()
 
@@ -201,12 +266,14 @@ ControllerFrame:SetScript("OnUpdate", function()
     local nodeIndex = 1
     if AutoBG_Settings.ABTimers and (isTestAll or isAB) then
         if isTestAll then
-            local fs = NodeFrame:GetOrCreateFontString(1)
-            fs:SetText("|cFFFF4040Blacksmith: 0:59|r")
-            fs:Show()
-            local fs2 = NodeFrame:GetOrCreateFontString(2)
-            fs2:SetText("|cFF4090FFLumber Mill: 0:42|r")
-            fs2:Show()
+            local row1 = NodeFrame:GetOrCreateRow(1)
+            row1.fs:SetText("|cFFFF4040Blacksmith: 0:59|r")
+            row1.announceText = "AutoBG: Blacksmith (Horde) - 0:59 left"
+            row1:Show()
+            local row2 = NodeFrame:GetOrCreateRow(2)
+            row2.fs:SetText("|cFF4090FFLumber Mill: 0:42|r")
+            row2.announceText = "AutoBG: Lumber Mill (Alliance) - 0:42 left"
+            row2:Show()
             nodeIndex = 3
         else
             for name, data in pairs(timers.AB) do
@@ -215,7 +282,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                 local remaining = math.floor(expireTime - now)
 
                 if remaining > 0 then
-                    local fs = NodeFrame:GetOrCreateFontString(nodeIndex)
+                    local row = NodeFrame:GetOrCreateRow(nodeIndex)
                     local colorPrefix = ""
                     if useColors and faction == "Horde" then
                         colorPrefix = "|cFFFF4040"
@@ -224,11 +291,13 @@ ControllerFrame:SetScript("OnUpdate", function()
                     end
 
                     if colorPrefix ~= "" then
-                        fs:SetText(colorPrefix .. name .. ": " .. FormatTime(remaining) .. "|r")
+                        row.fs:SetText(colorPrefix .. name .. ": " .. FormatTime(remaining) .. "|r")
                     else
-                        fs:SetText(name .. ": " .. FormatTime(remaining))
+                        row.fs:SetText(name .. ": " .. FormatTime(remaining))
                     end
-                    fs:Show()
+                    local facText = faction and (" (" .. faction .. ")") or ""
+                    row.announceText = "AutoBG: " .. name .. facText .. " - " .. FormatTime(remaining) .. " left"
+                    row:Show()
                     nodeIndex = nodeIndex + 1
                 else
                     timers.AB[name] = nil
@@ -237,9 +306,10 @@ ControllerFrame:SetScript("OnUpdate", function()
             if timers.Global["Match Starts"] and isAB then
                 local remaining = math.floor(timers.Global["Match Starts"] - now)
                 if remaining > 0 then
-                    local fs = NodeFrame:GetOrCreateFontString(nodeIndex)
-                    fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
-                    fs:Show()
+                    local row = NodeFrame:GetOrCreateRow(nodeIndex)
+                    row.fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
+                    row.announceText = "AutoBG: Match starts in " .. FormatTime(remaining)
+                    row:Show()
                     nodeIndex = nodeIndex + 1
                 else
                     timers.Global["Match Starts"] = nil
@@ -257,12 +327,14 @@ ControllerFrame:SetScript("OnUpdate", function()
     local avIndex = 1
     if AutoBG_Settings.AVTimers and (isTestAll or isAV) then
         if isTestAll then
-            local fs = AVNodeFrame:GetOrCreateFontString(1)
-            fs:SetText("|cFFFF4040Stonehearth Bunker: 4:59|r")
-            fs:Show()
-            local fs2 = AVNodeFrame:GetOrCreateFontString(2)
-            fs2:SetText("|cFF4090FFIceblood Tower: 3:30|r")
-            fs2:Show()
+            local row1 = AVNodeFrame:GetOrCreateRow(1)
+            row1.fs:SetText("|cFFFF4040Stonehearth Bunker: 4:59|r")
+            row1.announceText = "AutoBG: Stonehearth Bunker (Horde) - 4:59 left"
+            row1:Show()
+            local row2 = AVNodeFrame:GetOrCreateRow(2)
+            row2.fs:SetText("|cFF4090FFIceblood Tower: 3:30|r")
+            row2.announceText = "AutoBG: Iceblood Tower (Alliance) - 3:30 left"
+            row2:Show()
             avIndex = 3
         else
             for name, data in pairs(timers.AV) do
@@ -271,7 +343,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                 local remaining = math.floor(expireTime - now)
 
                 if remaining > 0 then
-                    local fs = AVNodeFrame:GetOrCreateFontString(avIndex)
+                    local row = AVNodeFrame:GetOrCreateRow(avIndex)
                     local colorPrefix = ""
                     if useColors and faction == "Horde" then
                         colorPrefix = "|cFFFF4040"
@@ -280,11 +352,13 @@ ControllerFrame:SetScript("OnUpdate", function()
                     end
 
                     if colorPrefix ~= "" then
-                        fs:SetText(colorPrefix .. name .. ": " .. FormatTime(remaining) .. "|r")
+                        row.fs:SetText(colorPrefix .. name .. ": " .. FormatTime(remaining) .. "|r")
                     else
-                        fs:SetText(name .. ": " .. FormatTime(remaining))
+                        row.fs:SetText(name .. ": " .. FormatTime(remaining))
                     end
-                    fs:Show()
+                    local facText = faction and (" (" .. faction .. ")") or ""
+                    row.announceText = "AutoBG: " .. name .. facText .. " - " .. FormatTime(remaining) .. " left"
+                    row:Show()
                     avIndex = avIndex + 1
                 else
                     timers.AV[name] = nil
@@ -293,9 +367,10 @@ ControllerFrame:SetScript("OnUpdate", function()
             if timers.Global["Match Starts"] and isAV then
                 local remaining = math.floor(timers.Global["Match Starts"] - now)
                 if remaining > 0 then
-                    local fs = AVNodeFrame:GetOrCreateFontString(avIndex)
-                    fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
-                    fs:Show()
+                    local row = AVNodeFrame:GetOrCreateRow(avIndex)
+                    row.fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
+                    row.announceText = "AutoBG: Match starts in " .. FormatTime(remaining)
+                    row:Show()
                     avIndex = avIndex + 1
                 else
                     timers.Global["Match Starts"] = nil
@@ -313,24 +388,27 @@ ControllerFrame:SetScript("OnUpdate", function()
     local wsgIndex = 1
     if AutoBG_Settings.WSGTimers and (isTestAll or isWSG) then
         if isTestAll then
-            local fs = WSGFlagFrame:GetOrCreateFontString(1)
-            fs:SetText("|cFF4090FFAlliance Flag: 0:23|r")
-            fs:Show()
-            local fs2 = WSGFlagFrame:GetOrCreateFontString(2)
-            fs2:SetText("|cFFFF4040Horde Flag: 0:17|r")
-            fs2:Show()
+            local row1 = WSGFlagFrame:GetOrCreateRow(1)
+            row1.fs:SetText("|cFF4090FFAlliance Flag: 0:23|r")
+            row1.announceText = "AutoBG: Alliance Flag respawns in 0:23"
+            row1:Show()
+            local row2 = WSGFlagFrame:GetOrCreateRow(2)
+            row2.fs:SetText("|cFFFF4040Horde Flag: 0:17|r")
+            row2.announceText = "AutoBG: Horde Flag respawns in 0:17"
+            row2:Show()
             wsgIndex = 3
         else
             for name, expireTime in pairs(timers.WSG) do
                 local remaining = math.floor(expireTime - now)
                 if remaining > 0 then
-                    local fs = WSGFlagFrame:GetOrCreateFontString(wsgIndex)
+                    local row = WSGFlagFrame:GetOrCreateRow(wsgIndex)
                     local color = "|cFFFFFFFF"
                     if string.find(name, "Alliance") then color = "|cFF4090FF"
                     elseif string.find(name, "Horde") then color = "|cFFFF4040" end
 
-                    fs:SetText(color .. name .. ": " .. FormatTime(remaining) .. "|r")
-                    fs:Show()
+                    row.fs:SetText(color .. name .. ": " .. FormatTime(remaining) .. "|r")
+                    row.announceText = "AutoBG: " .. name .. " respawns in " .. FormatTime(remaining)
+                    row:Show()
                     wsgIndex = wsgIndex + 1
                 else
                     timers.WSG[name] = nil
@@ -339,9 +417,10 @@ ControllerFrame:SetScript("OnUpdate", function()
             if timers.Global["Match Starts"] and isWSG then
                 local remaining = math.floor(timers.Global["Match Starts"] - now)
                 if remaining > 0 then
-                    local fs = WSGFlagFrame:GetOrCreateFontString(wsgIndex)
-                    fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
-                    fs:Show()
+                    local row = WSGFlagFrame:GetOrCreateRow(wsgIndex)
+                    row.fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
+                    row.announceText = "AutoBG: Match starts in " .. FormatTime(remaining)
+                    row:Show()
                     wsgIndex = wsgIndex + 1
                 else
                     timers.Global["Match Starts"] = nil
@@ -376,6 +455,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                 RespawnFrame.timeText:SetText("|cFF00FF000:24|r")
                 RespawnFrame.bar:SetValue(24)
                 RespawnFrame.bar:SetStatusBarColor(0.1, 0.9, 0.2)
+                RespawnFrame.announceText = "AutoBG: Spirit Healer rez in 0:24"
                 RespawnFrame:Show()
             elseif runTimeSec > 0 then
                 local adjustedTime = runTimeSec + (spiritHealerOffset or 0)
@@ -403,6 +483,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                 RespawnFrame.bar:SetStatusBarColor(r, g, b)
                 local prefix = spiritHealerSynced and "" or "~"
                 RespawnFrame.timeText:SetText(colorCode .. prefix .. FormatTime(numRemaining) .. "|r")
+                RespawnFrame.announceText = "AutoBG: Spirit Healer rez in " .. FormatTime(numRemaining)
                 RespawnFrame:Show()
             else
                 RespawnFrame:Hide()
@@ -420,12 +501,14 @@ ControllerFrame:SetScript("OnUpdate", function()
     local queueIndex = 1
     if AutoBG_Settings.QueueTimers then
         if isTestAll then
-            local fs = QueueFrame:GetOrCreateFontString(1)
-            fs:SetText("WSG: 1:15")
-            fs:Show()
-            local fs2 = QueueFrame:GetOrCreateFontString(2)
-            fs2:SetText("AB: 4:32")
-            fs2:Show()
+            local row1 = QueueFrame:GetOrCreateRow(1)
+            row1.fs:SetText("WSG: 1:15")
+            row1.announceText = "AutoBG: Warsong Gulch Queue: 1:15"
+            row1:Show()
+            local row2 = QueueFrame:GetOrCreateRow(2)
+            row2.fs:SetText("AB: 4:32")
+            row2.announceText = "AutoBG: Arathi Basin Queue: 4:32"
+            row2:Show()
             queueIndex = 3
         else
             local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
@@ -434,15 +517,16 @@ ControllerFrame:SetScript("OnUpdate", function()
                 if status == "queued" then
                     local waitTime = (GetBattlefieldTimeWaited and GetBattlefieldTimeWaited(i)) or 0
                     local elapsedSeconds = math.floor(waitTime / 1000)
-                    local fs = QueueFrame:GetOrCreateFontString(queueIndex)
+                    local row = QueueFrame:GetOrCreateRow(queueIndex)
 
                     local abbrev = mapName or "BG"
                     if mapName == "Warsong Gulch" then abbrev = "WSG"
                     elseif mapName == "Arathi Basin" then abbrev = "AB"
                     elseif mapName == "Alterac Valley" then abbrev = "AV" end
 
-                    fs:SetText(abbrev .. ": " .. FormatQueueTime(elapsedSeconds))
-                    fs:Show()
+                    row.fs:SetText(abbrev .. ": " .. FormatQueueTime(elapsedSeconds))
+                    row.announceText = "AutoBG: " .. (mapName or "Battleground") .. " Queue wait time: " .. FormatQueueTime(elapsedSeconds)
+                    row:Show()
                     queueIndex = queueIndex + 1
                 end
             end
