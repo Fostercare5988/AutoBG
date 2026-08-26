@@ -474,13 +474,13 @@ ControllerFrame:SetScript("OnUpdate", function()
         RespawnFrame.bar:SetStatusBarColor(r, g, b)
         local prefix = spiritHealerSynced and "" or "~"
         RespawnFrame.timeText:SetText(colorCode .. prefix .. FormatTime(numRemaining) .. "|r")
-        RespawnFrame.announceText = "Rez: " .. FormatTime(numRemaining)
+        RespawnFrame.announceText = "Ress: " .. FormatTime(numRemaining)
         RespawnFrame:Show()
     elseif isTestAll and AutoBG_Settings.RessTimer then
         RespawnFrame.timeText:SetText("|cFF00FF000:24|r")
         RespawnFrame.bar:SetValue(24)
         RespawnFrame.bar:SetStatusBarColor(0.1, 0.9, 0.2)
-        RespawnFrame.announceText = "Rez: 0:24"
+        RespawnFrame.announceText = "Ress: 0:24"
         RespawnFrame:Show()
     else
         RespawnFrame:Hide()
