@@ -6,7 +6,7 @@ local timers = {
     Global = {}
 }
 
-local spiritHealerSyncTime = 0
+local spiritHealerOffset = 0
 local spiritHealerSynced = false
 
 local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minWidth)
@@ -358,68 +358,64 @@ ControllerFrame:SetScript("OnUpdate", function()
     end
     WSGFlagFrame:UpdateSize(wsgIndex)
 
-    -- 4. Respawn Timer (Spirit Healer 30s Multi-Source Synchronized Wave)
+    -- 4. Respawn Timer (Spirit Healer 30s Server Instance Synchronized Wave)
     local isInstance, instanceType = IsInInstance()
     local inBG = (isInstance and instanceType == "pvp")
 
     if inBG then
+        local runTime = (GetBattlefieldInstanceRunTime and GetBattlefieldInstanceRunTime()) or 0
+        local runTimeSec = runTime / 1000
         local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
-        if healerTime and healerTime > 0 then
-            spiritHealerSyncTime = now - (30 - healerTime)
+
+        -- Live calibration from Spirit Guide API whenever available
+        if healerTime and healerTime > 0 and runTimeSec > 0 then
+            local currentPhase = 30 - math.mod(runTimeSec, 30)
+            spiritHealerOffset = math.mod(currentPhase - healerTime + 30, 30)
             spiritHealerSynced = true
         end
 
-        if spiritHealerSyncTime == 0 then
-            local instanceTime = (GetBattlefieldInstanceRunTime and GetBattlefieldInstanceRunTime()) or 0
-            if instanceTime > 0 then
-                spiritHealerSyncTime = now - math.mod(instanceTime / 1000, 30)
+        if AutoBG_Settings.RessTimer then
+            if isTestAll then
+                RespawnFrame.timeText:SetText("|cFF00FF000:24|r")
+                RespawnFrame.bar:SetValue(24)
+                RespawnFrame.bar:SetStatusBarColor(0.1, 0.9, 0.2)
+                RespawnFrame:Show()
+            elseif runTimeSec > 0 then
+                local adjustedTime = runTimeSec + (spiritHealerOffset or 0)
+                local remaining = 30 - math.mod(adjustedTime, 30)
+                local numRemaining = math.ceil(remaining)
+                if numRemaining <= 0 then numRemaining = 30 end
+
+                RespawnFrame.bar:SetValue(remaining)
+
+                local r, g, b, colorCode
+                if numRemaining > 10 then
+                    r, g, b = 0.1, 0.9, 0.2
+                    colorCode = "|cFF00FF00"
+                elseif numRemaining > 5 then
+                    r, g, b = 1.0, 0.85, 0.0
+                    colorCode = "|cFFFFFF00"
+                elseif numRemaining > 2 then
+                    r, g, b = 1.0, 0.5, 0.0
+                    colorCode = "|cFFFF8000"
+                else
+                    r, g, b = 1.0, 0.15, 0.15
+                    colorCode = "|cFFFF2020"
+                end
+
+                RespawnFrame.bar:SetStatusBarColor(r, g, b)
+                local prefix = spiritHealerSynced and "" or "~"
+                RespawnFrame.timeText:SetText(colorCode .. prefix .. FormatTime(numRemaining) .. "|r")
+                RespawnFrame:Show()
             else
-                spiritHealerSyncTime = now
+                RespawnFrame:Hide()
             end
-            spiritHealerSynced = false
-        end
-    else
-        spiritHealerSyncTime = 0
-        spiritHealerSynced = false
-    end
-
-    if AutoBG_Settings.RessTimer then
-        if isTestAll then
-            RespawnFrame.timeText:SetText("|cFF00FF000:24|r")
-            RespawnFrame.bar:SetValue(24)
-            RespawnFrame.bar:SetStatusBarColor(0.1, 0.9, 0.2)
-            RespawnFrame:Show()
-        elseif inBG and spiritHealerSyncTime > 0 then
-            local elapsedSinceSync = now - spiritHealerSyncTime
-            local remaining = 30 - math.mod(elapsedSinceSync, 30)
-            local numRemaining = math.ceil(remaining)
-            if numRemaining <= 0 then numRemaining = 30 end
-
-            RespawnFrame.bar:SetValue(remaining)
-
-            local r, g, b, colorCode
-            if numRemaining > 10 then
-                r, g, b = 0.1, 0.9, 0.2
-                colorCode = "|cFF00FF00"
-            elseif numRemaining > 5 then
-                r, g, b = 1.0, 0.85, 0.0
-                colorCode = "|cFFFFFF00"
-            elseif numRemaining > 2 then
-                r, g, b = 1.0, 0.5, 0.0
-                colorCode = "|cFFFF8000"
-            else
-                r, g, b = 1.0, 0.15, 0.15
-                colorCode = "|cFFFF2020"
-            end
-
-            RespawnFrame.bar:SetStatusBarColor(r, g, b)
-            local prefix = spiritHealerSynced and "" or "~"
-            RespawnFrame.timeText:SetText(colorCode .. prefix .. FormatTime(numRemaining) .. "|r")
-            RespawnFrame:Show()
         else
             RespawnFrame:Hide()
         end
     else
+        spiritHealerOffset = 0
+        spiritHealerSynced = false
         RespawnFrame:Hide()
     end
 
@@ -566,14 +562,6 @@ local function ParseCombatMessage(msg, ev)
             timers.WSG["Berserk Buff"] = GetTime() + 120
         end
     end
-
-    -- Multi-Source Spirit Healer Wave Sync (Aura Gain & Combat Log)
-    if string.find(lowerMsg, "spirit healing") or string.find(lowerMsg, "honorless target") or string.find(lowerMsg, "resurrection sickness") or string.find(lowerMsg, "resurrected by spirit") then
-        if AutoBG_Settings and AutoBG_Settings.RessTimer then
-            spiritHealerSyncTime = GetTime()
-            spiritHealerSynced = true
-        end
-    end
 end
 
 local EventFrame = CreateFrame("Frame", "AutoBG_TimersEventFrame")
@@ -582,16 +570,6 @@ EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_ALLIANCE")
 EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 EventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
 EventFrame:RegisterEvent("CHAT_MSG_MONSTER_YELL")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_BUFFS")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_PARTY_BUFFS")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_FRIENDLYPLAYER_BUFFS")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_SELF")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_PARTY")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_CREATURE_BUFF")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_PARTY_BUFF")
-EventFrame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_HOSTILEPLAYER_BUFF")
 EventFrame:RegisterEvent("PLAYER_UNGHOST")
 EventFrame:RegisterEvent("PLAYER_ALIVE")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -607,30 +585,22 @@ EventFrame:SetScript("OnEvent", function()
         timers.AV = {}
         timers.WSG = {}
         timers.Global = {}
+        spiritHealerOffset = 0
+        spiritHealerSynced = false
 
-        local isInstance, instanceType = IsInInstance()
-        if isInstance and instanceType == "pvp" then
-            local runTime = (GetBattlefieldInstanceRunTime and GetBattlefieldInstanceRunTime()) or 0
-            if runTime > 0 then
-                spiritHealerSyncTime = GetTime() - math.mod(runTime / 1000, 30)
-                spiritHealerSynced = false
-            else
-                spiritHealerSyncTime = GetTime()
-                spiritHealerSynced = false
-            end
-        else
-            spiritHealerSyncTime = 0
-            spiritHealerSynced = false
-        end
     elseif ev == "PLAYER_UNGHOST" or ev == "PLAYER_ALIVE" then
         local isInstance, instanceType = IsInInstance()
         if isInstance and instanceType == "pvp" then
+            local runTime = (GetBattlefieldInstanceRunTime and GetBattlefieldInstanceRunTime()) or 0
+            local runTimeSec = runTime / 1000
             local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
-            if healerTime and healerTime > 0 then
-                spiritHealerSyncTime = GetTime() - (30 - healerTime)
+            if healerTime and healerTime > 0 and runTimeSec > 0 then
+                local currentPhase = 30 - math.mod(runTimeSec, 30)
+                spiritHealerOffset = math.mod(currentPhase - healerTime + 30, 30)
                 spiritHealerSynced = true
-            elseif ev == "PLAYER_UNGHOST" then
-                spiritHealerSyncTime = GetTime()
+            elseif ev == "PLAYER_UNGHOST" and runTimeSec > 0 then
+                local currentPhase = 30 - math.mod(runTimeSec, 30)
+                spiritHealerOffset = math.mod(currentPhase + 30, 30)
                 spiritHealerSynced = true
             end
         end
