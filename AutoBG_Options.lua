@@ -140,7 +140,7 @@ headerTimers:SetText("Timers & Overlays")
 
 local cbABTimers = CreateCheckbox("AutoBG_Opt_ABTimers", "Arathi Basin Nodes", "Show 60s node capture countdowns in Arathi Basin.", "ABTimers", headerTimers, 0, -4)
 local cbAVTimers = CreateCheckbox("AutoBG_Opt_AVTimers", "Alterac Valley Nodes", "Show 5m bunker/tower capture countdowns in AV.", "AVTimers", cbABTimers)
-local cbWSGTimers = CreateCheckbox("AutoBG_Opt_WSGTimers", "WSG Flags & Buffs", "Show WSG flag respawn (23s) and speed buff (3m) timers.", "WSGTimers", cbAVTimers)
+local cbWSGTimers = CreateCheckbox("AutoBG_Opt_WSGTimers", "WSG Flag Respawns", "Show 23s flag respawn countdowns in Warsong Gulch.", "WSGTimers", cbAVTimers)
 local cbRessTimer = CreateCheckbox("AutoBG_Opt_RessTimer", "Spirit Healer Timer", "Show synced 30s Spirit Healer resurrection wave timer.", "RessTimer", cbWSGTimers)
 local cbQueueTimers = CreateCheckbox("AutoBG_Opt_QueueTimers", "BG Queue Timers", "Show on-screen timer for active BG queue wait times.", "QueueTimers", cbRessTimer)
 local cbFCFrame = CreateCheckbox("AutoBG_Opt_FCFrame", "WSG Flag Carrier Frames", "Show clickable frames to target and track WSG flag carriers.", "FCFrame", cbQueueTimers)

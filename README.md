@@ -35,15 +35,14 @@ High-performance PvP automation and timer engine for World of Warcraft **Vanilla
 ### 2. Objective & Base Timers
 - **Arathi Basin**: 60s node capture timers with faction color-coding (Horde / Alliance). Supports all standard combat log aliases (`"the mine"`, `"the mill"`).
 - **Alterac Valley**: 300s capture timers for bunkers, towers, and graveyards.
-- **Warsong Gulch**: 23s flag respawn timers and 120s/180s powerup buff tracking (Speed, Restoration, Berserking). Strictly zone-isolated.
+- **Warsong Gulch**: 23s flag respawn timers with faction color-coding (Alliance / Horde). Strictly zone-isolated.
 - **Gate Openings**: Universal pre-match countdowns (120s, 60s, 30s, 15s).
 
-### 3. Multi-Source Spirit Healer Synchronization
-Synchronizes the global 30-second server resurrection wave across four inputs:
-1. **Combat Log Aura Sniffer**: Resets master clock upon `Spirit Healing`, `Honorless Target`, or `Resurrection Sickness` application.
-2. **Spirit Guide Proximity**: Ground-truth calibration via `GetAreaSpiritHealerTime()`.
-3. **Instance Clock Offset**: Initialized on zone entry via `GetBattlefieldInstanceRunTime() % 30`.
-4. **Visual Alert**: Color-shifts to yellow (<= 5s) and red/orange (<= 2s).
+### 3. Server-Synchronized Spirit Healer Engine
+Synchronizes the global 30-second server resurrection wave with a live visual progress bar:
+1. **Server Clock Heartbeat**: Continuous tracking aligned to `GetBattlefieldInstanceRunTime()`.
+2. **Ground-Truth Calibration**: Exact phase lock via `GetAreaSpiritHealerTime()` and `PLAYER_UNGHOST`.
+3. **Color-Graded Status Bar**: Smooth draining bar transitioning Green (>10s) -> Yellow (5-10s) -> Orange (2-5s) -> Red (<=2s).
 
 ### 4. Warsong Flag Carrier (FC) Tracking
 - Targetable unit frames for friendly and enemy carriers.

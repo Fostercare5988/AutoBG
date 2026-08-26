@@ -134,7 +134,7 @@ local QueueFrame = CreateDraggableTimerFrame("AutoBG_QueueFrame", "BG Queues", -
 local RespawnFrame = CreateRespawnFrame("AutoBG_RespawnFrame", 0, -100)
 local NodeFrame = CreateDraggableTimerFrame("AutoBG_NodeFrame", "AB Nodes", 220, -100, 160)
 local AVNodeFrame = CreateDraggableTimerFrame("AutoBG_AVNodeFrame", "AV Nodes", 220, -150, 160)
-local WSGFlagFrame = CreateDraggableTimerFrame("AutoBG_WSGFlagFrame", "WSG Timers", -110, -150, 140)
+local WSGFlagFrame = CreateDraggableTimerFrame("AutoBG_WSGFlagFrame", "WSG Flags", -110, -150, 140)
 
 function AutoBG_LoadTimerPositions()
     if AutoBG_LoadPosition then
@@ -309,7 +309,7 @@ ControllerFrame:SetScript("OnUpdate", function()
     end
     AVNodeFrame:UpdateSize(avIndex)
 
-    -- 3. WSG Timers (Flags & Buffs)
+    -- 3. WSG Timers (Flag Respawns 23s)
     local wsgIndex = 1
     if AutoBG_Settings.WSGTimers and (isTestAll or isWSG) then
         if isTestAll then
@@ -317,7 +317,7 @@ ControllerFrame:SetScript("OnUpdate", function()
             fs:SetText("|cFF4090FFAlliance Flag: 0:23|r")
             fs:Show()
             local fs2 = WSGFlagFrame:GetOrCreateFontString(2)
-            fs2:SetText("|cFFFFD100Speed Buff: 3:00|r")
+            fs2:SetText("|cFFFF4040Horde Flag: 0:17|r")
             fs2:Show()
             wsgIndex = 3
         else
@@ -327,10 +327,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                     local fs = WSGFlagFrame:GetOrCreateFontString(wsgIndex)
                     local color = "|cFFFFFFFF"
                     if string.find(name, "Alliance") then color = "|cFF4090FF"
-                    elseif string.find(name, "Horde") then color = "|cFFFF4040"
-                    elseif string.find(name, "Speed") then color = "|cFFFFD100"
-                    elseif string.find(name, "Resto") then color = "|cFF00FF00"
-                    elseif string.find(name, "Berserk") then color = "|cFFFF0000" end
+                    elseif string.find(name, "Horde") then color = "|cFFFF4040" end
 
                     fs:SetText(color .. name .. ": " .. FormatTime(remaining) .. "|r")
                     fs:Show()
@@ -547,7 +544,7 @@ local function ParseCombatMessage(msg, ev)
         timers.Global["Match Starts"] = nil
     end
 
-    -- WSG Flag Respawns (23s) & Buffs (ONLY in Warsong Gulch)
+    -- WSG Flag Respawns (23s - ONLY in Warsong Gulch)
     if AutoBG_Settings.WSGTimers and isWSG then
         if string.find(lowerMsg, "captured the alliance flag") or string.find(lowerMsg, "captured the horde flag") then
             if string.find(lowerMsg, "alliance flag") then
@@ -555,15 +552,6 @@ local function ParseCombatMessage(msg, ev)
             elseif string.find(lowerMsg, "horde flag") then
                 timers.WSG["Horde Flag"] = GetTime() + 23
             end
-        end
-
-        -- WSG Speed / Restoration / Berserking Buffs
-        if string.find(lowerMsg, "gains speed") then
-            timers.WSG["Speed Buff"] = GetTime() + 180
-        elseif string.find(lowerMsg, "gains restoration") then
-            timers.WSG["Resto Buff"] = GetTime() + 120
-        elseif string.find(lowerMsg, "gains berserking") then
-            timers.WSG["Berserk Buff"] = GetTime() + 120
         end
     end
 end
