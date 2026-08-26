@@ -513,16 +513,24 @@ local function ParseCombatMessage(msg, ev)
     -- Arathi Basin Node Capture Timers (60s - ONLY in Arathi Basin)
     if AutoBG_Settings.ABTimers and isAB then
         local matchedAB = FindABNode(msg)
-        if matchedAB and (string.find(lowerMsg, "claims") or string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "taken") or string.find(lowerMsg, "captured")) then
-            timers.AB[matchedAB] = { expire = GetTime() + 60, faction = assaultingFaction }
+        if matchedAB then
+            if string.find(lowerMsg, "claims") or string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "claimed") then
+                timers.AB[matchedAB] = { expire = GetTime() + 60, faction = assaultingFaction }
+            elseif string.find(lowerMsg, "taken") or string.find(lowerMsg, "defended") or string.find(lowerMsg, "controls") or string.find(lowerMsg, "captured") then
+                timers.AB[matchedAB] = nil
+            end
         end
     end
 
     -- Alterac Valley Node Capture Timers (300s - ONLY in Alterac Valley)
     if AutoBG_Settings.AVTimers and isAV then
         local matchedAV = FindAVNode(msg)
-        if matchedAV and (string.find(lowerMsg, "claims") or string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "taken") or string.find(lowerMsg, "under attack")) then
-            timers.AV[matchedAV] = { expire = GetTime() + 300, faction = assaultingFaction }
+        if matchedAV then
+            if string.find(lowerMsg, "claims") or string.find(lowerMsg, "assaulted") or string.find(lowerMsg, "under attack") then
+                timers.AV[matchedAV] = { expire = GetTime() + 300, faction = assaultingFaction }
+            elseif string.find(lowerMsg, "taken") or string.find(lowerMsg, "defended") or string.find(lowerMsg, "destroyed") or string.find(lowerMsg, "controls") or string.find(lowerMsg, "captured") then
+                timers.AV[matchedAV] = nil
+            end
         end
     end
 
@@ -537,10 +545,6 @@ local function ParseCombatMessage(msg, ev)
         timers.Global["Match Starts"] = GetTime() + 15
     elseif string.find(lowerMsg, "has begun") or string.find(lowerMsg, "begun!") or string.find(lowerMsg, "let the battle begin") or string.find(lowerMsg, "gates are open") or string.find(lowerMsg, "gates have opened") then
         timers.Global["Match Starts"] = nil
-        if AutoBG_Settings and AutoBG_Settings.RessTimer then
-            spiritHealerSyncTime = GetTime()
-            spiritHealerSynced = true
-        end
     end
 
     -- WSG Flag Respawns (23s) & Buffs (ONLY in Warsong Gulch)
