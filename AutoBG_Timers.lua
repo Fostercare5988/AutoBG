@@ -490,6 +490,63 @@ local function FindAVNode(msg)
     return nil
 end
 
+local function GetFactionFromMessage(msg, ev)
+    if not msg then return nil end
+    local lowerMsg = string.lower(msg)
+    if string.find(lowerMsg, "horde") then
+        return "Horde"
+    elseif string.find(lowerMsg, "alliance") then
+        return "Alliance"
+    end
+
+    if ev == "CHAT_MSG_BG_SYSTEM_HORDE" then
+        return "Horde"
+    elseif ev == "CHAT_MSG_BG_SYSTEM_ALLIANCE" then
+        return "Alliance"
+    end
+
+    -- Extract player name: "<Player> has assaulted..." or "<Player> claims..."
+    local _, _, playerName = string.find(msg, "^([^%s!]+)%s+has assaulted")
+    if not playerName then
+        _, _, playerName = string.find(msg, "^([^%s!]+)%s+claims")
+    end
+    if not playerName then
+        _, _, playerName = string.find(msg, "^([^%s!]+)%s+has claimed")
+    end
+    if not playerName then
+        _, _, playerName = string.find(msg, "^([^%s!]+)%s+assaulted")
+    end
+
+    if playerName then
+        local myFaction = UnitFactionGroup("player")
+        if not myFaction then return nil end
+        local isFriendly = false
+        local myName = UnitName("player")
+        if myName and string.lower(myName) == string.lower(playerName) then
+            isFriendly = true
+        else
+            local numRaid = GetNumRaidMembers()
+            if numRaid and numRaid > 0 then
+                for i = 1, numRaid do
+                    local rName = UnitName("raid" .. i)
+                    if rName and string.lower(rName) == string.lower(playerName) then
+                        isFriendly = true
+                        break
+                    end
+                end
+            end
+        end
+
+        if isFriendly then
+            return myFaction
+        else
+            return (myFaction == "Horde") and "Alliance" or "Horde"
+        end
+    end
+
+    return nil
+end
+
 local function ParseCombatMessage(msg, ev)
     if not AutoBG_Settings or not msg then return end
 
@@ -500,12 +557,7 @@ local function ParseCombatMessage(msg, ev)
     local isWSG = (string.find(lowerZone, "warsong") ~= nil)
 
     local lowerMsg = string.lower(msg)
-    local assaultingFaction = nil
-    if string.find(lowerMsg, "horde") then
-        assaultingFaction = "Horde"
-    elseif string.find(lowerMsg, "alliance") then
-        assaultingFaction = "Alliance"
-    end
+    local assaultingFaction = GetFactionFromMessage(msg, ev)
 
     -- Arathi Basin Node Capture Timers (60s - ONLY in Arathi Basin)
     if AutoBG_Settings.ABTimers and isAB then
