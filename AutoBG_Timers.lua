@@ -268,11 +268,11 @@ ControllerFrame:SetScript("OnUpdate", function()
         if isTestAll then
             local row1 = NodeFrame:GetOrCreateRow(1)
             row1.fs:SetText("|cFFFF4040Blacksmith: 0:59|r")
-            row1.announceText = "AutoBG: Blacksmith (Horde) - 0:59 left"
+            row1.announceText = "Blacksmith (Horde): 0:59"
             row1:Show()
             local row2 = NodeFrame:GetOrCreateRow(2)
             row2.fs:SetText("|cFF4090FFLumber Mill: 0:42|r")
-            row2.announceText = "AutoBG: Lumber Mill (Alliance) - 0:42 left"
+            row2.announceText = "Lumber Mill (Alliance): 0:42"
             row2:Show()
             nodeIndex = 3
         else
@@ -296,7 +296,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                         row.fs:SetText(name .. ": " .. FormatTime(remaining))
                     end
                     local facText = faction and (" (" .. faction .. ")") or ""
-                    row.announceText = "AutoBG: " .. name .. facText .. " - " .. FormatTime(remaining) .. " left"
+                    row.announceText = name .. facText .. ": " .. FormatTime(remaining)
                     row:Show()
                     nodeIndex = nodeIndex + 1
                 else
@@ -308,7 +308,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                 if remaining > 0 then
                     local row = NodeFrame:GetOrCreateRow(nodeIndex)
                     row.fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
-                    row.announceText = "AutoBG: Match starts in " .. FormatTime(remaining)
+                    row.announceText = "Gates: " .. FormatTime(remaining)
                     row:Show()
                     nodeIndex = nodeIndex + 1
                 else
@@ -329,11 +329,11 @@ ControllerFrame:SetScript("OnUpdate", function()
         if isTestAll then
             local row1 = AVNodeFrame:GetOrCreateRow(1)
             row1.fs:SetText("|cFFFF4040Stonehearth Bunker: 4:59|r")
-            row1.announceText = "AutoBG: Stonehearth Bunker (Horde) - 4:59 left"
+            row1.announceText = "Stonehearth Bunker (Horde): 4:59"
             row1:Show()
             local row2 = AVNodeFrame:GetOrCreateRow(2)
             row2.fs:SetText("|cFF4090FFIceblood Tower: 3:30|r")
-            row2.announceText = "AutoBG: Iceblood Tower (Alliance) - 3:30 left"
+            row2.announceText = "Iceblood Tower (Alliance): 3:30"
             row2:Show()
             avIndex = 3
         else
@@ -357,7 +357,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                         row.fs:SetText(name .. ": " .. FormatTime(remaining))
                     end
                     local facText = faction and (" (" .. faction .. ")") or ""
-                    row.announceText = "AutoBG: " .. name .. facText .. " - " .. FormatTime(remaining) .. " left"
+                    row.announceText = name .. facText .. ": " .. FormatTime(remaining)
                     row:Show()
                     avIndex = avIndex + 1
                 else
@@ -369,7 +369,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                 if remaining > 0 then
                     local row = AVNodeFrame:GetOrCreateRow(avIndex)
                     row.fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
-                    row.announceText = "AutoBG: Match starts in " .. FormatTime(remaining)
+                    row.announceText = "Gates: " .. FormatTime(remaining)
                     row:Show()
                     avIndex = avIndex + 1
                 else
@@ -390,11 +390,11 @@ ControllerFrame:SetScript("OnUpdate", function()
         if isTestAll then
             local row1 = WSGFlagFrame:GetOrCreateRow(1)
             row1.fs:SetText("|cFF4090FFAlliance Flag: 0:23|r")
-            row1.announceText = "AutoBG: Alliance Flag respawns in 0:23"
+            row1.announceText = "Alliance Flag: 0:23"
             row1:Show()
             local row2 = WSGFlagFrame:GetOrCreateRow(2)
             row2.fs:SetText("|cFFFF4040Horde Flag: 0:17|r")
-            row2.announceText = "AutoBG: Horde Flag respawns in 0:17"
+            row2.announceText = "Horde Flag: 0:17"
             row2:Show()
             wsgIndex = 3
         else
@@ -407,7 +407,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                     elseif string.find(name, "Horde") then color = "|cFFFF4040" end
 
                     row.fs:SetText(color .. name .. ": " .. FormatTime(remaining) .. "|r")
-                    row.announceText = "AutoBG: " .. name .. " respawns in " .. FormatTime(remaining)
+                    row.announceText = name .. ": " .. FormatTime(remaining)
                     row:Show()
                     wsgIndex = wsgIndex + 1
                 else
@@ -419,7 +419,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                 if remaining > 0 then
                     local row = WSGFlagFrame:GetOrCreateRow(wsgIndex)
                     row.fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
-                    row.announceText = "AutoBG: Match starts in " .. FormatTime(remaining)
+                    row.announceText = "Gates: " .. FormatTime(remaining)
                     row:Show()
                     wsgIndex = wsgIndex + 1
                 else
@@ -474,13 +474,13 @@ ControllerFrame:SetScript("OnUpdate", function()
         RespawnFrame.bar:SetStatusBarColor(r, g, b)
         local prefix = spiritHealerSynced and "" or "~"
         RespawnFrame.timeText:SetText(colorCode .. prefix .. FormatTime(numRemaining) .. "|r")
-        RespawnFrame.announceText = "AutoBG: Spirit Healer rez in " .. FormatTime(numRemaining) .. "s"
+        RespawnFrame.announceText = "Rez: " .. FormatTime(numRemaining)
         RespawnFrame:Show()
     elseif isTestAll and AutoBG_Settings.RessTimer then
         RespawnFrame.timeText:SetText("|cFF00FF000:24|r")
         RespawnFrame.bar:SetValue(24)
         RespawnFrame.bar:SetStatusBarColor(0.1, 0.9, 0.2)
-        RespawnFrame.announceText = "AutoBG: Spirit Healer rez in 0:24"
+        RespawnFrame.announceText = "Rez: 0:24"
         RespawnFrame:Show()
     else
         RespawnFrame:Hide()
@@ -492,11 +492,11 @@ ControllerFrame:SetScript("OnUpdate", function()
         if isTestAll then
             local row1 = QueueFrame:GetOrCreateRow(1)
             row1.fs:SetText("WSG: 1:15")
-            row1.announceText = "AutoBG: Warsong Gulch Queue: 1:15"
+            row1.announceText = "WSG Queue: 1:15"
             row1:Show()
             local row2 = QueueFrame:GetOrCreateRow(2)
             row2.fs:SetText("AB: 4:32")
-            row2.announceText = "AutoBG: Arathi Basin Queue: 4:32"
+            row2.announceText = "AB Queue: 4:32"
             row2:Show()
             queueIndex = 3
         else
@@ -514,7 +514,7 @@ ControllerFrame:SetScript("OnUpdate", function()
                     elseif mapName == "Alterac Valley" then abbrev = "AV" end
 
                     row.fs:SetText(abbrev .. ": " .. FormatQueueTime(elapsedSeconds))
-                    row.announceText = "AutoBG: " .. (mapName or "Battleground") .. " Queue wait time: " .. FormatQueueTime(elapsedSeconds)
+                    row.announceText = abbrev .. " Queue: " .. FormatQueueTime(elapsedSeconds)
                     row:Show()
                     queueIndex = queueIndex + 1
                 end
