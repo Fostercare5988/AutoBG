@@ -6,7 +6,7 @@ local timers = {
     Global = {}
 }
 
-local spiritHealerOffset = 0
+local spiritHealerSyncTime = 0
 local spiritHealerSynced = false
 
 local function SendTimerAnnouncement(text)
@@ -434,66 +434,55 @@ ControllerFrame:SetScript("OnUpdate", function()
     end
     WSGFlagFrame:UpdateSize(wsgIndex)
 
-    -- 4. Respawn Timer (Spirit Healer 30s Server Instance Synchronized Wave)
+    -- 4. Respawn Timer (Spirit Healer 30s Multi-Source Synchronized Wave)
     local isInstance, instanceType = IsInInstance()
     local inBG = (isInstance and instanceType == "pvp")
 
-    if inBG then
-        local runTime = (GetBattlefieldInstanceRunTime and GetBattlefieldInstanceRunTime()) or 0
-        local runTimeSec = runTime / 1000
+    if inBG and AutoBG_Settings.RessTimer then
         local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
-
-        -- Live calibration from Spirit Guide API whenever available
-        if healerTime and healerTime > 0 and runTimeSec > 0 then
-            local currentPhase = 30 - math.mod(runTimeSec, 30)
-            spiritHealerOffset = math.mod(currentPhase - healerTime + 30, 30)
+        if healerTime and healerTime > 0 then
+            spiritHealerSyncTime = now - (30 - healerTime)
             spiritHealerSynced = true
         end
 
-        if AutoBG_Settings.RessTimer then
-            if isTestAll then
-                RespawnFrame.timeText:SetText("|cFF00FF000:24|r")
-                RespawnFrame.bar:SetValue(24)
-                RespawnFrame.bar:SetStatusBarColor(0.1, 0.9, 0.2)
-                RespawnFrame.announceText = "AutoBG: Spirit Healer rez in 0:24"
-                RespawnFrame:Show()
-            elseif runTimeSec > 0 then
-                local adjustedTime = runTimeSec + (spiritHealerOffset or 0)
-                local remaining = 30 - math.mod(adjustedTime, 30)
-                local numRemaining = math.ceil(remaining)
-                if numRemaining <= 0 then numRemaining = 30 end
-
-                RespawnFrame.bar:SetValue(remaining)
-
-                local r, g, b, colorCode
-                if numRemaining > 10 then
-                    r, g, b = 0.1, 0.9, 0.2
-                    colorCode = "|cFF00FF00"
-                elseif numRemaining > 5 then
-                    r, g, b = 1.0, 0.85, 0.0
-                    colorCode = "|cFFFFFF00"
-                elseif numRemaining > 2 then
-                    r, g, b = 1.0, 0.5, 0.0
-                    colorCode = "|cFFFF8000"
-                else
-                    r, g, b = 1.0, 0.15, 0.15
-                    colorCode = "|cFFFF2020"
-                end
-
-                RespawnFrame.bar:SetStatusBarColor(r, g, b)
-                local prefix = spiritHealerSynced and "" or "~"
-                RespawnFrame.timeText:SetText(colorCode .. prefix .. FormatTime(numRemaining) .. "|r")
-                RespawnFrame.announceText = "AutoBG: Spirit Healer rez in " .. FormatTime(numRemaining)
-                RespawnFrame:Show()
-            else
-                RespawnFrame:Hide()
-            end
-        else
-            RespawnFrame:Hide()
+        if spiritHealerSyncTime == 0 then
+            spiritHealerSyncTime = now
         end
+
+        local elapsed = now - spiritHealerSyncTime
+        local remaining = 30 - math.mod(elapsed, 30)
+        local numRemaining = math.ceil(remaining)
+        if numRemaining <= 0 then numRemaining = 30 end
+
+        RespawnFrame.bar:SetValue(remaining)
+
+        local r, g, b, colorCode
+        if numRemaining > 10 then
+            r, g, b = 0.1, 0.9, 0.2
+            colorCode = "|cFF00FF00"
+        elseif numRemaining > 5 then
+            r, g, b = 1.0, 0.85, 0.0
+            colorCode = "|cFFFFFF00"
+        elseif numRemaining > 2 then
+            r, g, b = 1.0, 0.5, 0.0
+            colorCode = "|cFFFF8000"
+        else
+            r, g, b = 1.0, 0.15, 0.15
+            colorCode = "|cFFFF2020"
+        end
+
+        RespawnFrame.bar:SetStatusBarColor(r, g, b)
+        local prefix = spiritHealerSynced and "" or "~"
+        RespawnFrame.timeText:SetText(colorCode .. prefix .. FormatTime(numRemaining) .. "|r")
+        RespawnFrame.announceText = "AutoBG: Spirit Healer rez in " .. FormatTime(numRemaining) .. "s"
+        RespawnFrame:Show()
+    elseif isTestAll and AutoBG_Settings.RessTimer then
+        RespawnFrame.timeText:SetText("|cFF00FF000:24|r")
+        RespawnFrame.bar:SetValue(24)
+        RespawnFrame.bar:SetStatusBarColor(0.1, 0.9, 0.2)
+        RespawnFrame.announceText = "AutoBG: Spirit Healer rez in 0:24"
+        RespawnFrame:Show()
     else
-        spiritHealerOffset = 0
-        spiritHealerSynced = false
         RespawnFrame:Hide()
     end
 
@@ -713,22 +702,18 @@ EventFrame:SetScript("OnEvent", function()
         timers.AV = {}
         timers.WSG = {}
         timers.Global = {}
-        spiritHealerOffset = 0
+        spiritHealerSyncTime = GetTime()
         spiritHealerSynced = false
 
     elseif ev == "PLAYER_UNGHOST" or ev == "PLAYER_ALIVE" then
         local isInstance, instanceType = IsInInstance()
         if isInstance and instanceType == "pvp" then
-            local runTime = (GetBattlefieldInstanceRunTime and GetBattlefieldInstanceRunTime()) or 0
-            local runTimeSec = runTime / 1000
             local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
-            if healerTime and healerTime > 0 and runTimeSec > 0 then
-                local currentPhase = 30 - math.mod(runTimeSec, 30)
-                spiritHealerOffset = math.mod(currentPhase - healerTime + 30, 30)
+            if healerTime and healerTime > 0 then
+                spiritHealerSyncTime = GetTime() - (30 - healerTime)
                 spiritHealerSynced = true
-            elseif ev == "PLAYER_UNGHOST" and runTimeSec > 0 then
-                local currentPhase = 30 - math.mod(runTimeSec, 30)
-                spiritHealerOffset = math.mod(currentPhase + 30, 30)
+            elseif ev == "PLAYER_UNGHOST" then
+                spiritHealerSyncTime = GetTime()
                 spiritHealerSynced = true
             end
         end
