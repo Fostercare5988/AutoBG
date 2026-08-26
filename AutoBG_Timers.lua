@@ -530,17 +530,20 @@ local function ParseCombatMessage(msg, ev)
         end
     end
 
-    -- Match Start Universal Countdown (Strictly for pre-match gate countdowns)
-    local isMatchStartMsg = (string.find(lowerMsg, "battle will begin") or string.find(lowerMsg, "battle begins") or string.find(lowerMsg, "until the battle begins") or string.find(lowerMsg, "arena battle will begin") or string.find(lowerMsg, "arena battle begins")) and not string.find(lowerMsg, "control") and not string.find(lowerMsg, "claims") and not string.find(lowerMsg, "unchallenged")
-    if isMatchStartMsg then
-        if string.find(lowerMsg, "2 minute") or string.find(lowerMsg, "two minute") then
-            timers.Global["Match Starts"] = GetTime() + 120
-        elseif string.find(lowerMsg, "1 minute") or string.find(lowerMsg, "one minute") then
-            timers.Global["Match Starts"] = GetTime() + 60
-        elseif string.find(lowerMsg, "30 second") or string.find(lowerMsg, "thirty second") then
-            timers.Global["Match Starts"] = GetTime() + 30
-        elseif string.find(lowerMsg, "15 second") or string.find(lowerMsg, "fifteen second") then
-            timers.Global["Match Starts"] = GetTime() + 15
+    -- Exact OctoWOW / Turtle WoW Pre-Match Gate Announcements
+    if string.find(lowerMsg, "begins in 2 minute") then
+        timers.Global["Match Starts"] = GetTime() + 120
+    elseif string.find(lowerMsg, "begins in 1 minute") then
+        timers.Global["Match Starts"] = GetTime() + 60
+    elseif string.find(lowerMsg, "begins in 30 second") then
+        timers.Global["Match Starts"] = GetTime() + 30
+    elseif string.find(lowerMsg, "begins in 15 second") then
+        timers.Global["Match Starts"] = GetTime() + 15
+    elseif string.find(lowerMsg, "has begun") or string.find(lowerMsg, "begun!") or string.find(lowerMsg, "let the battle begin") or string.find(lowerMsg, "gates are open") or string.find(lowerMsg, "gates have opened") then
+        timers.Global["Match Starts"] = nil
+        if AutoBG_Settings and AutoBG_Settings.RessTimer then
+            spiritHealerSyncTime = GetTime()
+            spiritHealerSynced = true
         end
     end
 
@@ -570,15 +573,6 @@ local function ParseCombatMessage(msg, ev)
             spiritHealerSyncTime = GetTime()
             spiritHealerSynced = true
         end
-    end
-
-    -- Sync Spirit Healer timer when BG begins
-    if string.find(lowerMsg, "begun!") or string.find(lowerMsg, "has begun") or string.find(lowerMsg, "gates are open") or string.find(lowerMsg, "gates have opened") then
-        if AutoBG_Settings and AutoBG_Settings.RessTimer then
-            spiritHealerSyncTime = GetTime()
-            spiritHealerSynced = true
-        end
-        timers.Global["Match Starts"] = nil
     end
 end
 
