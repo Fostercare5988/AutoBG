@@ -31,6 +31,7 @@ High-performance PvP automation and timer engine for World of Warcraft **Vanilla
 - **Auto-Accept & Delay**: Confirms queue pop instantly (0s) or after a configurable countdown (0–30s).
 - **Smart Spirit Release**: Auto-releases spirit inside battlegrounds while preserving Soulstones and Reincarnation (Ankh).
 - **Audio & Taskbar Alerts**: Ready-check audio triggers and OS taskbar flashing on queue pop.
+- **Chat Notifications**: Color-coded system status messages for queues, joins, delayed entries, and leaves.
 
 ### 2. Objective & Base Timers
 - **Arathi Basin**: 60s node capture timers with faction color-coding (Horde / Alliance). Supports all standard combat log aliases (`"the mine"`, `"the mill"`).
@@ -70,6 +71,7 @@ Synchronizes the global 30-second server resurrection wave with a live visual pr
 | `/abg q tg` | Queue for Thorn Gorge |
 | `/abg a` | Toggle Auto-Accept queue pop |
 | `/abg delay <sec>` | Set Auto-Accept delay (0=instant, up to 30s) |
+| `/abg msg` | Toggle chat status notifications |
 | `/abg l` | Toggle Auto-Leave on match end |
 | `/abg j` | Toggle Auto-Rejoin on zone exit |
 | `/abg r` | Toggle Auto-Release on death |

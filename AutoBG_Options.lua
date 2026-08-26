@@ -1,7 +1,7 @@
 -- AutoBG Options Panel for WoW 1.12.1
 local panel = CreateFrame("Frame", "AutoBG_OptionsPanel", UIParent)
 panel:SetWidth(460)
-panel:SetHeight(450)
+panel:SetHeight(480)
 panel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 panel:SetFrameStrata("DIALOG")
 panel:SetToplevel(true)
@@ -63,9 +63,13 @@ local function CreateCheckbox(name, labelText, tooltipText, settingKey, anchor, 
                 if AutoBG_UpdateStanceBar then
                     AutoBG_UpdateStanceBar()
                 end
+                if not isChecked then
+                    if DEFAULT_CHAT_FRAME then
+                        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00AutoBG:|r Please type /reload to restore stance/stealth bar.")
+                    end
+                end
             elseif settingKey == "TestAllTimers" then
-                if AutoBG_Timers_UpdateVisibility then AutoBG_Timers_UpdateVisibility() end
-                if AutoBG_FC_UpdateVisibility then AutoBG_FC_UpdateVisibility() end
+                if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
             end
         end
     end)
@@ -73,7 +77,7 @@ local function CreateCheckbox(name, labelText, tooltipText, settingKey, anchor, 
     cb:SetScript("OnEnter", function()
         if this.tooltipText then
             GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-            GameTooltip:SetText(this.tooltipText, nil, nil, nil, nil, 1)
+            GameTooltip:SetText(this.tooltipText, 1, 1, 1, nil, 1)
             GameTooltip:Show()
         end
     end)
@@ -81,15 +85,15 @@ local function CreateCheckbox(name, labelText, tooltipText, settingKey, anchor, 
         GameTooltip:Hide()
     end)
 
-    table.insert(checkboxes, cb)
+    tinsert(checkboxes, cb)
     return cb
 end
 
 local function CreateHeader(text, anchor, x, y)
-    local header = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    header:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", x or 0, y or -12)
-    header:SetText(text)
-    return header
+    local h = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    h:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", x or 0, y or -10)
+    h:SetText(text)
+    return h
 end
 
 -- ==========================================================
@@ -101,7 +105,8 @@ headerAlerts:SetText("Alerts & Automation")
 
 local cbSound = CreateCheckbox("AutoBG_Opt_Sound", "Loud Sound Alerts", "Play a loud ready check sound when queues pop or end.", "NotifySound", headerAlerts, 0, -4)
 local cbFlash = CreateCheckbox("AutoBG_Opt_Flash", "Taskbar Flashing", "Flash the game window in taskbar on queue pop.", "FlashTaskbar", cbSound)
-local cbAccept = CreateCheckbox("AutoBG_Opt_Accept", "Auto-Accept Queue Pop", "Automatically accept the battleground queue and enter when ready.", "AutoAccept", cbFlash)
+local cbChatMsg = CreateCheckbox("AutoBG_Opt_ChatMsg", "Chat Notifications", "Display status messages in chat for queues, auto-leave, and joins.", "ChatMessages", cbFlash)
+local cbAccept = CreateCheckbox("AutoBG_Opt_Accept", "Auto-Accept Queue Pop", "Automatically accept the battleground queue and enter when ready.", "AutoAccept", cbChatMsg)
 
 local sliderDelay = CreateFrame("Slider", "AutoBG_Slider_AcceptDelay", panel, "OptionsSliderTemplate")
 sliderDelay:SetPoint("TOPLEFT", cbAccept, "BOTTOMLEFT", 20, -14)

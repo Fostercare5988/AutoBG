@@ -77,6 +77,7 @@ end
 local defaultSettings = {
     NotifySound = true,
     FlashTaskbar = true,
+    ChatMessages = true,
     AutoAccept = false,
     AutoAcceptDelay = 0,
     AutoLeave = true,
@@ -96,6 +97,12 @@ local defaultSettings = {
     LastPlayedBG = nil,
     Positions = {},
 }
+
+function AutoBG_Print(msg, force)
+    if (force or (AutoBG_Settings and AutoBG_Settings.ChatMessages)) and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00AutoBG:|r " .. msg)
+    end
+end
 
 function AutoBG_UpdateStanceBar()
     if not AutoBG_Settings then return end
@@ -338,10 +345,11 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
 end
 
 -- Global Macro Button: /click AutoBG_QuickQueueButton or /abg q
+-- Global Macro Button: /click AutoBG_QuickQueueButton or /abg q
 local quickQueueBtn = CreateFrame("Button", "AutoBG_QuickQueueButton", UIParent)
 quickQueueBtn:SetScript("OnClick", function()
     local bg = (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG or "Warsong Gulch"
-    print("|cFF00FF00AutoBG:|r Quick-queue triggered for |cFFFFFF00" .. bg .. "|r...")
+    AutoBG_Print("Quick-queue triggered for |cFFFFFF00" .. bg .. "|r...")
     AutoBG_TriggerBattlegroundFinder(bg)
 end)
 
@@ -365,7 +373,7 @@ local function HandleMatchEnd()
     -- Instant leave
     if AutoBG_Settings and AutoBG_Settings.AutoLeave then
         LeaveBattlefield(0)
-        print("|cFF00FF00AutoBG:|r Instantly left battleground.")
+        AutoBG_Print("Instantly left |cFFFFFF00" .. (lastPlayedBG or "battleground") .. "|r.")
     end
 end
 
@@ -377,7 +385,7 @@ StaticPopup_Show = function(which, text_arg1, text_arg2, data)
         if delay <= 0 then
             local id = data or 1
             AcceptBattlefieldPort(id, 1)
-            print("|cFF00FF00AutoBG:|r Instant Auto-Accepted " .. (text_arg1 or "Battleground") .. "!")
+            AutoBG_Print("Instant Auto-Accepted |cFFFFFF00" .. (text_arg1 or "Battleground") .. "|r!")
             return nil
         end
     end
@@ -403,7 +411,7 @@ frame:SetScript("OnEvent", function()
                 AutoBG_Settings.Positions = {}
             end
         end
-        print("|cFF00FF00AutoBG:|r Loaded. Type |cFFFFFF00/abg|r for options.")
+        AutoBG_Print("Loaded. Type |cFFFFFF00/abg|r for options.", true)
 
         if AutoBG_Settings.HideCastbar and CastingBarFrame then
             CastingBarFrame:UnregisterAllEvents()
@@ -457,7 +465,7 @@ frame:SetScript("OnEvent", function()
             if BattlefieldFrame and BattlefieldFrame:IsShown() then
                 HideUIPanel(BattlefieldFrame)
             end
-            print("|cFF00FF00AutoBG:|r Successfully queued for |cFFFFFF00" .. bgTitle .. "|r!")
+            AutoBG_Print("Successfully queued for |cFFFFFF00" .. bgTitle .. "|r via Battleground Finder!")
             pendingAutoRejoin = nil
             hasHandledEnd = false
         end
@@ -498,10 +506,10 @@ frame:SetScript("OnEvent", function()
                                     dlg:Hide()
                                 end
                             end
-                            print("|cFF00FF00AutoBG:|r Instant Auto-Accepted " .. bgName .. "!")
+                            AutoBG_Print("Instant Auto-Accepted |cFFFFFF00" .. bgName .. "|r!")
                         else
                             -- Delayed Accept (Wait X seconds)
-                            print("|cFF00FF00AutoBG:|r Queue popped for |cFFFFFF00" .. bgName .. "|r! Auto-entering in |cFFFFFF00" .. delay .. "s|r...")
+                            AutoBG_Print("Queue popped for |cFFFFFF00" .. bgName .. "|r! Auto-entering in |cFFFFFF00" .. delay .. "s|r...")
                             AutoBG_TimerAfter(delay, function()
                                 if GetBattlefieldStatus(queueId) == "confirm" then
                                     AcceptBattlefieldPort(queueId, 1)
@@ -514,7 +522,7 @@ frame:SetScript("OnEvent", function()
                                             dlg:Hide()
                                         end
                                     end
-                                    print("|cFF00FF00AutoBG:|r Auto-Entered " .. bgName .. " after " .. delay .. "s delay!")
+                                    AutoBG_Print("Auto-Entered |cFFFFFF00" .. bgName .. "|r after |cFFFFFF00" .. delay .. "s|r delay!")
                                 end
                             end)
                         end
@@ -529,7 +537,7 @@ frame:SetScript("OnEvent", function()
                     end
 
                     if not AutoBG_Settings.AutoAccept then
-                        print("|cFF00FF00AutoBG:|r Queue is ready for " .. (mapName or "Battleground") .. "!")
+                        AutoBG_Print("Queue is ready for |cFFFFFF00" .. (mapName or "Battleground") .. "|r! (Queue #" .. id .. ")")
                     end
                 end
             elseif status == "active" or status == "none" then
@@ -564,7 +572,7 @@ frame:SetScript("OnEvent", function()
                         StaticPopup_Hide("DEATH")
                     end
                 else
-                    print("|cFF00FF00AutoBG:|r Self-resurrection available. Not releasing.")
+                    AutoBG_Print("Self-resurrection available. Preserving spirit.")
                 end
             end
         end
@@ -580,7 +588,7 @@ if BattlefieldFrame then
             local bgTitle = pendingAutoRejoin or (GetBattlefieldInfo and GetBattlefieldInfo()) or "Battleground"
             JoinBattlefield(0)
             HideUIPanel(BattlefieldFrame)
-            print("|cFF00FF00AutoBG:|r Successfully joined queue for |cFFFFFF00" .. bgTitle .. "|r!")
+            AutoBG_Print("Successfully queued for |cFFFFFF00" .. bgTitle .. "|r via Battleground Finder!")
             pendingAutoRejoin = nil
             hasHandledEnd = false
         end
@@ -657,39 +665,43 @@ SlashCmdList["AUTOBG"] = function(msg)
 
     if cmd == "s" or cmd == "sound" then
         AutoBG_Settings.NotifySound = not AutoBG_Settings.NotifySound
-        print("|cFF00FF00AutoBG:|r Loud Sound Notification is now " .. (AutoBG_Settings.NotifySound and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        AutoBG_Print("Loud Sound Notification is now " .. (AutoBG_Settings.NotifySound and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "f" or cmd == "flash" then
         AutoBG_Settings.FlashTaskbar = not AutoBG_Settings.FlashTaskbar
-        print("|cFF00FF00AutoBG:|r Taskbar Flashing is now " .. (AutoBG_Settings.FlashTaskbar and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        AutoBG_Print("Taskbar Flashing is now " .. (AutoBG_Settings.FlashTaskbar and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
+        if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
+    elseif cmd == "msg" or cmd == "chat" or cmd == "messages" then
+        AutoBG_Settings.ChatMessages = not AutoBG_Settings.ChatMessages
+        AutoBG_Print("Chat Notifications are now " .. (AutoBG_Settings.ChatMessages and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "a" or cmd == "accept" then
         AutoBG_Settings.AutoAccept = not AutoBG_Settings.AutoAccept
-        print("|cFF00FF00AutoBG:|r Auto-Accept Queue Pop is now " .. (AutoBG_Settings.AutoAccept and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        AutoBG_Print("Auto-Accept Queue Pop is now " .. (AutoBG_Settings.AutoAccept and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "j" or cmd == "autorejoin" then
         AutoBG_Settings.AutoRejoin = not AutoBG_Settings.AutoRejoin
-        print("|cFF00FF00AutoBG:|r Auto-Rejoin BG on Exit is now " .. (AutoBG_Settings.AutoRejoin and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        AutoBG_Print("Auto-Rejoin BG on Exit is now " .. (AutoBG_Settings.AutoRejoin and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "l" or cmd == "leave" then
         AutoBG_Settings.AutoLeave = not AutoBG_Settings.AutoLeave
-        print("|cFF00FF00AutoBG:|r Auto-Leave is now " .. (AutoBG_Settings.AutoLeave and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        AutoBG_Print("Auto-Leave is now " .. (AutoBG_Settings.AutoLeave and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "c" or cmd == "color" then
         AutoBG_Settings.ScoreColor = not AutoBG_Settings.ScoreColor
-        print("|cFF00FF00AutoBG:|r Scoreboard Class Colors is now " .. (AutoBG_Settings.ScoreColor and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        AutoBG_Print("Scoreboard Class Colors is now " .. (AutoBG_Settings.ScoreColor and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "r" or cmd == "release" then
         AutoBG_Settings.AutoRelease = not AutoBG_Settings.AutoRelease
-        print("|cFF00FF00AutoBG:|r Auto-Release is now " .. (AutoBG_Settings.AutoRelease and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        AutoBG_Print("Auto-Release is now " .. (AutoBG_Settings.AutoRelease and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "t" or cmd == "test" then
         AutoBG_Settings.TestAllTimers = not AutoBG_Settings.TestAllTimers
-        print("|cFF00FF00AutoBG:|r Test Mode (All Timers) is now " .. (AutoBG_Settings.TestAllTimers and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        AutoBG_Print("Test Mode (All Timers) is now " .. (AutoBG_Settings.TestAllTimers and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "stealth" or cmd == "stance" then
         AutoBG_Settings.HideStanceBar = not AutoBG_Settings.HideStanceBar
-        print("|cFF00FF00AutoBG:|r Hide Stealth/Stance Bar is now " .. (AutoBG_Settings.HideStanceBar and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        AutoBG_Print("Hide Stealth/Stance Bar is now " .. (AutoBG_Settings.HideStanceBar and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         if AutoBG_UpdateStanceBar then AutoBG_UpdateStanceBar() end
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "q" or cmd == "queue" or cmd == "join" or cmd == "rejoin" or cmd == "requeue" then
@@ -714,11 +726,11 @@ SlashCmdList["AUTOBG"] = function(msg)
 
         if targetBG then
             if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = targetBG end
-            print("|cFF00FF00AutoBG:|r Quick-queue triggered for |cFFFFFF00" .. targetBG .. "|r...")
+            AutoBG_Print("Quick-queue triggered for |cFFFFFF00" .. targetBG .. "|r...", true)
             AutoBG_TriggerBattlegroundFinder(targetBG)
         else
-            print("|cFF00FF00AutoBG:|r No previous BG recorded. Opening Battleground Finder...")
-            print("  |cFFFFFF00Tip:|r Use |cFFFFFF00/abg q ab|r, |cFFFFFF00/abg q wsg|r, |cFFFFFF00/abg q av|r, or |cFFFFFF00/abg q tg|r")
+            AutoBG_Print("No previous BG recorded. Opening Battleground Finder...", true)
+            AutoBG_Print("  |cFFFFFF00Tip:|r Use |cFFFFFF00/abg q ab|r, |cFFFFFF00/abg q wsg|r, |cFFFFFF00/abg q av|r, or |cFFFFFF00/abg q tg|r", true)
             local mmBtn = FindBattlegroundFinderButton()
             if mmBtn then
                 if mmBtn.Click then mmBtn:Click()
@@ -732,14 +744,14 @@ SlashCmdList["AUTOBG"] = function(msg)
         if val then
             val = math.max(0, math.min(30, math.floor(val)))
             AutoBG_Settings.AutoAcceptDelay = val
-            print("|cFF00FF00AutoBG:|r Auto-Accept Enter Delay set to |cFFFFFF00" .. (val == 0 and "Instant (0s)" or (val .. "s")) .. "|r")
+            AutoBG_Print("Auto-Accept Enter Delay set to |cFFFFFF00" .. (val == 0 and "Instant (0s)" or (val .. "s")) .. "|r", true)
             if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
         else
-            print("|cFF00FF00AutoBG:|r Current Auto-Accept Enter Delay: |cFFFFFF00" .. ((AutoBG_Settings.AutoAcceptDelay or 0) == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r (Use |cFFFFFF00/abg delay 5|r to change)")
+            AutoBG_Print("Current Auto-Accept Enter Delay: |cFFFFFF00" .. ((AutoBG_Settings.AutoAcceptDelay or 0) == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r (Use |cFFFFFF00/abg delay 5|r to change)", true)
         end
     elseif cmd == "reset" then
         AutoBG_Settings = nil
-        print("|cFF00FF00AutoBG:|r Settings reset to default. Reloading UI...")
+        AutoBG_Print("Settings reset to default. Reloading UI...", true)
         ReloadUI()
     elseif cmd == "help" then
         print("|cFF00FF00AutoBG Commands:|r")
@@ -751,6 +763,7 @@ SlashCmdList["AUTOBG"] = function(msg)
         print("  |cFFFFFF00/abg q tg|r - Quick-queue for Thorn Gorge")
         print("  |cFFFFFF00/abg a|r - Toggle auto-accept queue pop")
         print("  |cFFFFFF00/abg delay <sec>|r - Set auto-accept delay (0=instant, up to 30s)")
+        print("  |cFFFFFF00/abg msg|r - Toggle chat status notifications")
         print("  |cFFFFFF00/abg s|r - Toggle sound alerts")
         print("  |cFFFFFF00/abg f|r - Toggle taskbar flashing")
         print("  |cFFFFFF00/abg l|r - Toggle auto-leave BG on end")
