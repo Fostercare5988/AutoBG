@@ -25,13 +25,14 @@ High-performance PvP automation and timer engine for World of Warcraft **Vanilla
 
 ## ⚡ Core Modules
 
-### 1. Automation & Queue Engine
-- **Instant Match Exit**: Calls `LeaveBattlefield(0)` immediately upon match end detection.
-- **0ms Auto-Rejoin**: On zoning out of a battleground, directly queues into the next match via Battleground Finder.
-- **Auto-Accept & Delay**: Confirms queue pop instantly (0s) or after a configurable countdown (0–30s).
+### 1. Automation & Auto-Queue Engine
+- **Instant Match Exit**: Calls `LeaveBattlefield(0)` immediately upon match conclusion detection.
+- **0ms Instant Auto-Rejoin**: On zoning out of a battleground, automatically re-queues into the same battleground (AB, WSG, AV, TG) instantly via OctoWOW's Battleground Finder.
+- **1-Click Quick-Queue**: Queue from anywhere in the world into any BG using macro buttons or slash commands (`/abg q`, `/abg q ab`, `/abg q wsg`, `/abg q av`, `/abg q tg`).
+- **Auto-Accept & Delay Engine**: Confirms queue pop instantly (0s) or after a configurable countdown (0–30s).
 - **Smart Spirit Release**: Auto-releases spirit inside battlegrounds while preserving Soulstones and Reincarnation (Ankh).
 - **Audio & Taskbar Alerts**: Ready-check audio triggers and OS taskbar flashing on queue pop.
-- **Chat Notifications**: Color-coded system status messages for queues, joins, delayed entries, and leaves.
+- **Chat Notifications**: Clean, color-coded system status messages confirming queue entries, pops, and match transitions.
 
 ### 2. Objective & Base Timers
 - **Arathi Basin**: 60s node capture timers with faction color-coding (Horde / Alliance). Supports all standard combat log aliases (`"the mine"`, `"the mill"`).
