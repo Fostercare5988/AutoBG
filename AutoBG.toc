@@ -2,7 +2,7 @@
 ## Title: AutoBG
 ## Notes: High-performance PvP automation engine built natively for SuperWoW 2.2, NamPower, and UnitXP SP3.
 ## Author: Fostercare5988
-## Version: 1.0.0
+## Version: 1.0.1
 ## SavedVariables: AutoBG_Settings
 ## X-Category: Battlegrounds & PvP
 ## X-Website: https://github.com/Fostercare5988/AutoBG

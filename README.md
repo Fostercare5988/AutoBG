@@ -1,6 +1,6 @@
 # AutoBG
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
 [![Interface](https://img.shields.io/badge/interface-1.12.1%20%2F%20OctoWOW-orange.svg)](https://github.com/Fostercare5988/AutoBG)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/Fostercare5988/AutoBG)
 
