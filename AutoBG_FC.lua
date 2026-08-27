@@ -201,6 +201,16 @@ Scanner:SetScript("OnUpdate", function()
             if targetName and UnitExists(unit) and UnitName(unit) == targetName then
                 local hp = UnitHealth(unit)
                 local maxHp = UnitHealthMax(unit)
+
+                -- UnitXP Real Health Detection (Enemy raw HP)
+                local rawHp, rawMaxHp = nil, nil
+                if UnitXP then
+                    pcall(function()
+                        rawHp = UnitXP("health", unit)
+                        rawMaxHp = UnitXP("maxhealth", unit)
+                    end)
+                end
+
                 if maxHp and maxHp > 0 then
                     local pct = math.floor((hp / maxHp) * 100)
                     frame.healthBar:SetValue(pct)
@@ -213,7 +223,11 @@ Scanner:SetScript("OnUpdate", function()
                         frame.healthBar:SetStatusBarColor(0.1, 0.85, 0.1) -- Green
                     end
 
-                    frame.hpText:SetText(pct .. "%")
+                    if rawHp and rawMaxHp and rawMaxHp > 100 then
+                        frame.hpText:SetText(rawHp .. " (" .. pct .. "%)")
+                    else
+                        frame.hpText:SetText(pct .. "%")
+                    end
                 end
 
                 -- Refresh class coloring if found
