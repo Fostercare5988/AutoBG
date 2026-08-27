@@ -742,12 +742,12 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "delay" or cmd == "acceptdelay" then
         local val = tonumber(arg)
         if val then
-            val = math.max(0, math.min(30, math.floor(val)))
+            val = math.max(0, math.min(120, math.floor(val)))
             AutoBG_Settings.AutoAcceptDelay = val
             AutoBG_Print("Auto-Accept Enter Delay set to |cFFFFFF00" .. (val == 0 and "Instant (0s)" or (val .. "s")) .. "|r", true)
             if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
         else
-            AutoBG_Print("Current Auto-Accept Enter Delay: |cFFFFFF00" .. ((AutoBG_Settings.AutoAcceptDelay or 0) == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r (Use |cFFFFFF00/abg delay 5|r to change)", true)
+            AutoBG_Print("Current Auto-Accept Enter Delay: |cFFFFFF00" .. ((AutoBG_Settings.AutoAcceptDelay or 0) == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r (Use |cFFFFFF00/abg delay 60|r to change)", true)
         end
     elseif cmd == "reset" then
         AutoBG_Settings = nil

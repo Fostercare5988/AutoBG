@@ -110,11 +110,11 @@ local cbAccept = CreateCheckbox("AutoBG_Opt_Accept", "Auto-Accept Queue Pop", "A
 
 local sliderDelay = CreateFrame("Slider", "AutoBG_Slider_AcceptDelay", panel, "OptionsSliderTemplate")
 sliderDelay:SetPoint("TOPLEFT", cbAccept, "BOTTOMLEFT", 20, -14)
-sliderDelay:SetMinMaxValues(0, 30)
+sliderDelay:SetMinMaxValues(0, 70)
 sliderDelay:SetValueStep(1)
 sliderDelay:SetWidth(150)
 getglobal(sliderDelay:GetName() .. "Low"):SetText("0s")
-getglobal(sliderDelay:GetName() .. "High"):SetText("30s")
+getglobal(sliderDelay:GetName() .. "High"):SetText("70s")
 getglobal(sliderDelay:GetName() .. "Text"):SetText("Enter Delay: Instant (0s)")
 sliderDelay:SetScript("OnValueChanged", function()
     local val = math.floor(this:GetValue() + 0.5)

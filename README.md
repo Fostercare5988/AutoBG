@@ -29,7 +29,7 @@ High-performance PvP automation and timer engine for World of Warcraft **Vanilla
 - **Instant Match Exit**: Calls `LeaveBattlefield(0)` immediately upon match conclusion detection.
 - **0ms Instant Auto-Rejoin**: On zoning out of a battleground, automatically re-queues into the same battleground (AB, WSG, AV, TG) instantly via OctoWOW's Battleground Finder.
 - **1-Click Quick-Queue**: Queue from anywhere in the world into any BG using macro buttons or slash commands (`/abg q`, `/abg q ab`, `/abg q wsg`, `/abg q av`, `/abg q tg`).
-- **Auto-Accept & Delay Engine**: Confirms queue pop instantly (0s) or after a configurable countdown (0–30s).
+- **Auto-Accept & Delay Engine**: Confirms queue pop instantly (0s) or after a configurable countdown (0–70s slider, up to 120s via command).
 - **Smart Spirit Release**: Auto-releases spirit inside battlegrounds while preserving Soulstones and Reincarnation (Ankh).
 - **Audio & Taskbar Alerts**: Ready-check audio triggers and OS taskbar flashing on queue pop.
 - **Chat Notifications**: Clean, color-coded system status messages confirming queue entries, pops, and match transitions.
@@ -81,7 +81,7 @@ Synchronizes the global 30-second server resurrection wave with a live visual pr
 | `/abg q av` | Queue for Alterac Valley |
 | `/abg q tg` | Queue for Thorn Gorge |
 | `/abg a` | Toggle Auto-Accept queue pop |
-| `/abg delay <sec>` | Set Auto-Accept delay (0=instant, up to 30s) |
+| `/abg delay <sec>` | Set Auto-Accept delay (0=instant, up to 120s) |
 | `/abg msg` | Toggle chat status notifications |
 | `/abg l` | Toggle Auto-Leave on match end |
 | `/abg j` | Toggle Auto-Rejoin on zone exit |
