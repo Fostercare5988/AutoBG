@@ -100,15 +100,6 @@ Synchronizes the global 30-second server resurrection wave with a live visual pr
 | `/abg test` | Toggle test mode to reposition all frames |
 | `/abg reset` | Reset configuration and frame positions |
 
-### 1-Click Action Bar Macro
-```text
-/click AutoBG_QuickQueueButton
-```
-*Or:*
-```text
-/abg q
-```
-
 ---
 
 ## 📦 Installation
