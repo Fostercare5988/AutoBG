@@ -4,7 +4,7 @@
 [![Interface](https://img.shields.io/badge/interface-1.12.1%20%2F%20OctoWOW-orange.svg)](https://github.com/Fostercare5988/AutoBG)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/Fostercare5988/AutoBG)
 
-High-performance PvP automation and timer engine for World of Warcraft **Vanilla 1.12.1** and modern enhanced clients (OctoWOW / SuperWoW).
+Next-generation 2026 PvP automation and battleground intelligence engine built natively for **SuperWoW 2.2+**, **NamPower**, and **UnitXP SP3**.
 
 ---
 
@@ -14,12 +14,18 @@ High-performance PvP automation and timer engine for World of Warcraft **Vanilla
 
 ---
 
-## ⚙️ Architecture & Performance
+## 🚀 2026 Modern Architecture & DLL Integration
 
-- **Zero-Delay Execution (0ms)**: Queue confirmations, match exit calls, and battleground queueing execute on the first frame of receipt.
-- **Throttled Update Loops**: Core timers update at 10 Hz (`0.1s`), FC unit scanner at 5 Hz (`0.2s`). Prevents CPU spikes and memory garbage accumulation.
-- **Direct Frame Indexing**: Direct integration with OctoWOW/Turtle UI elements (`TWMiniMapBattlefieldFrame` -> `DropDownList1Button[3-7]`) eliminating dynamic UI tree traversal overhead.
-- **Memory Footprint**: Minimal heap allocation, stateless timer calculations via `GetTime()`, zero background table churn.
+- **⚡ SuperWoW 2.2 C++ Engine**:
+  - Native `C_Timer.After()` scheduler replacing slow Lua `OnUpdate` array queues.
+  - OS-level `FlashClientIcon()` taskbar notifications on queue pops.
+  - Exact `TargetByName(name, true)` substring/whole-name resolution for 1-click Flag Carrier targeting.
+- **🏎️ NamPower Event Pipeline**:
+  - Microsecond-precision combat event queueing and zero-latency packet dispatching.
+  - Frame-0 execution for auto-queueing, match exits, and objective updates with 0ms delay.
+- **🎯 UnitXP SP3 Health & Distance Engine**:
+  - Direct `UnitXP("health", unit)` and `UnitXP("maxhealth", unit)` hooks providing true raw enemy HP numbers (e.g. `3840 (85%)`) on Flag Carrier unit frames instead of generic percentages.
+- **🌱 Pure Memory Footprint**: Minimal heap allocation, stateless mathematical timers via `GetTime()`, zero table garbage accumulation.
 
 ---
 

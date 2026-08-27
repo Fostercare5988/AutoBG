@@ -1,57 +1,12 @@
--- AutoBG for WoW 1.12.1 (Vanilla / OctoWOW)
+-- AutoBG (Built for SuperWoW 2.2+, NamPower, and UnitXP SP3)
 local addonName = "AutoBG"
 
--- Lua 5.0 Compatibility Polyfills
-if not math.mod then
-    math.mod = math.fmod or function(a, b)
-        return a - math.floor(a / b) * b
-    end
-end
-if not mod then
-    mod = math.mod
-end
-
-if not string.match then
-    string.match = function(str, pattern, init)
-        local start, finish, c1, c2, c3, c4, c5, c6, c7, c8, c9 = string.find(str, pattern, init)
-        if start then
-            if c1 then
-                return c1, c2, c3, c4, c5, c6, c7, c8, c9
-            else
-                return string.sub(str, start, finish)
-            end
-        end
-    end
-end
-
-local function print(msg)
-    if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage(msg)
-    end
-end
-
--- Lightweight Timer Scheduler (Replacement for C_Timer.After in 1.12)
-AutoBG_TimersQueue = AutoBG_TimersQueue or {}
-local TimerScheduler = CreateFrame("Frame", "AutoBG_TimerScheduler")
-TimerScheduler:SetScript("OnUpdate", function()
-    local now = GetTime()
-    local count = table.getn(AutoBG_TimersQueue)
-    for i = count, 1, -1 do
-        local item = AutoBG_TimersQueue[i]
-        if now >= item.time then
-            table.remove(AutoBG_TimersQueue, i)
-            if item.func then
-                item.func()
-            end
-        end
-    end
-end)
-
+-- Direct C++ Engine Timer Interface
 function AutoBG_TimerAfter(delay, func)
     if C_Timer and C_Timer.After then
         C_Timer.After(delay, func)
-    else
-        table.insert(AutoBG_TimersQueue, { time = GetTime() + delay, func = func })
+    elseif func then
+        func()
     end
 end
 
@@ -411,7 +366,17 @@ frame:SetScript("OnEvent", function()
                 AutoBG_Settings.Positions = {}
             end
         end
-        AutoBG_Print("Loaded. Type |cFFFFFF00/abg|r for options.", true)
+
+        local modules = {}
+        if C_Timer and C_Timer.After then table.insert(modules, "|cFF00FF00SuperWoW 2.2+|r") end
+        if UnitXP then table.insert(modules, "|cFF00FF00UnitXP SP3|r") end
+        if nampower or NamPower or SpellQueue then table.insert(modules, "|cFF00FF00NamPower|r") end
+
+        if table.getn(modules) > 0 then
+            AutoBG_Print("Loaded with " .. table.concat(modules, ", ") .. " active! Type |cFFFFFF00/abg|r for options.", true)
+        else
+            AutoBG_Print("Loaded. Type |cFFFFFF00/abg|r for options.", true)
+        end
 
         if AutoBG_Settings.HideCastbar and CastingBarFrame then
             CastingBarFrame:UnregisterAllEvents()

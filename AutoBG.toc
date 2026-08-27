@@ -1,6 +1,6 @@
 ## Interface: 11200
 ## Title: AutoBG
-## Notes: Automated Battleground queue manager, multi-source objective timers, and Warsong Flag Carrier tracker for WoW 1.12.1.
+## Notes: High-performance PvP automation engine built natively for SuperWoW 2.2, NamPower, and UnitXP SP3.
 ## Author: Fostercare5988
 ## Version: 1.0.0
 ## SavedVariables: AutoBG_Settings
