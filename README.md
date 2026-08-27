@@ -53,9 +53,10 @@ Synchronizes the global 30-second server resurrection wave with a live visual pr
 3. **Color-Graded Status Bar**: Smooth draining bar transitioning Green (>10s) -> Yellow (5-10s) -> Orange (2-5s) -> Red (<=2s).
 
 ### 4. Warsong Flag Carrier (FC) Tracking
-- Targetable unit frames for friendly and enemy carriers.
-- Scoreboard and raid cache class-color resolution.
-- Live HP status bar scanned at 5 Hz.
+- Targetable unit frames for friendly and enemy carriers with 1-click SuperWoW exact target lock.
+- Real-time **EFC Distance Tracker** (yards) with dynamic color gradient.
+- Live raw HP & percentage via **UnitXP SP3** and class-color resolution.
+- 5 Hz background scanner with zero memory churn.
 
 ### 5. UI Tweaks
 - **Scoreboard Colors**: Class-colored player entries with realm suffix removal.

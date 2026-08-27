@@ -4,7 +4,7 @@ local carrierHorde = nil
 
 local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     local frame = CreateFrame("Button", name, UIParent)
-    frame:SetWidth(175)
+    frame:SetWidth(185)
     frame:SetHeight(48)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
     frame:SetBackdrop({
@@ -26,7 +26,7 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     end)
     frame:Hide()
 
-    -- 1.12 Instant targeting on click
+    -- 1.12 / SuperWoW Instant targeting on click
     frame:SetScript("OnClick", function()
         if this.carrierName and this.carrierName ~= "" then
             TargetByName(this.carrierName, true)
@@ -40,10 +40,16 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     icon:SetPoint("LEFT", frame, "LEFT", 8, 0)
     icon:SetTexture(flagTexture)
 
-    -- Carrier Name FontString (Cleanly positioned above the health bar)
+    -- Distance FontString (Top-right aligned)
+    local distText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    distText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
+    distText:SetJustifyH("RIGHT")
+    distText:SetText("")
+
+    -- Carrier Name FontString (Cleanly positioned above the health bar, left of distance)
     local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     nameText:SetPoint("TOPLEFT", frame, "TOPLEFT", 46, -8)
-    nameText:SetPoint("RIGHT", frame, "RIGHT", -8, 0)
+    nameText:SetPoint("RIGHT", distText, "LEFT", -4, 0)
     nameText:SetJustifyH("LEFT")
     nameText:SetText(titleText)
 
@@ -51,7 +57,7 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     local healthBar = CreateFrame("StatusBar", name .. "HealthBar", frame)
     healthBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 46, 8)
     healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 8)
-    healthBar:SetHeight(12)
+    healthBar:SetHeight(13)
     healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     healthBar:SetMinMaxValues(0, 100)
     healthBar:SetValue(100)
@@ -67,6 +73,7 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     hpText:SetText("100%")
 
     frame.nameText = nameText
+    frame.distText = distText
     frame.healthBar = healthBar
     frame.hpText = hpText
     frame.icon = icon
@@ -101,6 +108,7 @@ local function UpdateFCButton(frame, carrierName)
         frame.healthBar:SetValue(100)
         frame.healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
         frame.hpText:SetText("???")
+        frame.distText:SetText("")
         frame:Show()
     else
         frame:Hide()
@@ -181,12 +189,14 @@ Scanner:SetScript("OnUpdate", function()
         AllianceFC.healthBar:SetValue(82)
         AllianceFC.healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
         AllianceFC.hpText:SetText("82%")
+        AllianceFC.distText:SetText("|cFF00FF0024 yd|r")
 
         HordeFC:Show()
         HordeFC.nameText:SetText("|cFFC79C6EHorde Warrior|r")
         HordeFC.healthBar:SetValue(45)
         HordeFC.healthBar:SetStatusBarColor(0.95, 0.75, 0.1)
         HordeFC.hpText:SetText("45%")
+        HordeFC.distText:SetText("|cFFFFFF0042 yd|r")
         return
     else
         if not carrierAlliance and AllianceFC:IsShown() then AllianceFC:Hide() end
@@ -202,7 +212,7 @@ Scanner:SetScript("OnUpdate", function()
                 local hp = UnitHealth(unit)
                 local maxHp = UnitHealthMax(unit)
 
-                -- UnitXP Real Health Detection (Enemy raw HP)
+                -- 1. UnitXP Real Health Detection (Enemy raw HP)
                 local rawHp, rawMaxHp = nil, nil
                 if UnitXP then
                     pcall(function()
@@ -230,7 +240,38 @@ Scanner:SetScript("OnUpdate", function()
                     end
                 end
 
-                -- Refresh class coloring if found
+                -- 2. Real-Time Distance Detection (UnitXP / InteractRange)
+                local dist = nil
+                if UnitXP then
+                    pcall(function()
+                        dist = UnitXP("distance", unit) or UnitXP("range", unit)
+                    end)
+                end
+
+                if dist and type(dist) == "number" and dist >= 0 then
+                    local yard = math.floor(dist + 0.5)
+                    local color = "|cFF00FF00"
+                    if yard > 80 then
+                        color = "|cFFFF4040"
+                    elseif yard > 50 then
+                        color = "|cFFFF8000"
+                    elseif yard > 30 then
+                        color = "|cFFFFFF00"
+                    end
+                    frame.distText:SetText(color .. yard .. " yd|r")
+                else
+                    if CheckInteractDistance(unit, 3) then
+                        frame.distText:SetText("|cFF00FF00<10 yd|r")
+                    elseif CheckInteractDistance(unit, 2) then
+                        frame.distText:SetText("|cFF00FF00<11 yd|r")
+                    elseif CheckInteractDistance(unit, 1) or CheckInteractDistance(unit, 4) then
+                        frame.distText:SetText("|cFFFFFF00<28 yd|r")
+                    else
+                        frame.distText:SetText("")
+                    end
+                end
+
+                -- 3. Refresh class coloring if found
                 local _, classToken = UnitClass(unit)
                 if classToken and AutoBG_GetClassColor then
                     local classColor = AutoBG_GetClassColor(classToken)

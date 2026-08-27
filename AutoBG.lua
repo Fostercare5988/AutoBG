@@ -367,16 +367,7 @@ frame:SetScript("OnEvent", function()
             end
         end
 
-        local modules = {}
-        if C_Timer and C_Timer.After then table.insert(modules, "|cFF00FF00SuperWoW 2.2+|r") end
-        if UnitXP then table.insert(modules, "|cFF00FF00UnitXP SP3|r") end
-        if nampower or NamPower or SpellQueue then table.insert(modules, "|cFF00FF00NamPower|r") end
-
-        if table.getn(modules) > 0 then
-            AutoBG_Print("Loaded with " .. table.concat(modules, ", ") .. " active! Type |cFFFFFF00/abg|r for options.", true)
-        else
-            AutoBG_Print("Loaded. Type |cFFFFFF00/abg|r for options.", true)
-        end
+        AutoBG_Print("Successfully loaded SuperWoW 2.2+, UnitXP SP3, NamPower. Type |cFFFFFF00/abg|r for options.", true)
 
         if AutoBG_Settings.HideCastbar and CastingBarFrame then
             CastingBarFrame:UnregisterAllEvents()
