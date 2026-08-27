@@ -1,8 +1,8 @@
 # AutoBG
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/fostercare123/AutoBG/releases)
-[![Interface](https://img.shields.io/badge/interface-1.12.1%20%2F%20OctoWOW-orange.svg)](https://github.com/fostercare123/AutoBG)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/fostercare123/AutoBG)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
+[![Interface](https://img.shields.io/badge/interface-1.12.1%20%2F%20OctoWOW-orange.svg)](https://github.com/Fostercare5988/AutoBG)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/Fostercare5988/AutoBG)
 
 High-performance PvP automation and timer engine for World of Warcraft **Vanilla 1.12.1** and modern enhanced clients (OctoWOW / SuperWoW).
 
@@ -106,7 +106,7 @@ Synchronizes the global 30-second server resurrection wave with a live visual pr
 
 ## 📦 Installation
 
-1. Download the latest release from the [Releases](https://github.com/fostercare123/AutoBG/releases) page.
+1. Download the latest release from the [Releases](https://github.com/Fostercare5988/AutoBG/releases) page.
 2. Place the `AutoBG` directory into:
    ```text
    World of Warcraft/Interface/AddOns/AutoBG/
@@ -118,6 +118,6 @@ Synchronizes the global 30-second server resurrection wave with a live visual pr
 
 ## 📄 License
 
-MIT License - Developed by **[fostercare123](https://github.com/fostercare123)**. See [LICENSE](LICENSE) for details.
+MIT License - Developed by **[Fostercare5988](https://github.com/Fostercare5988)**. See [LICENSE](LICENSE) for details.
 
 
