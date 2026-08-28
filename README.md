@@ -4,11 +4,7 @@
 [![Interface](https://img.shields.io/badge/interface-1.12.1%20%2F%20OctoWOW-orange.svg)](https://github.com/Fostercare5988/AutoBG)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/Fostercare5988/AutoBG)
 
-Next-generation 2026 PvP automation and battleground intelligence engine engineered natively for the **OctoWoW Engine Stack**:
-- **SuperWoW (v2.2+)**
-- **NamPower (v4.6.2+)**
-- **UnitXP SP3**
-- **DXVK (v3.0.2+)** & **VanillaFixes**
+High-performance, zero-latency PvP automation and battleground intelligence engine engineered natively for World of Warcraft 1.12.1 on the **OctoWoW Engine Stack** (**SuperWoW 2.2+**, **NamPower 4.6.2+**, **UnitXP SP3**, **DXVK 3.0.2+**, and **VanillaFixes**).
 
 ---
 
@@ -18,110 +14,88 @@ Next-generation 2026 PvP automation and battleground intelligence engine enginee
 
 ---
 
-## 🚀 2026 Modern Architecture & Engine Directives
+## 🚀 Engine Architecture & Performance
 
-- **⚡ SuperWoW 2.2 C++ Native Engine**:
-  - Native `C_Timer.After()` hardware scheduler replacing slow Lua `OnUpdate` array queues.
-  - OS-level `FlashClientIcon()` and `SetClientWindowForeground()` taskbar notifications on queue pops.
-  - Exact `TargetByName(name, true)` whole-name resolution for 1-click Flag Carrier targeting.
-- **🏎️ NamPower Event Pipeline**:
+- **⚡ SuperWoW 2.2+ C++ Native Engine**:
+  - Direct hardware timer scheduling via `C_Timer.After()`, bypassing legacy Lua `OnUpdate` queues.
+  - OS-level `FlashClientIcon()` taskbar notifications and `SetClientWindowForeground()` window focus on queue pops.
+  - Exact whole-name resolution via `TargetByName(name, true)` for 1-click Flag Carrier targeting.
+- **🏎️ NamPower 4.6.2+ Event Pipeline**:
   - Microsecond-precision event queueing and zero-latency packet dispatching.
   - Frame-0 execution for auto-queueing, match exits, and objective updates with 0ms delay.
 - **🎯 UnitXP SP3 Health & Distance Engine**:
-  - Direct `UnitXP("health", unit)` and `UnitXP("maxhealth", unit)` hooks providing true uncapped enemy HP (e.g. `3840 (85%)`) on Flag Carrier unit frames instead of generic percentages.
-  - Real-time `UnitXP("distance", unit)` yard calculations with dynamic 4-stage color gradient.
+  - Real-time `UnitXP("distance", unit)` calculations with dynamic 4-stage range coloring (`≤30 yd` green, `31–50 yd` yellow, `51–80 yd` orange, `>80 yd` red).
+  - True uncapped enemy HP numbers (`3840 (85%)`) via `UnitXP("health", unit)` & `UnitXP("maxhealth", unit)`.
 - **🌱 Zero-GC Memory Footprint & DXVK Smoothness**:
-  - Pre-allocated static unit arrays (`RAID_UNITS`, `PARTY_UNITS`) to completely eliminate heap string allocations in scan loops.
-  - Decoupled delta-time rendering optimized for high-refresh 144Hz+ displays under DXVK.
+  - Pre-allocated static unit lookup arrays (`RAID_UNITS`, `PARTY_UNITS`) to eliminate string concatenation heap allocations during recurring scan loops.
+  - Decoupled delta-time rendering optimized for high-refresh 144Hz+ display engines under DXVK.
 
 ---
 
-## ⚡ Core Modules
+## ⚡ Core Features
 
-### 1. Automation & Auto-Queue Engine
-- **Instant Match Exit**: Calls `LeaveBattlefield(0)` immediately upon match conclusion detection.
-- **0ms Instant Auto-Rejoin**: On zoning out of a battleground, automatically re-queues into the same battleground (AB, WSG, AV, TG) instantly via OctoWOW's Battleground Finder.
-- **1-Click Quick-Queue**: Queue from anywhere in the world into any BG using macro buttons or slash commands (`/abg q`, `/abg q ab`, `/abg q wsg`, `/abg q av`, `/abg q tg`).
-- **Auto-Accept & Delay Engine**: Confirms queue pop instantly (0s) or after a configurable countdown (0–70s slider, up to 120s via command).
+### 1. Automation & Queue Engine
+- **Instant Match Exit**: Calls `LeaveBattlefield(0)` immediately upon match conclusion.
+- **0ms Instant Auto-Rejoin**: Automatically re-queues into the same BG (AB, WSG, AV, TG) on zoning out via OctoWoW's Battleground Finder.
+- **1-Click Quick-Queue**: Queue into any battleground from anywhere in the world via slash command (`/abg q ab`, `/abg q wsg`, `/abg q av`, `/abg q tg`) or macro button (`/click AutoBG_QuickQueueButton`).
+- **Auto-Accept & Configurable Delay**: Instant entry (0s) or configurable countdown slider (`0–70s`, up to `120s` via command).
 - **Smart Spirit Release**: Auto-releases spirit inside battlegrounds while preserving Soulstones and Reincarnation (Ankh).
-- **Audio & Taskbar Alerts**: Ready-check audio triggers and OS taskbar flashing on queue pop.
-- **Chat Notifications**: Clean, color-coded system status messages confirming queue entries, pops, and match transitions.
 
 ### 2. Objective & Base Timers
-- **Arathi Basin**: 60s node capture timers with faction color-coding (Horde / Alliance). Supports all standard combat log aliases (`"the mine"`, `"the mill"`).
-- **Alterac Valley**: 300s capture timers for bunkers, towers, and graveyards.
-- **Warsong Gulch**: 23s flag respawn timers with faction color-coding (Alliance / Horde). Strictly zone-isolated.
-- **Gate Openings**: Universal pre-match countdowns (120s, 60s, 30s, 15s).
+- **Arathi Basin**: 60s node capture countdowns with faction color-coding (Horde / Alliance).
+- **Alterac Valley**: 300s bunker, tower, and graveyard capture countdowns.
+- **Warsong Gulch**: 23s flag respawn countdowns (zone-isolated).
+- **Match Gates**: Universal pre-match countdowns (120s, 60s, 30s, 15s).
 
 ### 3. Server-Synchronized Spirit Healer Engine
-Synchronizes the global 30-second server resurrection wave with a live visual progress bar:
-1. **Server Clock Heartbeat**: Continuous tracking aligned to `GetBattlefieldInstanceRunTime()`.
-2. **Ground-Truth Calibration**: Exact phase lock via `GetAreaSpiritHealerTime()` and `PLAYER_UNGHOST`.
-3. **Color-Graded Status Bar**: Smooth draining bar transitioning Green (>10s) -> Yellow (5-10s) -> Orange (2-5s) -> Red (<=2s).
+- Live 30-second Spirit Healer wave synchronization aligned with `GetBattlefieldInstanceRunTime()`, `GetAreaSpiritHealerTime()`, and `PLAYER_UNGHOST`.
+- Color-graded progress bar: Green (>10s) -> Yellow (5-10s) -> Orange (2-5s) -> Red (<=2s).
 
-### 4. Warsong Flag Carrier (FC) Tracking
-- Targetable unit frames for friendly and enemy carriers with 1-click SuperWoW exact target lock.
-- Real-time **EFC Distance Tracker** (yards) with dynamic color gradient.
-- Live raw HP & percentage via **UnitXP SP3** and class-color resolution.
-- 5 Hz background scanner with zero memory churn.
+### 4. Warsong Flag Carrier (FC) HUD
+- Clickable unit frames for friendly and enemy carriers with 1-click SuperWoW exact target lock.
+- Live raw HP & percentage via **UnitXP SP3** with class-color resolution.
+- Live **EFC Distance Tracker** (yards) with dynamic color gradient.
 
-### 5. UI Tweaks
-- **Scoreboard Colors**: Class-colored player entries with realm suffix removal.
-- **Stance / Stealth Bar**: Suppresses default `ShapeshiftBarFrame` and child action buttons.
-- **Draggable Frames**: Position persistence across all timer displays via `/abg test`.
-
-### 6. Interactive Chat Announcements
-- **CTRL + Left-Click**: Click any live timer (AB/AV node, WSG flag respawn, Spirit Healer wave, or queue wait time) to instantly broadcast its remaining time into **Battleground chat** (or Party/Raid).
+### 5. Interactive Chat Announcements
+- `CTRL + Left-Click` any timer (AB/AV node, WSG flag, Spirit Healer, or Queue) to broadcast its countdown into **Battleground chat** (or Party/Raid).
 
 ---
 
-## ⌨️ Commands & Macros
+## ⌨️ Commands & Shortcuts
 
-### Shortcuts & Click Actions
-
-| Action | Result |
+| Command / Action | Description |
 | :--- | :--- |
-| `CTRL + Left-Click` on Timer | Broadcast timer countdown to Battleground / Raid chat |
-| `Left-Click Drag` on Frame | Move timer frame position (saved across sessions) |
-
-### Slash Commands
-
-| Command | Action |
-| :--- | :--- |
-| `/abg` | Toggle graphical configuration panel |
-| `/abg q` | Queue for last played battleground |
-| `/abg q ab` | Queue for Arathi Basin |
-| `/abg q wsg` | Queue for Warsong Gulch |
-| `/abg q av` | Queue for Alterac Valley |
-| `/abg q tg` | Queue for Thorn Gorge |
+| `/abg` | Open options configuration panel |
+| `/abg q [wsg\|ab\|av\|tg]` | Quick-queue for a specific BG (or last played if blank) |
 | `/abg a` | Toggle Auto-Accept queue pop |
-| `/abg delay <sec>` | Set Auto-Accept delay (0=instant, up to 120s) |
-| `/abg msg` | Toggle chat status notifications |
-| `/abg l` | Toggle Auto-Leave on match end |
-| `/abg j` | Toggle Auto-Rejoin on zone exit |
+| `/abg delay <sec>` | Set Auto-Accept delay countdown (0–120s) |
+| `/abg j` | Toggle Auto-Rejoin on battleground exit |
+| `/abg l` | Toggle Auto-Leave on match conclusion |
 | `/abg r` | Toggle Auto-Release on death |
 | `/abg c` | Toggle Scoreboard class colors |
-| `/abg stealth` | Toggle Stealth / Stance bar suppression |
-| `/abg s` | Toggle Sound notifications |
-| `/abg f` | Toggle Taskbar flashing |
-| `/abg test` | Toggle test mode to reposition all frames |
-| `/abg reset` | Reset configuration and frame positions |
+| `/abg msg` | Toggle chat status notifications |
+| `/abg s` / `/abg f` | Toggle sound alerts / taskbar flashing |
+| `/abg stealth` | Toggle Stealth & Stance bar suppression |
+| `/abg test` | Toggle test mode to reposition HUD frames |
+| `/abg reset` | Reset all configuration and frame positions |
+| `CTRL + Left-Click` on Timer | Broadcast countdown to Battleground chat |
+| `Left-Click Drag` on Frame | Move and save frame position |
 
 ---
 
 ## 📦 Installation
 
 1. Download the latest release from the [Releases](https://github.com/Fostercare5988/AutoBG/releases) page.
-2. Place the `AutoBG` directory into:
+2. Place the `AutoBG` folder into:
    ```text
    World of Warcraft/Interface/AddOns/AutoBG/
    ```
-3. Verify folder structure: `Interface/AddOns/AutoBG/AutoBG.toc` must be valid.
-4. Enable **AutoBG** in the in-game AddOn manager.
+3. Ensure `AutoBG.toc` is directly inside `Interface/AddOns/AutoBG/`.
+4. Enable **AutoBG** in the AddOn list at character selection.
 
 ---
 
 ## 📄 License & Authorship
-- **Authors**: `[Original Author]`, `Fostercare5988`
-- **Maintainer**: `Fostercare5988`
+
+- **Author & Maintainer**: **[Fostercare5988](https://github.com/Fostercare5988)**
 - **License**: MIT License - See [LICENSE](LICENSE) for details.

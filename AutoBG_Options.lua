@@ -1,5 +1,5 @@
 -- AutoBG Options Panel
--- Authors: [Original Author], Fostercare5988 (Maintainer: Fostercare5988)
+-- Author & Maintainer: Fostercare5988
 -- Built natively for SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK 3.0.2+
 
 local panel = CreateFrame("Frame", "AutoBG_OptionsPanel", UIParent)
