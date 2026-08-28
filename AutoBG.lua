@@ -252,48 +252,46 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
     local btnIdx, cleanName = GetBGButtonIndex(bgName)
     pendingAutoRejoin = cleanName
 
-    -- 1. If dropdown is already open, click the exact button instantly
-    local targetBtn = getglobal("DropDownList1Button" .. btnIdx)
-    if targetBtn and targetBtn:IsShown() then
-        ClickFrame(targetBtn)
-        return
+    -- Ensure any existing dropdown is cleanly closed before reopening
+    if CloseDropDownMenus then
+        CloseDropDownMenus()
     end
 
-    -- 2. Direct click on TWMiniMapBattlefieldFrame
     local mmBtn = getglobal("TWMiniMapBattlefieldFrame") or getglobal("MiniMapBattlefieldFrame")
     if mmBtn then
         ClickFrame(mmBtn)
     end
 
-    -- 3. Click the specific DropDown button immediately
-    local btn = getglobal("DropDownList1Button" .. btnIdx)
-    if btn and btn:IsShown() then
-        ClickFrame(btn)
-    else
-        -- 0.04s tick in case client requires 1 render frame to show dropdown
-        AutoBG_TimerAfter(0.04, function()
+    -- Allow 0.08s for dropdown items to construct and render
+    AutoBG_TimerAfter(0.08, function()
+        local targetFound = false
+        local lowerTarget = string.lower(cleanName)
+
+        -- 1. Scan across all potential DropDownList1 buttons matching the BG name
+        for i = 1, 12 do
+            local dropBtn = getglobal("DropDownList1Button" .. i)
+            if dropBtn and dropBtn:IsShown() then
+                local text = dropBtn:GetText()
+                if not text then
+                    local textObj = getglobal("DropDownList1Button" .. i .. "NormalText")
+                    if textObj and textObj.GetText then text = textObj:GetText() end
+                end
+                if text and string.find(string.lower(text), lowerTarget) then
+                    ClickFrame(dropBtn)
+                    targetFound = true
+                    break
+                end
+            end
+        end
+
+        -- 2. Fallback to direct button index if text scan was ambiguous
+        if not targetFound then
             local b = getglobal("DropDownList1Button" .. btnIdx)
             if b and b:IsShown() then
                 ClickFrame(b)
-            else
-                -- Fallback: check text across DropDownList1 buttons
-                for i = 1, 8 do
-                    local dropBtn = getglobal("DropDownList1Button" .. i)
-                    if dropBtn and dropBtn:IsShown() then
-                        local text = dropBtn:GetText()
-                        if not text then
-                            local textObj = getglobal("DropDownList1Button" .. i .. "NormalText")
-                            if textObj and textObj.GetText then text = textObj:GetText() end
-                        end
-                        if text and string.find(string.lower(text), string.lower(cleanName)) then
-                            ClickFrame(dropBtn)
-                            break
-                        end
-                    end
-                end
             end
-        end)
-    end
+        end
+    end)
 end
 
 -- Global Macro Button: /click AutoBG_QuickQueueButton or /abg q
@@ -326,7 +324,8 @@ function AutoBG_QueueAllBGs()
         end
     end
 
-    if table.getn(queueQueue) == 0 then
+    local totalToQueue = table.getn(queueQueue)
+    if totalToQueue == 0 then
         AutoBG_Print("Already queued for all 3 Battlegrounds (WSG, AB, AV).")
         return
     end
@@ -335,19 +334,20 @@ function AutoBG_QueueAllBGs()
     local queueIdx = 1
 
     local function StepQueue()
-        if queueIdx > table.getn(queueQueue) then
+        if queueIdx > totalToQueue then
             isAutoQueueing = false
-            AutoBG_Print("Auto-Queue complete: Queued for WSG, AB, and AV.")
+            AutoBG_Print("Auto-Queue complete: Queued for WSG, AB, and AV!")
             return
         end
 
         local currentBG = queueQueue[queueIdx]
         queueIdx = queueIdx + 1
 
-        AutoBG_Print("Auto-queuing for |cFFFFFF00" .. currentBG .. "|r...")
+        AutoBG_Print("Auto-queuing for |cFFFFFF00" .. currentBG .. "|r (" .. (queueIdx - 1) .. "/" .. totalToQueue .. ")...")
         AutoBG_TriggerBattlegroundFinder(currentBG)
 
-        AutoBG_TimerAfter(1.2, StepQueue)
+        -- 2.2s delay between BG requests to allow server handshake & dropdown reset
+        AutoBG_TimerAfter(2.2, StepQueue)
     end
 
     StepQueue()
@@ -722,6 +722,11 @@ SlashCmdList["AUTOBG"] = function(msg)
         if AutoBG_UpdateStanceBar then AutoBG_UpdateStanceBar() end
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "q" or cmd == "queue" or cmd == "join" or cmd == "rejoin" or cmd == "requeue" then
+        if arg == "all" or arg == "3" or arg == "bg" or arg == "bgs" then
+            AutoBG_QueueAllBGs()
+            return
+        end
+
         local targetBG = nil
         if arg ~= "" then
             if string.find(arg, "wsg") or string.find(arg, "war") then
