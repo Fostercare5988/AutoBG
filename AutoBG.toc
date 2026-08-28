@@ -1,6 +1,6 @@
 ## Interface: 11200
 ## Title: AutoBG
-## Notes: Next-generation 2026 PvP automation and battleground intelligence engine built natively for SuperWoW 2.2+, NamPower, and UnitXP SP3.
+## Notes: PVP & BG automation built natively for SuperWoW 2.2+, NamPower, and UnitXP SP3.
 ## Author: Fostercare5988
 ## Version: 1.0.1
 ## SavedVariables: AutoBG_Settings
