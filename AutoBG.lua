@@ -1,4 +1,7 @@
--- AutoBG (Built for SuperWoW 2.2+, NamPower, and UnitXP SP3)
+-- AutoBG for World of Warcraft 1.12.1 (Vanilla / OctoWoW)
+-- Authors: [Original Author], Fostercare5988 (Maintainer: Fostercare5988)
+-- Built natively for SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK 3.0.2+
+
 local addonName = "AutoBG"
 
 -- Direct C++ Engine Timer Interface
@@ -9,6 +12,12 @@ function AutoBG_TimerAfter(delay, func)
         func()
     end
 end
+
+-- Pre-allocated static Unit ID arrays (Eliminates GC string allocations)
+local RAID_UNITS = {}
+local PARTY_UNITS = {}
+for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
+for i = 1, 4 do PARTY_UNITS[i] = "party" .. i end
 
 -- Frame Position Persistence Helpers
 function AutoBG_SavePosition(frame, name)
@@ -37,6 +46,7 @@ local defaultSettings = {
     AutoAcceptDelay = 0,
     AutoLeave = true,
     AutoRejoin = false,
+    AutoQueueLogin = false,
     ScoreColor = true,
     NodeColors = true,
     AutoRelease = true,
@@ -100,7 +110,7 @@ UIParent_ManageFramePositions = function(a1, a2, a3)
     end
 end
 
--- Class Color Table & Multi-Locale Name Map
+-- Class Color Table
 local classColors = {}
 if RAID_CLASS_COLORS then
     for class, color in pairs(RAID_CLASS_COLORS) do
@@ -118,29 +128,16 @@ classColors["WARLOCK"] = classColors["WARLOCK"] or "|cff9482c9"
 classColors["PALADIN"] = classColors["PALADIN"] or "|cfff58cba"
 classColors["SHAMAN"] = classColors["SHAMAN"] or "|cfff58cba"
 
-local LOCALIZED_CLASS_MAP = {
-    -- English
+local CLASS_MAP = {
     ["WARRIOR"] = "WARRIOR", ["MAGE"] = "MAGE", ["ROGUE"] = "ROGUE", ["DRUID"] = "DRUID",
     ["HUNTER"] = "HUNTER", ["PRIEST"] = "PRIEST", ["WARLOCK"] = "WARLOCK", ["PALADIN"] = "PALADIN", ["SHAMAN"] = "SHAMAN",
     ["Warrior"] = "WARRIOR", ["Mage"] = "MAGE", ["Rogue"] = "ROGUE", ["Druid"] = "DRUID",
     ["Hunter"] = "HUNTER", ["Priest"] = "PRIEST", ["Warlock"] = "WARLOCK", ["Paladin"] = "PALADIN", ["Shaman"] = "SHAMAN",
-    -- German
-    ["Krieger"] = "WARRIOR", ["Magier"] = "MAGE", ["Schurke"] = "ROGUE", ["Druide"] = "DRUID",
-    ["Jäger"] = "HUNTER", ["Priester"] = "PRIEST", ["Hexenmeister"] = "WARLOCK", ["Paladin"] = "PALADIN", ["Schamane"] = "SHAMAN",
-    -- French
-    ["Guerrier"] = "WARRIOR", ["Voleur"] = "ROGUE", ["Chasseur"] = "HUNTER", ["Prêtre"] = "PRIEST",
-    ["Démoniste"] = "WARLOCK", ["Chaman"] = "SHAMAN",
-    -- Russian
-    ["Воин"] = "WARRIOR", ["Маг"] = "MAGE", ["Разбойник"] = "ROGUE", ["Друид"] = "DRUID",
-    ["Охотник"] = "HUNTER", ["Жрец"] = "PRIEST", ["Чернокнижник"] = "WARLOCK", ["Паладин"] = "PALADIN", ["Шаман"] = "SHAMAN",
 }
 
 function AutoBG_GetClassColor(classOrToken)
     if not classOrToken then return nil end
-    local token = LOCALIZED_CLASS_MAP[classOrToken]
-    if not token and type(classOrToken) == "string" then
-        token = string.upper(classOrToken)
-    end
+    local token = CLASS_MAP[classOrToken] or (type(classOrToken) == "string" and string.upper(classOrToken))
     if token and classColors[token] then
         return classColors[token], token
     end
@@ -169,20 +166,20 @@ function AutoBG_FindPlayerClass(playerName)
         end
     end
 
-    -- 2. Check Raid / Party
+    -- 2. Check Raid / Party using pre-allocated unit arrays
     local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
     if numRaid > 0 then
         for i = 1, numRaid do
-            if UnitName("raid" .. i) == cleanTarget then
-                local _, token = UnitClass("raid" .. i)
+            if UnitName(RAID_UNITS[i]) == cleanTarget then
+                local _, token = UnitClass(RAID_UNITS[i])
                 return token
             end
         end
     else
         local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
         for i = 1, numParty do
-            if UnitName("party" .. i) == cleanTarget then
-                local _, token = UnitClass("party" .. i)
+            if UnitName(PARTY_UNITS[i]) == cleanTarget then
+                local _, token = UnitClass(PARTY_UNITS[i])
                 return token
             end
         end
@@ -300,6 +297,62 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
 end
 
 -- Global Macro Button: /click AutoBG_QuickQueueButton or /abg q
+-- Multi-BG Auto-Queue Engine (WSG, AB, AV)
+local isAutoQueueing = false
+local hasQueuedOnLogin = false
+
+function AutoBG_QueueAllBGs()
+    if isAutoQueueing then return end
+
+    local inInstance, instanceType = IsInInstance()
+    if inInstance and instanceType == "pvp" then return end
+
+    local bgsToQueue = {"Warsong Gulch", "Arathi Basin", "Alterac Valley"}
+    local queueQueue = {}
+
+    -- Check which BGs we are NOT yet queued for
+    local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
+    for _, bg in ipairs(bgsToQueue) do
+        local alreadyQueued = false
+        for i = 1, maxQueues do
+            local status, mapName = GetBattlefieldStatus(i)
+            if status and status ~= "none" and mapName and string.find(string.lower(mapName), string.lower(bg)) then
+                alreadyQueued = true
+                break
+            end
+        end
+        if not alreadyQueued then
+            table.insert(queueQueue, bg)
+        end
+    end
+
+    if table.getn(queueQueue) == 0 then
+        AutoBG_Print("Already queued for all 3 Battlegrounds (WSG, AB, AV).")
+        return
+    end
+
+    isAutoQueueing = true
+    local queueIdx = 1
+
+    local function StepQueue()
+        if queueIdx > table.getn(queueQueue) then
+            isAutoQueueing = false
+            AutoBG_Print("Auto-Queue complete: Queued for WSG, AB, and AV.")
+            return
+        end
+
+        local currentBG = queueQueue[queueIdx]
+        queueIdx = queueIdx + 1
+
+        AutoBG_Print("Auto-queuing for |cFFFFFF00" .. currentBG .. "|r...")
+        AutoBG_TriggerBattlegroundFinder(currentBG)
+
+        AutoBG_TimerAfter(1.2, StepQueue)
+    end
+
+    StepQueue()
+end
+
 -- Global Macro Button: /click AutoBG_QuickQueueButton or /abg q
 local quickQueueBtn = CreateFrame("Button", "AutoBG_QuickQueueButton", UIParent)
 quickQueueBtn:SetScript("OnClick", function()
@@ -411,6 +464,14 @@ frame:SetScript("OnEvent", function()
                 end)
             else
                 hasHandledEnd = false
+            end
+
+            -- Auto-Queue on login (runs once per session after 3s)
+            if AutoBG_Settings and AutoBG_Settings.AutoQueueLogin and not hasQueuedOnLogin then
+                hasQueuedOnLogin = true
+                AutoBG_TimerAfter(3.0, function()
+                    AutoBG_QueueAllBGs()
+                end)
             end
         end
 
@@ -695,6 +756,10 @@ SlashCmdList["AUTOBG"] = function(msg)
                 end
             end
         end
+    elseif cmd == "autoqueue" or cmd == "loginqueue" or cmd == "qlogin" then
+        AutoBG_Settings.AutoQueueLogin = not AutoBG_Settings.AutoQueueLogin
+        AutoBG_Print("Auto-Queue on Login is now " .. (AutoBG_Settings.AutoQueueLogin and "|cFF00FF00[ENABLED]|r" or "|cFFFF0000[DISABLED]|r"), true)
+        if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
     elseif cmd == "delay" or cmd == "acceptdelay" then
         local val = tonumber(arg)
         if val then

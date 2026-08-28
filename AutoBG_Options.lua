@@ -1,7 +1,10 @@
--- AutoBG Options Panel for WoW 1.12.1
+-- AutoBG Options Panel
+-- Authors: [Original Author], Fostercare5988 (Maintainer: Fostercare5988)
+-- Built natively for SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK 3.0.2+
+
 local panel = CreateFrame("Frame", "AutoBG_OptionsPanel", UIParent)
 panel:SetWidth(460)
-panel:SetHeight(480)
+panel:SetHeight(510)
 panel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 panel:SetFrameStrata("DIALOG")
 panel:SetToplevel(true)
@@ -128,7 +131,8 @@ end)
 
 local cbLeave = CreateCheckbox("AutoBG_Opt_Leave", "Auto-Leave BG on End", "Automatically leave the Battleground when the match finishes.", "AutoLeave", sliderDelay, -20, -18)
 local cbRejoin = CreateCheckbox("AutoBG_Opt_Rejoin", "Auto-Rejoin BG on Exit", "Automatically queue for the same Battleground after match exit via Battleground Finder.", "AutoRejoin", cbLeave)
-local cbRelease = CreateCheckbox("AutoBG_Opt_Release", "Auto-Release Spirit", "Automatically release spirit upon dying in BG (skips if Soulstone/Ankh ready).", "AutoRelease", cbRejoin)
+local cbQueueLogin = CreateCheckbox("AutoBG_Opt_QueueLogin", "Auto-Queue on Login (WSG/AB/AV)", "Automatically queue for Warsong Gulch, Arathi Basin, and Alterac Valley when logging in or reloading.", "AutoQueueLogin", cbRejoin)
+local cbRelease = CreateCheckbox("AutoBG_Opt_Release", "Auto-Release Spirit", "Automatically release spirit upon dying in BG (skips if Soulstone/Ankh ready).", "AutoRelease", cbQueueLogin)
 
 local headerTweaks = CreateHeader("General Tweaks", cbRelease, 0, -12)
 local cbScoreColor = CreateCheckbox("AutoBG_Opt_ScoreColor", "Scoreboard Class Colors", "Color names on the scoreboard by player class.", "ScoreColor", headerTweaks, 0, -4)

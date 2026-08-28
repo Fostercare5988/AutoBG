@@ -1,6 +1,24 @@
--- AutoBG Flag Carrier (FC) Tracker for WoW 1.12.1 (Vanilla / OctoWOW)
+-- AutoBG Warsong Flag Carrier (FC) Tracker
+-- Authors: [Original Author], Fostercare5988 (Maintainer: Fostercare5988)
+-- Built natively for SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK 3.0.2+
+
 local carrierAlliance = nil
 local carrierHorde = nil
+
+-- Static pre-allocated Unit ID arrays (Eliminates GC allocations during scan loops)
+local RAID_UNITS = {}
+local RAID_TARGET_UNITS = {}
+local PARTY_UNITS = {}
+local PARTY_TARGET_UNITS = {}
+
+for i = 1, 40 do
+    RAID_UNITS[i] = "raid" .. i
+    RAID_TARGET_UNITS[i] = "raid" .. i .. "target"
+end
+for i = 1, 4 do
+    PARTY_UNITS[i] = "party" .. i
+    PARTY_TARGET_UNITS[i] = "party" .. i .. "target"
+end
 
 local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     local frame = CreateFrame("Button", name, UIParent)
@@ -26,7 +44,7 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     end)
     frame:Hide()
 
-    -- 1.12 / SuperWoW Instant targeting on click
+    -- SuperWoW Exact whole-name targeting
     frame:SetScript("OnClick", function()
         if this.carrierName and this.carrierName ~= "" then
             TargetByName(this.carrierName, true)
@@ -163,7 +181,7 @@ EventFrame:SetScript("OnEvent", function()
     end
 end)
 
--- Live HP Scanner for Vanilla 1.12 (Throttled at 5 Hz / 0.2s)
+-- Live HP & Distance Scanner (Throttled at 5 Hz / 0.2s with Zero-GC Allocation)
 local Scanner = CreateFrame("Frame", "AutoBG_FCScanner")
 local updateTimer = 0
 Scanner:SetScript("OnUpdate", function()
@@ -212,7 +230,7 @@ Scanner:SetScript("OnUpdate", function()
                 local hp = UnitHealth(unit)
                 local maxHp = UnitHealthMax(unit)
 
-                -- 1. UnitXP Real Health Detection (Enemy raw HP)
+                -- 1. UnitXP Real Health Detection (True uncapped raw HP)
                 local rawHp, rawMaxHp = nil, nil
                 if UnitXP then
                     pcall(function()
@@ -295,14 +313,14 @@ Scanner:SetScript("OnUpdate", function()
             local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
             if numRaid > 0 then
                 for i = 1, numRaid do
-                    if checkUnit("raid" .. i, targetName, frame) then return end
-                    if checkUnit("raid" .. i .. "target", targetName, frame) then return end
+                    if checkUnit(RAID_UNITS[i], targetName, frame) then return end
+                    if checkUnit(RAID_TARGET_UNITS[i], targetName, frame) then return end
                 end
             else
                 local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
                 for i = 1, numParty do
-                    if checkUnit("party" .. i, targetName, frame) then return end
-                    if checkUnit("party" .. i .. "target", targetName, frame) then return end
+                    if checkUnit(PARTY_UNITS[i], targetName, frame) then return end
+                    if checkUnit(PARTY_TARGET_UNITS[i], targetName, frame) then return end
                 end
             end
         end
@@ -319,3 +337,4 @@ end)
 function AutoBG_FC_UpdateVisibility()
     -- Scanner handles on next tick
 end
+

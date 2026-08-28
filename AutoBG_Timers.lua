@@ -1,4 +1,7 @@
--- AutoBG Timers for WoW 1.12.1 (Vanilla / OctoWOW)
+-- AutoBG Timers & Objective Countdown Engine
+-- Authors: [Original Author], Fostercare5988 (Maintainer: Fostercare5988)
+-- Built natively for SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK 3.0.2+
+
 local timers = {
     AB = {},
     AV = {},
@@ -221,14 +224,18 @@ end
 
 local function FormatTime(seconds)
     local m = math.floor(seconds / 60)
-    local s = math.floor(math.mod(seconds, 60))
-    return string.format("%d:%02d", m, s)
+    local s = math.floor(seconds - m * 60)
+    if s < 10 then
+        return m .. ":0" .. s
+    else
+        return m .. ":" .. s
+    end
 end
 
 local function FormatQueueTime(seconds)
     local h = math.floor(seconds / 3600)
-    local m = math.floor(math.mod(seconds, 3600) / 60)
-    local s = math.floor(math.mod(seconds, 60))
+    local m = math.floor((seconds - h * 3600) / 60)
+    local s = math.floor(seconds - h * 3600 - m * 60)
 
     if h > 0 then
         local hrStr = (h == 1) and "Hr" or "Hrs"

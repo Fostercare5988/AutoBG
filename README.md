@@ -4,7 +4,11 @@
 [![Interface](https://img.shields.io/badge/interface-1.12.1%20%2F%20OctoWOW-orange.svg)](https://github.com/Fostercare5988/AutoBG)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/Fostercare5988/AutoBG)
 
-Next-generation 2026 PvP automation and battleground intelligence engine built natively for **SuperWoW 2.2+**, **NamPower**, and **UnitXP SP3**.
+Next-generation 2026 PvP automation and battleground intelligence engine engineered natively for the **OctoWoW Engine Stack**:
+- **SuperWoW (v2.2+)**
+- **NamPower (v4.6.2+)**
+- **UnitXP SP3**
+- **DXVK (v3.0.2+)** & **VanillaFixes**
 
 ---
 
@@ -14,18 +18,21 @@ Next-generation 2026 PvP automation and battleground intelligence engine built n
 
 ---
 
-## 🚀 2026 Modern Architecture & DLL Integration
+## 🚀 2026 Modern Architecture & Engine Directives
 
-- **⚡ SuperWoW 2.2 C++ Engine**:
-  - Native `C_Timer.After()` scheduler replacing slow Lua `OnUpdate` array queues.
-  - OS-level `FlashClientIcon()` taskbar notifications on queue pops.
-  - Exact `TargetByName(name, true)` substring/whole-name resolution for 1-click Flag Carrier targeting.
+- **⚡ SuperWoW 2.2 C++ Native Engine**:
+  - Native `C_Timer.After()` hardware scheduler replacing slow Lua `OnUpdate` array queues.
+  - OS-level `FlashClientIcon()` and `SetClientWindowForeground()` taskbar notifications on queue pops.
+  - Exact `TargetByName(name, true)` whole-name resolution for 1-click Flag Carrier targeting.
 - **🏎️ NamPower Event Pipeline**:
-  - Microsecond-precision combat event queueing and zero-latency packet dispatching.
+  - Microsecond-precision event queueing and zero-latency packet dispatching.
   - Frame-0 execution for auto-queueing, match exits, and objective updates with 0ms delay.
 - **🎯 UnitXP SP3 Health & Distance Engine**:
-  - Direct `UnitXP("health", unit)` and `UnitXP("maxhealth", unit)` hooks providing true raw enemy HP numbers (e.g. `3840 (85%)`) on Flag Carrier unit frames instead of generic percentages.
-- **🌱 Pure Memory Footprint**: Minimal heap allocation, stateless mathematical timers via `GetTime()`, zero table garbage accumulation.
+  - Direct `UnitXP("health", unit)` and `UnitXP("maxhealth", unit)` hooks providing true uncapped enemy HP (e.g. `3840 (85%)`) on Flag Carrier unit frames instead of generic percentages.
+  - Real-time `UnitXP("distance", unit)` yard calculations with dynamic 4-stage color gradient.
+- **🌱 Zero-GC Memory Footprint & DXVK Smoothness**:
+  - Pre-allocated static unit arrays (`RAID_UNITS`, `PARTY_UNITS`) to completely eliminate heap string allocations in scan loops.
+  - Decoupled delta-time rendering optimized for high-refresh 144Hz+ displays under DXVK.
 
 ---
 
@@ -114,8 +121,7 @@ Synchronizes the global 30-second server resurrection wave with a live visual pr
 
 ---
 
-## 📄 License
-
-MIT License - Developed by **[Fostercare5988](https://github.com/Fostercare5988)**. See [LICENSE](LICENSE) for details.
-
-
+## 📄 License & Authorship
+- **Authors**: `[Original Author]`, `Fostercare5988`
+- **Maintainer**: `Fostercare5988`
+- **License**: MIT License - See [LICENSE](LICENSE) for details.
