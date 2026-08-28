@@ -4,13 +4,41 @@
 
 local addonName = "AutoBG"
 
--- Direct C++ Engine Timer Interface
-function AutoBG_TimerAfter(delay, func)
-    if C_Timer and C_Timer.After then
-        C_Timer.After(delay, func)
-    elseif func then
-        func()
+-- Micro-Scheduler for delayed execution (Sleeps when idle, 0 CPU overhead)
+local timerQueue = {}
+local timerFrame = CreateFrame("Frame", "AutoBG_TimerSchedulerFrame")
+timerFrame:Hide()
+timerFrame:SetScript("OnUpdate", function()
+    local now = GetTime()
+    local i = 1
+    while i <= table.getn(timerQueue) do
+        local entry = timerQueue[i]
+        if now >= entry.fireTime then
+            table.remove(timerQueue, i)
+            if entry.func then
+                entry.func()
+            end
+        else
+            i = i + 1
+        end
     end
+    if table.getn(timerQueue) == 0 then
+        timerFrame:Hide()
+    end
+end)
+
+function AutoBG_TimerAfter(delay, func)
+    if not func then return end
+    if not delay or delay <= 0 then
+        func()
+        return
+    end
+
+    table.insert(timerQueue, {
+        fireTime = GetTime() + delay,
+        func = func
+    })
+    timerFrame:Show()
 end
 
 -- Pre-allocated static Unit ID arrays (Eliminates GC string allocations)
