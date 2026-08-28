@@ -58,22 +58,25 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     icon:SetPoint("LEFT", frame, "LEFT", 8, 0)
     icon:SetTexture(flagTexture)
 
-    -- Distance FontString (Top-right aligned)
+    -- Distance FontString (Top-right aligned with dedicated width)
     local distText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     distText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
+    distText:SetWidth(60)
+    distText:SetHeight(14)
     distText:SetJustifyH("RIGHT")
-    distText:SetText("")
+    distText:SetText("|cFF808080? yd|r")
 
     -- Carrier Name FontString (Cleanly positioned above the health bar, left of distance)
     local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    nameText:SetPoint("TOPLEFT", frame, "TOPLEFT", 46, -8)
-    nameText:SetPoint("RIGHT", distText, "LEFT", -4, 0)
+    nameText:SetPoint("TOPLEFT", frame, "TOPLEFT", 44, -8)
+    nameText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -70, -8)
+    nameText:SetHeight(14)
     nameText:SetJustifyH("LEFT")
     nameText:SetText(titleText)
 
     -- Visual Health Bar (Cleanly anchored to the bottom with breathing room)
     local healthBar = CreateFrame("StatusBar", name .. "HealthBar", frame)
-    healthBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 46, 8)
+    healthBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 44, 8)
     healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 8)
     healthBar:SetHeight(13)
     healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
@@ -126,7 +129,7 @@ local function UpdateFCButton(frame, carrierName)
         frame.healthBar:SetValue(100)
         frame.healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
         frame.hpText:SetText("???")
-        frame.distText:SetText("")
+        frame.distText:SetText("|cFF808080? yd|r")
         frame:Show()
     else
         frame:Hide()
@@ -258,7 +261,7 @@ Scanner:SetScript("OnUpdate", function()
                     end
                 end
 
-                -- 2. Real-Time Distance Detection (UnitXP / InteractRange)
+                -- 2. Real-Time Distance Detection (UnitXP / Map Position / Interact Brackets)
                 local dist = nil
                 if UnitXP then
                     pcall(function()
@@ -278,14 +281,30 @@ Scanner:SetScript("OnUpdate", function()
                     end
                     frame.distText:SetText(color .. yard .. " yd|r")
                 else
-                    if CheckInteractDistance(unit, 3) then
+                    -- Friendly unit in raid/party map calculation
+                    local px, py = GetPlayerMapPosition("player")
+                    local ux, uy = GetPlayerMapPosition(unit)
+                    if px and py and ux and uy and (px > 0 or py > 0) and (ux > 0 or uy > 0) then
+                        local dx = (px - ux) * 500
+                        local dy = (py - uy) * 670
+                        local yard = math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
+                        local color = "|cFF00FF00"
+                        if yard > 80 then
+                            color = "|cFFFF4040"
+                        elseif yard > 50 then
+                            color = "|cFFFF8000"
+                        elseif yard > 30 then
+                            color = "|cFFFFFF00"
+                        end
+                        frame.distText:SetText(color .. yard .. " yd|r")
+                    elseif CheckInteractDistance(unit, 3) then
                         frame.distText:SetText("|cFF00FF00<10 yd|r")
                     elseif CheckInteractDistance(unit, 2) then
-                        frame.distText:SetText("|cFF00FF00<11 yd|r")
+                        frame.distText:SetText("|cFF00FF00~11 yd|r")
                     elseif CheckInteractDistance(unit, 1) or CheckInteractDistance(unit, 4) then
                         frame.distText:SetText("|cFFFFFF00<28 yd|r")
                     else
-                        frame.distText:SetText("")
+                        frame.distText:SetText("|cFFFF4040>28 yd|r")
                     end
                 end
 
@@ -323,6 +342,9 @@ Scanner:SetScript("OnUpdate", function()
                     if checkUnit(PARTY_TARGET_UNITS[i], targetName, frame) then return end
                 end
             end
+
+            -- Carrier is active but not targeted by player or raid members
+            frame.distText:SetText("|cFF808080? yd|r")
         end
 
         if carrierAlliance then
