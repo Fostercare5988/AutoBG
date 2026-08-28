@@ -225,12 +225,20 @@ local notifiedQueues = {}
 local hasHandledEnd = false
 local lastPlayedBG = nil
 local pendingAutoRejoin = nil
+local needsQueueAfterResurrect = false
+
+local function IsPlayerDeadOrGhost()
+    return (UnitIsDeadOrGhost and UnitIsDeadOrGhost("player")) or (UnitIsDead and UnitIsDead("player")) or (UnitIsGhost and UnitIsGhost("player"))
+end
 
 local frame = CreateFrame("Frame", "AutoBGFrame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 frame:RegisterEvent("BATTLEFIELDS_SHOW")
 frame:RegisterEvent("PLAYER_DEAD")
+frame:RegisterEvent("PLAYER_ALIVE")
+frame:RegisterEvent("PLAYER_UNGHOST")
+frame:RegisterEvent("UI_ERROR_MESSAGE")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
 frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_ALLIANCE")
@@ -333,6 +341,12 @@ function AutoBG_QueueAllBGs()
     local inInstance, instanceType = IsInInstance()
     if inInstance and instanceType == "pvp" then return end
 
+    if IsPlayerDeadOrGhost() then
+        needsQueueAfterResurrect = true
+        AutoBG_Print("Cannot queue for battlegrounds while dead. Will auto-queue once resurrected.")
+        return
+    end
+
     local bgsToQueue = {"Warsong Gulch", "Arathi Basin", "Alterac Valley"}
     local queueQueue = {}
 
@@ -362,6 +376,13 @@ function AutoBG_QueueAllBGs()
     local queueIdx = 1
 
     local function StepQueue()
+        if IsPlayerDeadOrGhost() then
+            isAutoQueueing = false
+            needsQueueAfterResurrect = true
+            AutoBG_Print("Auto-Queue paused (player is dead/ghost). Will resume once resurrected.")
+            return
+        end
+
         if queueIdx > totalToQueue then
             isAutoQueueing = false
             AutoBG_Print("Auto-Queue complete: Queued for WSG, AB, and AV!")
@@ -496,10 +517,20 @@ frame:SetScript("OnEvent", function()
 
             -- Auto-Queue on login (runs once per session after 3s)
             if AutoBG_Settings and AutoBG_Settings.AutoQueueLogin and not hasQueuedOnLogin then
-                hasQueuedOnLogin = true
-                AutoBG_TimerAfter(3.0, function()
-                    AutoBG_QueueAllBGs()
-                end)
+                if IsPlayerDeadOrGhost() then
+                    needsQueueAfterResurrect = true
+                    AutoBG_Print("Logged in while dead. Auto-Queue will trigger upon resurrection.")
+                else
+                    hasQueuedOnLogin = true
+                    AutoBG_TimerAfter(3.0, function()
+                        if not IsPlayerDeadOrGhost() then
+                            AutoBG_QueueAllBGs()
+                        else
+                            needsQueueAfterResurrect = true
+                            hasQueuedOnLogin = false
+                        end
+                    end)
+                end
             end
         end
 
@@ -619,6 +650,29 @@ frame:SetScript("OnEvent", function()
                 else
                     AutoBG_Print("Self-resurrection available. Preserving spirit.")
                 end
+            end
+        end
+
+    elseif ev == "PLAYER_ALIVE" or ev == "PLAYER_UNGHOST" then
+        if needsQueueAfterResurrect or (AutoBG_Settings and AutoBG_Settings.AutoQueueLogin and not hasQueuedOnLogin) then
+            if not IsPlayerDeadOrGhost() then
+                needsQueueAfterResurrect = false
+                hasQueuedOnLogin = true
+                AutoBG_TimerAfter(2.0, function()
+                    if not IsPlayerDeadOrGhost() then
+                        AutoBG_Print("Resurrection detected! Initiating Battleground Auto-Queue...")
+                        AutoBG_QueueAllBGs()
+                    end
+                end)
+            end
+        end
+
+    elseif ev == "UI_ERROR_MESSAGE" then
+        if a1 and (string.find(string.lower(a1), "cannot queue") or string.find(string.lower(a1), "while dead")) then
+            if isAutoQueueing then
+                isAutoQueueing = false
+                needsQueueAfterResurrect = true
+                AutoBG_Print("Auto-Queue paused (cannot queue while dead). Will auto-queue once resurrected.")
             end
         end
     end
