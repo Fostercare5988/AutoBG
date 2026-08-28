@@ -224,11 +224,104 @@ Scanner:SetScript("OnUpdate", function()
         if not carrierHorde and HordeFC:IsShown() then HordeFC:Hide() end
     end
 
+    -- Refresh timer
     updateTimer = updateTimer + (arg1 or 0.05)
-    if updateTimer > 0.2 then
+    if updateTimer > 0.15 then
         updateTimer = 0
 
-        local function checkUnit(unit, targetName, frame)
+        -- Keep map coordinates active for long-distance flag & player tracking
+        if not WorldMapFrame or not WorldMapFrame:IsShown() then
+            pcall(SetMapToCurrentZone)
+        end
+
+        local function FormatYardText(yard)
+            if not yard or yard < 0 then return nil end
+            local color = "|cFF00FF00"
+            if yard > 80 then
+                color = "|cFFFF4040"
+            elseif yard > 50 then
+                color = "|cFFFF8000"
+            elseif yard > 30 then
+                color = "|cFFFFFF00"
+            end
+            return color .. yard .. " yd|r"
+        end
+
+        local function GetDistanceToTarget(unit, flagType)
+            -- 1. SuperWoW 3D World Space Coordinates (Exact to 1 yard, 0 to 1000+ yd)
+            if UnitPosition and unit and UnitExists(unit) then
+                local px, py, pz = UnitPosition("player")
+                local ux, uy, uz = UnitPosition(unit)
+                if px and py and ux and uy then
+                    local dx = px - ux
+                    local dy = py - uy
+                    local dz = (pz and uz) and (pz - uz) or 0
+                    local yard = math.floor(math.sqrt(dx * dx + dy * dy + dz * dz) + 0.5)
+                    if yard >= 0 then
+                        return yard
+                    end
+                end
+            end
+
+            -- 2. UnitXP native distance
+            if UnitXP and unit and UnitExists(unit) then
+                local dist = nil
+                pcall(function() dist = UnitXP("distance", unit) or UnitXP("range", unit) end)
+                if dist and type(dist) == "number" and dist >= 0 then
+                    return math.floor(dist + 0.5)
+                end
+            end
+
+            -- 3. Friendly Party/Raid map coordinates
+            if unit and UnitExists(unit) then
+                local px, py = GetPlayerMapPosition("player")
+                local ux, uy = GetPlayerMapPosition(unit)
+                if px and py and ux and uy and (px > 0 or py > 0) and (ux > 0 or uy > 0) then
+                    local dx = (px - ux) * 515
+                    local dy = (py - uy) * 685
+                    local yard = math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
+                    if yard >= 0 and yard < 1200 then
+                        return yard
+                    end
+                end
+            end
+
+            -- 4. Warsong Battlefield Flag Coordinates (Tracks across entire 0 to 650+ yard map)
+            if flagType then
+                local px, py = GetPlayerMapPosition("player")
+                if px and py and (px > 0 or py > 0) then
+                    local numFlags = (GetNumBattlefieldFlagPositions and GetNumBattlefieldFlagPositions()) or 0
+                    for i = 1, numFlags do
+                        local fx, fy, flagToken = GetBattlefieldFlagPosition(i)
+                        if fx and fy and (fx > 0 or fy > 0) then
+                            local isMatch = false
+                            if flagToken and string.find(string.lower(flagToken), string.lower(flagType)) then
+                                isMatch = true
+                            elseif numFlags == 2 then
+                                if string.lower(flagType) == "alliance" and i == 1 then isMatch = true
+                                elseif string.lower(flagType) == "horde" and i == 2 then isMatch = true
+                                end
+                            elseif numFlags == 1 then
+                                isMatch = true
+                            end
+
+                            if isMatch then
+                                local dx = (px - fx) * 515
+                                local dy = (py - fy) * 685
+                                local yard = math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
+                                if yard >= 0 and yard < 1200 then
+                                    return yard
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            return nil
+        end
+
+        local function checkUnit(unit, targetName, frame, flagType)
             if targetName and UnitExists(unit) and UnitName(unit) == targetName then
                 local hp = UnitHealth(unit)
                 local maxHp = UnitHealthMax(unit)
@@ -261,51 +354,18 @@ Scanner:SetScript("OnUpdate", function()
                     end
                 end
 
-                -- 2. Real-Time Distance Detection (UnitXP / Map Position / Interact Brackets)
-                local dist = nil
-                if UnitXP then
-                    pcall(function()
-                        dist = UnitXP("distance", unit) or UnitXP("range", unit)
-                    end)
-                end
-
-                if dist and type(dist) == "number" and dist >= 0 then
-                    local yard = math.floor(dist + 0.5)
-                    local color = "|cFF00FF00"
-                    if yard > 80 then
-                        color = "|cFFFF4040"
-                    elseif yard > 50 then
-                        color = "|cFFFF8000"
-                    elseif yard > 30 then
-                        color = "|cFFFFFF00"
-                    end
-                    frame.distText:SetText(color .. yard .. " yd|r")
+                -- 2. Long-Distance Precision Calculator
+                local yard = GetDistanceToTarget(unit, flagType)
+                if yard then
+                    frame.distText:SetText(FormatYardText(yard))
+                elseif CheckInteractDistance(unit, 3) then
+                    frame.distText:SetText("|cFF00FF00<10 yd|r")
+                elseif CheckInteractDistance(unit, 2) then
+                    frame.distText:SetText("|cFF00FF00~11 yd|r")
+                elseif CheckInteractDistance(unit, 1) or CheckInteractDistance(unit, 4) then
+                    frame.distText:SetText("|cFFFFFF00<28 yd|r")
                 else
-                    -- Friendly unit in raid/party map calculation
-                    local px, py = GetPlayerMapPosition("player")
-                    local ux, uy = GetPlayerMapPosition(unit)
-                    if px and py and ux and uy and (px > 0 or py > 0) and (ux > 0 or uy > 0) then
-                        local dx = (px - ux) * 500
-                        local dy = (py - uy) * 670
-                        local yard = math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
-                        local color = "|cFF00FF00"
-                        if yard > 80 then
-                            color = "|cFFFF4040"
-                        elseif yard > 50 then
-                            color = "|cFFFF8000"
-                        elseif yard > 30 then
-                            color = "|cFFFFFF00"
-                        end
-                        frame.distText:SetText(color .. yard .. " yd|r")
-                    elseif CheckInteractDistance(unit, 3) then
-                        frame.distText:SetText("|cFF00FF00<10 yd|r")
-                    elseif CheckInteractDistance(unit, 2) then
-                        frame.distText:SetText("|cFF00FF00~11 yd|r")
-                    elseif CheckInteractDistance(unit, 1) or CheckInteractDistance(unit, 4) then
-                        frame.distText:SetText("|cFFFFFF00<28 yd|r")
-                    else
-                        frame.distText:SetText("|cFFFF4040>28 yd|r")
-                    end
+                    frame.distText:SetText("|cFFFF4040>28 yd|r")
                 end
 
                 -- 3. Refresh class coloring if found
@@ -322,36 +382,41 @@ Scanner:SetScript("OnUpdate", function()
             return false
         end
 
-        local function scanFor(targetName, frame)
+        local function scanFor(targetName, frame, flagType)
             if not targetName or targetName == "" then return end
-            if checkUnit("target", targetName, frame) then return end
-            if checkUnit("mouseover", targetName, frame) then return end
-            if checkUnit("targettarget", targetName, frame) then return end
-            if checkUnit("player", targetName, frame) then return end
+            if checkUnit("target", targetName, frame, flagType) then return end
+            if checkUnit("mouseover", targetName, frame, flagType) then return end
+            if checkUnit("targettarget", targetName, frame, flagType) then return end
+            if checkUnit("player", targetName, frame, flagType) then return end
 
             local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
             if numRaid > 0 then
                 for i = 1, numRaid do
-                    if checkUnit(RAID_UNITS[i], targetName, frame) then return end
-                    if checkUnit(RAID_TARGET_UNITS[i], targetName, frame) then return end
+                    if checkUnit(RAID_UNITS[i], targetName, frame, flagType) then return end
+                    if checkUnit(RAID_TARGET_UNITS[i], targetName, frame, flagType) then return end
                 end
             else
                 local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
                 for i = 1, numParty do
-                    if checkUnit(PARTY_UNITS[i], targetName, frame) then return end
-                    if checkUnit(PARTY_TARGET_UNITS[i], targetName, frame) then return end
+                    if checkUnit(PARTY_UNITS[i], targetName, frame, flagType) then return end
+                    if checkUnit(PARTY_TARGET_UNITS[i], targetName, frame, flagType) then return end
                 end
             end
 
-            -- Carrier is active but not targeted by player or raid members
-            frame.distText:SetText("|cFF808080? yd|r")
+            -- If carrier is not directly targeted by raid, track through battlefield flag coordinates
+            local flagYard = GetDistanceToTarget(nil, flagType)
+            if flagYard then
+                frame.distText:SetText(FormatYardText(flagYard))
+            else
+                frame.distText:SetText("|cFF808080? yd|r")
+            end
         end
 
         if carrierAlliance then
-            scanFor(carrierAlliance, AllianceFC)
+            scanFor(carrierAlliance, AllianceFC, "Alliance")
         end
         if carrierHorde then
-            scanFor(carrierHorde, HordeFC)
+            scanFor(carrierHorde, HordeFC, "Horde")
         end
     end
 end)
