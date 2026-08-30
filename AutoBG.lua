@@ -535,13 +535,39 @@ frame:SetScript("OnEvent", function()
         end
 
     elseif ev == "BATTLEFIELDS_SHOW" then
-        if pendingAutoRejoin or (hasHandledEnd and lastPlayedBG and AutoBG_Settings and AutoBG_Settings.AutoRejoin) then
+        if pendingAutoRejoin or (hasHandledEnd and lastPlayedBG and AutoBG_Settings and AutoBG_Settings.AutoRejoin) or isAutoQueueing then
             local bgTitle = pendingAutoRejoin or (GetBattlefieldInfo and GetBattlefieldInfo()) or "Battleground"
-            JoinBattlefield(0)
-            if BattlefieldFrame and BattlefieldFrame:IsShown() then
-                HideUIPanel(BattlefieldFrame)
+
+            -- Always select "First Available" (Index 0)
+            if SetSelectedBattlefield then
+                pcall(SetSelectedBattlefield, 0)
             end
-            AutoBG_Print("Successfully queued for |cFFFFFF00" .. bgTitle .. "|r via Battleground Finder!")
+            pcall(JoinBattlefield, 0)
+
+            -- Instantly hide and dismiss the Battlefield frame
+            if BattlefieldFrame then
+                HideUIPanel(BattlefieldFrame)
+                BattlefieldFrame:Hide()
+            end
+            if CloseBattlefield then pcall(CloseBattlefield) end
+            if CloseDropDownMenus then pcall(CloseDropDownMenus) end
+
+            -- Guard against asynchronous ShowUIPanel overrides on next render ticks
+            AutoBG_TimerAfter(0.04, function()
+                if BattlefieldFrame and BattlefieldFrame:IsShown() then
+                    HideUIPanel(BattlefieldFrame)
+                    BattlefieldFrame:Hide()
+                end
+                if CloseDropDownMenus then pcall(CloseDropDownMenus) end
+            end)
+            AutoBG_TimerAfter(0.15, function()
+                if BattlefieldFrame and BattlefieldFrame:IsShown() then
+                    HideUIPanel(BattlefieldFrame)
+                    BattlefieldFrame:Hide()
+                end
+            end)
+
+            AutoBG_Print("Successfully queued for |cFFFFFF00" .. bgTitle .. "|r (First Available)!")
             pendingAutoRejoin = nil
             hasHandledEnd = false
         end
@@ -654,7 +680,7 @@ frame:SetScript("OnEvent", function()
         end
 
     elseif ev == "PLAYER_ALIVE" or ev == "PLAYER_UNGHOST" then
-        if needsQueueAfterResurrect or (AutoBG_Settings and AutoBG_Settings.AutoQueueLogin and not hasQueuedOnLogin) then
+        if needsQueueAfterResurrect then
             if not IsPlayerDeadOrGhost() then
                 needsQueueAfterResurrect = false
                 hasQueuedOnLogin = true
@@ -683,11 +709,26 @@ if BattlefieldFrame then
     local orig_BattlefieldFrame_OnShow = BattlefieldFrame:GetScript("OnShow")
     BattlefieldFrame:SetScript("OnShow", function()
         if orig_BattlefieldFrame_OnShow then orig_BattlefieldFrame_OnShow() end
-        if pendingAutoRejoin or (hasHandledEnd and lastPlayedBG and AutoBG_Settings and AutoBG_Settings.AutoRejoin) then
+        if pendingAutoRejoin or (hasHandledEnd and lastPlayedBG and AutoBG_Settings and AutoBG_Settings.AutoRejoin) or isAutoQueueing then
             local bgTitle = pendingAutoRejoin or (GetBattlefieldInfo and GetBattlefieldInfo()) or "Battleground"
-            JoinBattlefield(0)
+            if SetSelectedBattlefield then
+                pcall(SetSelectedBattlefield, 0)
+            end
+            pcall(JoinBattlefield, 0)
             HideUIPanel(BattlefieldFrame)
-            AutoBG_Print("Successfully queued for |cFFFFFF00" .. bgTitle .. "|r via Battleground Finder!")
+            BattlefieldFrame:Hide()
+            if CloseBattlefield then pcall(CloseBattlefield) end
+            if CloseDropDownMenus then pcall(CloseDropDownMenus) end
+
+            AutoBG_TimerAfter(0.04, function()
+                if BattlefieldFrame and BattlefieldFrame:IsShown() then
+                    HideUIPanel(BattlefieldFrame)
+                    BattlefieldFrame:Hide()
+                end
+                if CloseDropDownMenus then pcall(CloseDropDownMenus) end
+            end)
+
+            AutoBG_Print("Successfully queued for |cFFFFFF00" .. bgTitle .. "|r (First Available)!")
             pendingAutoRejoin = nil
             hasHandledEnd = false
         end
