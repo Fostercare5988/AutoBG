@@ -1,0 +1,13 @@
+## Interface: 11200
+## Title: AutoBG
+## Notes: High-performance PVP & Battleground automation engineered natively for World of Warcraft 1.12.1 (ClassicAPI, SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK).
+## Author: Fostercare5988
+## Version: 1.2.0
+## SavedVariables: AutoBG_Settings
+## X-Category: Battlegrounds & PvP
+## X-Website: https://github.com/Fostercare5988/AutoBG
+
+AutoBG.lua
+AutoBG_Options.lua
+AutoBG_Timers.lua
+AutoBG_FC.lua
