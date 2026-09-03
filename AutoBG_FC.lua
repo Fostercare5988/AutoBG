@@ -8,10 +8,18 @@ if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) then return end
 local carrierAlliance = nil
 local carrierHorde = nil
 
--- Static Unit IDs
+-- Pre-allocated static Unit IDs (Part D2)
 local SCAN_UNITS = { "target", "mouseover", "targettarget", "player" }
-for i = 1, 40 do table.insert(SCAN_UNITS, "raid" .. i); table.insert(SCAN_UNITS, "raid" .. i .. "target") end
-for i = 1, 4 do table.insert(SCAN_UNITS, "party" .. i); table.insert(SCAN_UNITS, "party" .. i .. "target") end
+local scanCount = #SCAN_UNITS
+for i = 1, 40 do
+    scanCount = scanCount + 1; SCAN_UNITS[scanCount] = "raid" .. i
+    scanCount = scanCount + 1; SCAN_UNITS[scanCount] = "raid" .. i .. "target"
+end
+for i = 1, 4 do
+    scanCount = scanCount + 1; SCAN_UNITS[scanCount] = "party" .. i
+    scanCount = scanCount + 1; SCAN_UNITS[scanCount] = "party" .. i .. "target"
+end
+
 
 -- Canonical 4-Stage Distance Color Grading (Rule B8)
 local function GetDistanceColor(d)
@@ -188,15 +196,18 @@ local function GetDistance(unit)
         local ok, dist = pcall(UnitXP, "distance", unit)
         if ok and dist and dist >= 0 then return math.floor(dist + 0.5) end
     end
-    -- 2. SuperWoW 3D World Space (Instant exact yardage)
+    -- 2. SuperWoW 3D World Space (Instant exact yardage - Rule B9)
     if UnitPosition then
         local ok1, px, py, pz = pcall(UnitPosition, "player")
         local ok2, ux, uy, uz = pcall(UnitPosition, unit)
-        if ok1 and ok2 and px and py and ux and uy then
-            local dx, dy, dz = px - ux, py - uy, (pz and uz and (pz - uz) or 0)
+        if ok1 and ok2 and px and py and ux and uy and type(px) == "number" and type(ux) == "number" then
+            local dx = px - ux
+            local dy = py - uy
+            local dz = (pz and uz and type(pz) == "number" and type(uz) == "number") and (pz - uz) or 0
             return math.floor(math.sqrt(dx * dx + dy * dy + dz * dz) + 0.5)
         end
     end
+
     return nil
 end
 

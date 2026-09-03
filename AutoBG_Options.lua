@@ -42,12 +42,13 @@ local function CreateCheckbox(name, labelText, tooltipText, settingKey, anchor, 
     cb:SetHeight(22)
     cb:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", x or 0, y or -4)
 
-    local text = getglobal(name .. "Text")
+    local text = _G[name .. "Text"]
     if text then
         text:SetText(labelText)
         text:SetFontObject("GameFontHighlightSmall")
         text:SetPoint("LEFT", cb, "RIGHT", 4, 1)
     end
+
     cb.tooltipText = tooltipText
     cb.settingKey = settingKey
 
@@ -119,18 +120,19 @@ sliderDelay:SetPoint("TOPLEFT", cbAccept, "BOTTOMLEFT", 20, -14)
 sliderDelay:SetMinMaxValues(0, 70)
 sliderDelay:SetValueStep(1)
 sliderDelay:SetWidth(150)
-getglobal(sliderDelay:GetName() .. "Low"):SetText("0s")
-getglobal(sliderDelay:GetName() .. "High"):SetText("70s")
-getglobal(sliderDelay:GetName() .. "Text"):SetText("Enter Delay: Instant (0s)")
+_G[sliderDelay:GetName() .. "Low"]:SetText("0s")
+_G[sliderDelay:GetName() .. "High"]:SetText("70s")
+_G[sliderDelay:GetName() .. "Text"]:SetText("Enter Delay: Instant (0s)")
 sliderDelay:SetScript("OnValueChanged", function()
     local val = math.floor(this:GetValue() + 0.5)
     if AutoBG_Settings then AutoBG_Settings.AutoAcceptDelay = val end
     if val == 0 then
-        getglobal(this:GetName() .. "Text"):SetText("Enter Delay: Instant (0s)")
+        _G[this:GetName() .. "Text"]:SetText("Enter Delay: Instant (0s)")
     else
-        getglobal(this:GetName() .. "Text"):SetText("Enter Delay: " .. val .. "s")
+        _G[this:GetName() .. "Text"]:SetText("Enter Delay: " .. val .. "s")
     end
 end)
+
 
 local cbLeave = CreateCheckbox("AutoBG_Opt_Leave", "Auto-Leave BG on End", "Automatically leave the Battleground when the match finishes.", "AutoLeave", sliderDelay, -20, -18)
 local cbRejoin = CreateCheckbox("AutoBG_Opt_Rejoin", "Auto-Rejoin BG on Exit", "Automatically queue for the same Battleground after match exit via Battleground Finder.", "AutoRejoin", cbLeave)
@@ -217,11 +219,12 @@ function AutoBG_Options_Refresh()
         local delay = AutoBG_Settings.AutoAcceptDelay or 0
         AutoBG_Slider_AcceptDelay:SetValue(delay)
         if delay == 0 then
-            getglobal("AutoBG_Slider_AcceptDelayText"):SetText("Enter Delay: Instant (0s)")
+            _G["AutoBG_Slider_AcceptDelayText"]:SetText("Enter Delay: Instant (0s)")
         else
-            getglobal("AutoBG_Slider_AcceptDelayText"):SetText("Enter Delay: " .. delay .. "s")
+            _G["AutoBG_Slider_AcceptDelayText"]:SetText("Enter Delay: " .. delay .. "s")
         end
     end
+
 end
 
 panel:SetScript("OnShow", function()

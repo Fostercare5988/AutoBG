@@ -1,7 +1,7 @@
 # AutoBG
 
 [![Interface: 1.12.1](https://img.shields.io/badge/Interface-1.12.1%20(5875)-orange.svg)](https://github.com/Fostercare5988/AutoBG)
-[![Version: 1.3.0](https://img.shields.io/badge/Version-1.3.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
+[![Version: 1.4.0](https://img.shields.io/badge/Version-1.4.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
 [![ClassicAPI: v1.13.3+](https://img.shields.io/badge/ClassicAPI-v1.13.3+-green.svg)](https://github.com/brues-code/ClassicAPI)
 [![SuperWoW: v2.2+](https://img.shields.io/badge/SuperWoW-v2.2+-brightgreen.svg)](https://github.com/balakethelock/SuperWoW)
 [![NamPower: v4.6.2+](https://img.shields.io/badge/NamPower-v4.6.2+-blueviolet.svg)](https://github.com/Emyrk/nampower)
@@ -9,7 +9,8 @@
 [![DXVK: Vulkan](https://img.shields.io/badge/DXVK-Vulkan-red.svg)](https://github.com/doitsujin/dxvk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AutoBG v1.3.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.13.3+**, **SuperWoW v2.2+**, **NamPower v4.6.2+**, **UnitXP SP3**, and **DXVK**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
+**AutoBG v1.4.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.13.3+**, **SuperWoW v2.2+**, **NamPower v4.6.2+**, **UnitXP SP3**, and **DXVK**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
+
 
 Created and actively maintained by **[Fostercare5988](https://github.com/Fostercare5988)**.
 
@@ -125,7 +126,15 @@ AutoBG is engineered around strict low-level system integration:
 
 ## 📜 Changelog
 
+### v1.4.0
+- **Native `hooksecurefunc` Architecture**: Replaced all remaining legacy 2006 function overwrites (`WorldStateScoreFrame_Update`, `StaticPopup_Show`, `ShapeshiftBar_Update`) with non-destructive, native C++ `hooksecurefunc` calls (Rule B10), completely eliminating hook collisions with other UI addons.
+- **Universal `_G` Table Indexing**: Eradicated all occurrences of legacy `getglobal(...)` across core and options modules in favor of direct `_G[...]` table indexing.
+- **Zero-GC Unit Arrays**: Pre-allocated static unit lists (`SCAN_UNITS`) directly during initialization without runtime `table.insert` overhead (Rule D1 & D2).
+- **Guarded 3D Spatial Telemetry**: Hardened `UnitPosition` coordinate queries with explicit numerical validation, strictly adhering to Rule B9.
+- **Pure English Standard (Rule F9 & H2)**: Verified complete elimination of multi-locale cruft and foreign language strings.
+
 ### v1.3.0
+
 - **ClassicAPI v1.13.3+ Linear Slot-Batching**: Integrated `C_UnitAuras.GetAuraSlots` and `GetAuraDataBySlot` to track Warsong flag carrier damage amplification debuffs (*Focused Assault* / *Brutal Assault*) in linear $O(n)$ time.
 - **Rule C8 Mouse Passthrough**: Applied `:EnableMouse(false)` across all child health bars, textures, and font strings inside FC unit cards, guaranteeing 100% click reliability.
 - **SuperWoW Hybrid Targeting & Mouseover**: Upgraded FC frame targeting to prioritize `TargetUnit(guid)` with `TargetByName(name, true)` fallback, and enabled native `SetMouseoverUnit` support for mouseover macros.

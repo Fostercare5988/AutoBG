@@ -78,33 +78,20 @@ function AutoBG_UpdateStanceBar()
             ShapeshiftBarFrame:SetAlpha(0)
         end
         for i = 1, 12 do
-            local btn = getglobal("ShapeshiftButton" .. i)
+            local btn = _G["ShapeshiftButton" .. i]
             if btn then btn:Hide(); btn:SetAlpha(0) end
         end
     end
 end
 
--- Hook stance updates using modern hooksecurefunc
-if hooksecurefunc then
-    hooksecurefunc("ShapeshiftBar_Update", function()
-        if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
-    end)
-    hooksecurefunc("UIParent_ManageFramePositions", function()
-        if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
-    end)
-else
-    local orig_ShapeshiftBar_Update = ShapeshiftBar_Update
-    ShapeshiftBar_Update = function()
-        if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar(); return end
-        if orig_ShapeshiftBar_Update then orig_ShapeshiftBar_Update() end
-    end
+-- Hook stance updates using modern hooksecurefunc (Rule B10)
+hooksecurefunc("ShapeshiftBar_Update", function()
+    if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
+end)
+hooksecurefunc("UIParent_ManageFramePositions", function()
+    if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
+end)
 
-    local orig_UIParent_ManageFramePositions = UIParent_ManageFramePositions
-    UIParent_ManageFramePositions = function(a1, a2, a3)
-        if orig_UIParent_ManageFramePositions then orig_UIParent_ManageFramePositions(a1, a2, a3) end
-        if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
-    end
-end
 
 -- Class Color Table
 local classColors = {
@@ -172,7 +159,7 @@ end
 local function DismissBattlefieldPopups()
     if StaticPopup_Hide then StaticPopup_Hide("CONFIRM_BATTLEFIELD_ENTRY") end
     for s = 1, 4 do
-        local dlg = getglobal("StaticPopup" .. s)
+        local dlg = _G["StaticPopup" .. s]
         if dlg and dlg:IsShown() and dlg.which == "CONFIRM_BATTLEFIELD_ENTRY" then
             dlg:Hide()
         end
@@ -210,16 +197,16 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
     pendingAutoRejoin = cleanName
     if CloseDropDownMenus then CloseDropDownMenus() end
 
-    local mmBtn = getglobal("TWMiniMapBattlefieldFrame") or getglobal("MiniMapBattlefieldFrame")
+    local mmBtn = _G["TWMiniMapBattlefieldFrame"] or _G["MiniMapBattlefieldFrame"]
     if mmBtn then ClickFrame(mmBtn) end
 
     AutoBG_TimerAfter(0.08, function()
         local targetFound = false
         local lowerTarget = string.lower(cleanName)
         for i = 1, 12 do
-            local dropBtn = getglobal("DropDownList1Button" .. i)
+            local dropBtn = _G["DropDownList1Button" .. i]
             if dropBtn and dropBtn:IsShown() then
-                local text = dropBtn:GetText() or (getglobal("DropDownList1Button" .. i .. "NormalText") and getglobal("DropDownList1Button" .. i .. "NormalText"):GetText())
+                local text = dropBtn:GetText() or (_G["DropDownList1Button" .. i .. "NormalText"] and _G["DropDownList1Button" .. i .. "NormalText"]:GetText())
                 if text and string.find(string.lower(text), lowerTarget) then
                     ClickFrame(dropBtn)
                     targetFound = true
@@ -228,11 +215,12 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
             end
         end
         if not targetFound then
-            local b = getglobal("DropDownList1Button" .. btnIdx)
+            local b = _G["DropDownList1Button" .. btnIdx]
             if b and b:IsShown() then ClickFrame(b) end
         end
     end)
 end
+
 
 -- Multi-BG Auto-Queue Engine (Zero-GC Pre-allocated Buffers)
 local isAutoQueueing = false
@@ -327,19 +315,18 @@ local function HandleMatchEnd()
     end
 end
 
--- StaticPopup Intercept
-local orig_StaticPopup_Show = StaticPopup_Show
-StaticPopup_Show = function(which, text_arg1, text_arg2, data)
+-- Auto-Accept Popup Dismissal Hook (Rule B10)
+hooksecurefunc("StaticPopup_Show", function(which, text_arg1, text_arg2, data)
     if which == "CONFIRM_BATTLEFIELD_ENTRY" and AutoBG_Settings and AutoBG_Settings.AutoAccept then
         local delay = AutoBG_Settings.AutoAcceptDelay or 0
         if delay <= 0 then
             AcceptBattlefieldPort(data or 1, 1)
+            DismissBattlefieldPopups()
             AutoBG_Print("Instant Auto-Accepted |cFFFFFF00" .. (text_arg1 or "Battleground") .. "|r!")
-            return nil
         end
     end
-    if orig_StaticPopup_Show then return orig_StaticPopup_Show(which, text_arg1, text_arg2, data) end
-end
+end)
+
 
 local frame = CreateFrame("Frame", "AutoBGFrame")
 frame:RegisterEvent("ADDON_LOADED")
@@ -500,27 +487,21 @@ frame:SetScript("OnEvent", function()
     end
 end)
 
--- Scoreboard Hook
-local orig_WorldStateScoreFrame_Update = WorldStateScoreFrame_Update
-WorldStateScoreFrame_Update = function()
-    if orig_WorldStateScoreFrame_Update then orig_WorldStateScoreFrame_Update() end
-    if not AutoBG_Settings then return end
+-- Scoreboard Hook (Rule B10)
+hooksecurefunc("WorldStateScoreFrame_Update", function()
+    if not AutoBG_Settings or not AutoBG_Settings.ScoreColor then return end
 
     local offset = (WorldStateScoreScrollFrame and FauxScrollFrame_GetOffset(WorldStateScoreScrollFrame)) or 0
     local maxButtons = MAX_WORLDSTATE_SCORE_BUTTONS or 20
     for i = 1, maxButtons do
         local name, _, _, _, _, faction, _, _, class, classToken = GetBattlefieldScore(offset + i)
         if name and name ~= "" then
-            local nameText = getglobal("WorldStateScoreButton" .. i .. "NameText") or getglobal("WorldStateScoreButton" .. i .. "Name")
+            local nameText = _G["WorldStateScoreButton" .. i .. "NameText"] or _G["WorldStateScoreButton" .. i .. "Name"]
             if nameText then
                 local clean = string.gsub(string.gsub(name, "-.*$", ""), "^%s*(.-)%s*$", "%1")
-                if AutoBG_Settings.ScoreColor then
-                    local color = AutoBG_GetClassColor(classToken or class)
-                    if color then nameText:SetText(color .. clean .. "|r")
-                    else
-                        nameText:SetText(clean)
-                        if faction == 0 then nameText:SetTextColor(1.0, 0.1, 0.1) else nameText:SetTextColor(0.0, 0.68, 1.0) end
-                    end
+                local color = AutoBG_GetClassColor(classToken or class)
+                if color then
+                    nameText:SetText(color .. clean .. "|r")
                 else
                     nameText:SetText(clean)
                     if faction == 0 then nameText:SetTextColor(1.0, 0.1, 0.1) else nameText:SetTextColor(0.0, 0.68, 1.0) end
@@ -528,7 +509,8 @@ WorldStateScoreFrame_Update = function()
             end
         end
     end
-end
+end)
+
 
 -- Data-Driven Slash Command Dispatcher (Replaces 150 lines of repetitive if/elseif chains)
 local toggleCommands = {
@@ -583,8 +565,9 @@ SlashCmdList["AUTOBG"] = function(msg)
             AutoBG_TriggerBattlegroundFinder(target)
         else
             AutoBG_Print("No previous BG recorded. Opening Battleground Finder...", true)
-            local mmBtn = getglobal("TWMiniMapBattlefieldFrame") or getglobal("MiniMapBattlefieldFrame")
+            local mmBtn = _G["TWMiniMapBattlefieldFrame"] or _G["MiniMapBattlefieldFrame"]
             if mmBtn then ClickFrame(mmBtn) end
+
         end
     elseif cmd == "delay" or cmd == "acceptdelay" then
         local val = tonumber(arg)
