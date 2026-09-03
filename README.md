@@ -6,10 +6,10 @@
 [![SuperWoW: v2.2+](https://img.shields.io/badge/SuperWoW-v2.2+-brightgreen.svg)](https://github.com/balakethelock/SuperWoW)
 [![NamPower: v4.6.2+](https://img.shields.io/badge/NamPower-v4.6.2+-blueviolet.svg)](https://github.com/Emyrk/nampower)
 [![UnitXP: SP3](https://img.shields.io/badge/UnitXP-SP3-teal.svg)](https://codeberg.org/konaka/UnitXP_SP3)
-[![DXVK: 144Hz+](https://img.shields.io/badge/DXVK-144Hz+-red.svg)](https://github.com/doitsujin/dxvk)
+[![DXVK: Vulkan](https://img.shields.io/badge/DXVK-Vulkan-red.svg)](https://github.com/doitsujin/dxvk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AutoBG v1.3.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.13.3+**, **SuperWoW v2.2+**, **NamPower v4.6.2+**, **UnitXP SP3**, and **DXVK 144Hz+**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
+**AutoBG v1.3.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.13.3+**, **SuperWoW v2.2+**, **NamPower v4.6.2+**, **UnitXP SP3**, and **DXVK**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
 
 Created and actively maintained by **[Fostercare5988](https://github.com/Fostercare5988)**.
 
@@ -27,11 +27,11 @@ AutoBG is engineered around strict low-level system integration:
 
 | Engine Component | Minimum Version | Architectural Role & Implementation |
 | :--- | :--- | :--- |
-| **ClassicAPI** | `v1.13.3+` | C++ hardware timers (`C_Timer.After`, `C_Timer.NewTicker`), $O(n)$ slot-batching aura traversal (`C_UnitAuras.GetAuraSlots`, `GetAuraDataBySlot`), modern UI events, and native `table.wipe`. |
-| **SuperWoW** | `v2.2+` | Direct GUID hardware targeting (`TargetUnit(guid)`), exact whole-name resolution (`TargetByName(name, true)`), native mouseover injection (`SetMouseoverUnit(guid)`), OS-level `FlashClientIcon()`, and 3D Euclidean world calculations (`UnitPosition`). |
-| **NamPower** | `v4.6.2+` | Microsecond-precision combat pipeline and zero-latency packet dispatching for instant match exits, re-queues, and objective captures. |
-| **UnitXP** | `SP3` | Native yardage measurement (`UnitXP("distance", unit)`) with dynamic 4-stage range coloring, and true uncapped HP integers (`UnitXP("health", unit)`). |
-| **DXVK** | `Latest` | High-refresh 144Hz+ frame pacing with decoupled event rendering and zero garbage collection heap churn. |
+| **ClassicAPI** | `v1.13.3+` | C++ hardware timers (`C_Timer.After`), modern linear $O(n)$ slot-batching aura queries (`C_UnitAuras.GetAuraSlots` / `GetAuraDataBySlot`), native `hooksecurefunc`, and source-rewritten Lua 5.1 syntax. |
+| **SuperWoW** | `v2.2+` | Direct memory state access, exact-name targeting fallback (`TargetByName(name, true)`), direct GUID targeting (`TargetUnit(guid)`), and native hover state tracking (`SetMouseoverUnit`). |
+| **NamPower** | `v4.6.2+` | Microsecond-precision combat pipeline and frame-0 event dispatching. |
+| **UnitXP** | `SP3` | High-precision raw 3D Euclidean distance calculations (`UnitXP("distance", unit)`), line-of-sight tracking, and OS taskbar alert notifications (`FlashClientIcon`). |
+| **DXVK** | `Latest` | Decoupled high-refresh frame pacing with zero garbage collection heap churn. |
 
 ### Elimination of 2006 Legacy Techniques
 - **Zero OnUpdate Polling**: Frame-based `OnUpdate` polling loops are eradicated; all periodic tasks run on C++ hardware tickers at optimal intervals (6.6 Hz for FC tracking, 10 Hz for objective timers).
