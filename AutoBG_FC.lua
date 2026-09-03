@@ -1,6 +1,9 @@
 -- AutoBG Warsong Flag Carrier (FC) Tracker (Zero-Bloat Consolidated Architecture)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI, SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK
+-- Built natively for ClassicAPI v1.13.3+, SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK
+
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.13.3+ & SuperWoW v2.2+)
+if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) then return end
 
 local carrierAlliance = nil
 local carrierHorde = nil
@@ -9,6 +12,15 @@ local carrierHorde = nil
 local SCAN_UNITS = { "target", "mouseover", "targettarget", "player" }
 for i = 1, 40 do table.insert(SCAN_UNITS, "raid" .. i); table.insert(SCAN_UNITS, "raid" .. i .. "target") end
 for i = 1, 4 do table.insert(SCAN_UNITS, "party" .. i); table.insert(SCAN_UNITS, "party" .. i .. "target") end
+
+-- Canonical 4-Stage Distance Color Grading (Rule B8)
+local function GetDistanceColor(d)
+    if not d then return "|cFF808080" end
+    if d <= 30 then return "|cFF00FF00"
+    elseif d <= 50 then return "|cFFFFFF00"
+    elseif d <= 80 then return "|cFFFF8000"
+    else return "|cFFFF4040" end
+end
 
 local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     local frame = CreateFrame("Button", name, UIParent)
@@ -32,10 +44,25 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     end)
     frame:Hide()
 
-    -- 1-Click SuperWoW Exact Target Lock
+    -- SuperWoW Hybrid Targeting (Rule B9 & D1)
     frame:SetScript("OnClick", function()
+        if this.carrierGuid and TargetUnit then
+            if TargetUnit(this.carrierGuid) then return end
+        end
         if this.carrierName and this.carrierName ~= "" then
             TargetByName(this.carrierName, true)
+        end
+    end)
+
+    -- SuperWoW Native Mouseover (Rule D1)
+    frame:SetScript("OnEnter", function()
+        if this.carrierGuid and SetMouseoverUnit then
+            SetMouseoverUnit(this.carrierGuid)
+        end
+    end)
+    frame:SetScript("OnLeave", function()
+        if SetMouseoverUnit then
+            SetMouseoverUnit(nil)
         end
     end)
 
@@ -63,6 +90,8 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     healthBar:SetMinMaxValues(0, 100); healthBar:SetValue(100)
     healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
+    -- Rule C8: Disable mouse on child statusbar to guarantee click passthrough to parent Button
+    healthBar:EnableMouse(false)
 
     local barBg = healthBar:CreateTexture(nil, "BACKGROUND")
     barBg:SetAllPoints(healthBar)
@@ -73,10 +102,16 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     hpText:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
     hpText:SetText("100%")
 
+    local debuffText = healthBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    debuffText:SetPoint("RIGHT", healthBar, "RIGHT", -2, 0)
+    debuffText:SetText("")
+
     frame.nameText = nameText
     frame.distText = distText
     frame.healthBar = healthBar
     frame.hpText = hpText
+    frame.debuffText = debuffText
+    frame.carrierGuid = nil
     return frame
 end
 
@@ -97,6 +132,7 @@ end
 
 local function UpdateFCButton(frame, carrierName)
     frame.carrierName = carrierName
+    frame.carrierGuid = nil
     if carrierName and carrierName ~= "" then
         local color = (AutoBG_FindPlayerClass and AutoBG_GetClassColor and AutoBG_GetClassColor(AutoBG_FindPlayerClass(carrierName)))
         frame.nameText:SetText(color and (color .. carrierName .. "|r") or carrierName)
@@ -104,6 +140,7 @@ local function UpdateFCButton(frame, carrierName)
         frame.healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
         frame.hpText:SetText("???")
         frame.distText:SetText("|cFF808080? yd|r")
+        if frame.debuffText then frame.debuffText:SetText("") end
         frame:Show()
     else
         frame:Hide()
@@ -144,33 +181,20 @@ EventFrame:SetScript("OnEvent", function()
     end
 end)
 
-local function GetDistance(unit, flagType)
-    -- 1. SuperWoW 3D World Space (Instant exact yardage)
-    if UnitPosition and unit and UnitExists(unit) then
-        local px, py, pz = UnitPosition("player")
-        local ux, uy, uz = UnitPosition(unit)
-        if px and py and ux and uy then
-            local dx, dy, dz = px - ux, py - uy, (pz and uz and (pz - uz) or 0)
-            return math.floor(math.sqrt(dx * dx + dy * dy + dz * dz) + 0.5)
-        end
-    end
-    -- 2. UnitXP Native Yard Engine
-    if UnitXP and unit and UnitExists(unit) then
+local function GetDistance(unit)
+    if not unit or not UnitExists(unit) then return nil end
+    -- 1. UnitXP Native Yard Engine (Rule B8 & B5)
+    if UnitXP then
         local ok, dist = pcall(UnitXP, "distance", unit)
         if ok and dist and dist >= 0 then return math.floor(dist + 0.5) end
     end
-    -- 3. Battlefield Flag Map Coordinates Fallback
-    if flagType then
-        local px, py = GetPlayerMapPosition("player")
-        if px and py and (px > 0 or py > 0) then
-            local num = (GetNumBattlefieldFlagPositions and GetNumBattlefieldFlagPositions()) or 0
-            for i = 1, num do
-                local fx, fy, token = GetBattlefieldFlagPosition(i)
-                if fx and fy and (fx > 0 or fy > 0) and (not token or string.find(string.lower(token), string.lower(flagType))) then
-                    local dx, dy = (px - fx) * 515, (py - fy) * 685
-                    return math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
-                end
-            end
+    -- 2. SuperWoW 3D World Space (Instant exact yardage)
+    if UnitPosition then
+        local ok1, px, py, pz = pcall(UnitPosition, "player")
+        local ok2, ux, uy, uz = pcall(UnitPosition, unit)
+        if ok1 and ok2 and px and py and ux and uy then
+            local dx, dy, dz = px - ux, py - uy, (pz and uz and (pz - uz) or 0)
+            return math.floor(math.sqrt(dx * dx + dy * dy + dz * dz) + 0.5)
         end
     end
     return nil
@@ -181,6 +205,7 @@ local function ScanCarrier(carrierName, frame, flagType)
     for i = 1, #SCAN_UNITS do
         local u = SCAN_UNITS[i]
         if UnitExists(u) and UnitName(u) == carrierName then
+            frame.carrierGuid = (UnitGUID and UnitGUID(u)) or nil
             local hp, maxHp = UnitHealth(u), UnitHealthMax(u)
             local rawHp, rawMax = nil, nil
             if UnitXP then
@@ -195,10 +220,31 @@ local function ScanCarrier(carrierName, frame, flagType)
                 frame.hpText:SetText((rawMax and rawMax > 100 and (rawHp .. " (" .. pct .. "%)")) or (pct .. "%"))
             end
 
-            local yard = GetDistance(u, flagType)
+            -- ClassicAPI v1.13.3+ Linear O(n) Slot-Batching Aura Tracker (Focused / Brutal Assault debuff stacks)
+            local debuffStacks = 0
+            if C_UnitAuras and C_UnitAuras.GetAuraSlots and C_UnitAuras.GetAuraDataBySlot then
+                local debuffSlots = C_UnitAuras.GetAuraSlots(u, "HARMFUL")
+                if debuffSlots then
+                    for s = 1, #debuffSlots do
+                        local debuff = C_UnitAuras.GetAuraDataBySlot(u, debuffSlots[s])
+                        if debuff and debuff.name and (string.find(debuff.name, "Assault") or string.find(debuff.name, "Flag")) then
+                            debuffStacks = debuff.applications or 1
+                            break
+                        end
+                    end
+                end
+            end
+            if frame.debuffText then
+                if debuffStacks > 0 then
+                    frame.debuffText:SetText("|cFFFF2020[" .. debuffStacks .. "]|r")
+                else
+                    frame.debuffText:SetText("")
+                end
+            end
+
+            local yard = GetDistance(u)
             if yard then
-                local color = (yard > 80 and "|cFFFF4040") or (yard > 50 and "|cFFFF8000") or (yard > 30 and "|cFFFFFF00") or "|cFF00FF00"
-                frame.distText:SetText(color .. yard .. " yd|r")
+                frame.distText:SetText(GetDistanceColor(yard) .. yard .. " yd|r")
             else
                 frame.distText:SetText("|cFF808080? yd|r")
             end
@@ -206,14 +252,8 @@ local function ScanCarrier(carrierName, frame, flagType)
         end
     end
 
-    -- Flag map coordinate fallback
-    local flagYard = GetDistance(nil, flagType)
-    if flagYard then
-        local color = (flagYard > 80 and "|cFFFF4040") or (flagYard > 50 and "|cFFFF8000") or (flagYard > 30 and "|cFFFFFF00") or "|cFF00FF00"
-        frame.distText:SetText(color .. flagYard .. " yd|r")
-    else
-        frame.distText:SetText("|cFF808080? yd|r")
-    end
+    frame.distText:SetText("|cFF808080? yd|r")
+    if frame.debuffText then frame.debuffText:SetText("") end
 end
 
 -- 6.6 Hz Native Hardware Ticker (ClassicAPI C_Timer)

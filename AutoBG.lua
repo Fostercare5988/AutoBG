@@ -2,10 +2,10 @@
 -- Author & Maintainer: Fostercare5988
 -- Built natively for ClassicAPI, SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK
 
--- Strict Engine Dependency Guard
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.13.3+ & SuperWoW v2.2+)
 if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) then
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI.dll & SuperWoW! Please ensure ClassicAPI.dll and SuperWoW are loaded.", 1, 0.2, 0.2)
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI.dll (v1.13.3+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
     end
     return
 end
@@ -84,16 +84,26 @@ function AutoBG_UpdateStanceBar()
     end
 end
 
-local orig_ShapeshiftBar_Update = ShapeshiftBar_Update
-ShapeshiftBar_Update = function()
-    if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar(); return end
-    if orig_ShapeshiftBar_Update then orig_ShapeshiftBar_Update() end
-end
+-- Hook stance updates using modern hooksecurefunc
+if hooksecurefunc then
+    hooksecurefunc("ShapeshiftBar_Update", function()
+        if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
+    end)
+    hooksecurefunc("UIParent_ManageFramePositions", function()
+        if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
+    end)
+else
+    local orig_ShapeshiftBar_Update = ShapeshiftBar_Update
+    ShapeshiftBar_Update = function()
+        if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar(); return end
+        if orig_ShapeshiftBar_Update then orig_ShapeshiftBar_Update() end
+    end
 
-local orig_UIParent_ManageFramePositions = UIParent_ManageFramePositions
-UIParent_ManageFramePositions = function(a1, a2, a3)
-    if orig_UIParent_ManageFramePositions then orig_UIParent_ManageFramePositions(a1, a2, a3) end
-    if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
+    local orig_UIParent_ManageFramePositions = UIParent_ManageFramePositions
+    UIParent_ManageFramePositions = function(a1, a2, a3)
+        if orig_UIParent_ManageFramePositions then orig_UIParent_ManageFramePositions(a1, a2, a3) end
+        if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
+    end
 end
 
 -- Class Color Table
@@ -224,9 +234,11 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
     end)
 end
 
--- Multi-BG Auto-Queue Engine
+-- Multi-BG Auto-Queue Engine (Zero-GC Pre-allocated Buffers)
 local isAutoQueueing = false
 local hasQueuedOnLogin = false
+local BGS_TO_QUEUE = { "Warsong Gulch", "Arathi Basin", "Alterac Valley" }
+local queueQueueBuffer = {}
 
 function AutoBG_QueueAllBGs()
     if isAutoQueueing or currentZonePVP then return end
@@ -236,22 +248,26 @@ function AutoBG_QueueAllBGs()
         return
     end
 
-    local bgsToQueue = { "Warsong Gulch", "Arathi Basin", "Alterac Valley" }
-    local queueQueue = {}
+    table.wipe(queueQueueBuffer)
     local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
+    local total = 0
 
-    for _, bg in ipairs(bgsToQueue) do
+    for i = 1, #BGS_TO_QUEUE do
+        local bg = BGS_TO_QUEUE[i]
         local alreadyQueued = false
-        for i = 1, maxQueues do
-            local status, mapName = GetBattlefieldStatus(i)
+        for q = 1, maxQueues do
+            local status, mapName = GetBattlefieldStatus(q)
             if status and status ~= "none" and mapName and string.find(string.lower(mapName), string.lower(bg)) then
                 alreadyQueued = true; break
             end
         end
-        if not alreadyQueued then table.insert(queueQueue, bg) end
+        if not alreadyQueued then
+            total = total + 1
+            queueQueueBuffer[total] = bg
+        end
     end
+    table.setn(queueQueueBuffer, total)
 
-    local total = #queueQueue
     if total == 0 then
         AutoBG_Print("Already queued for all 3 Battlegrounds (WSG, AB, AV).")
         return
@@ -270,7 +286,7 @@ function AutoBG_QueueAllBGs()
             isAutoQueueing = false; AutoBG_Print("Auto-Queue complete: Queued for WSG, AB, and AV!")
             return
         end
-        local currentBG = queueQueue[idx]
+        local currentBG = queueQueueBuffer[idx]
         idx = idx + 1
         AutoBG_Print("Auto-queuing for |cFFFFFF00" .. currentBG .. "|r (" .. (idx - 1) .. "/" .. total .. ")...")
         AutoBG_TriggerBattlegroundFinder(currentBG)
