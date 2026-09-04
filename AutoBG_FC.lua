@@ -176,15 +176,21 @@ EventFrame:SetScript("OnEvent", function()
     if not string.find(zone, "warsong") or not msg then return end
 
     local _, _, a_pick = string.find(msg, "[Aa]lliance [Ff]lag was picked up by ([^!%.]+)")
+    if not a_pick then
+        _, _, a_pick = string.find(msg, "[Ss]ilverwing [Ff]lag was picked up by ([^!%.]+)")
+    end
     if a_pick then carrierAlliance = a_pick; UpdateFCButton(AllianceFC, carrierAlliance) end
 
     local _, _, h_pick = string.find(msg, "[Hh]orde [Ff]lag was picked up by ([^!%.]+)")
+    if not h_pick then
+        _, _, h_pick = string.find(msg, "[Ww]arsong [Ff]lag was picked up by ([^!%.]+)")
+    end
     if h_pick then carrierHorde = h_pick; UpdateFCButton(HordeFC, carrierHorde) end
 
-    if string.find(msg, "[Aa]lliance [Ff]lag was dropped") or string.find(msg, "captured the [Aa]lliance [Ff]lag") or string.find(msg, "[Aa]lliance [Ff]lag was returned") or string.find(msg, "flags are now placed at their bases") then
+    if string.find(msg, "[Aa]lliance [Ff]lag was dropped") or string.find(msg, "[Ss]ilverwing [Ff]lag was dropped") or string.find(msg, "captured the [Aa]lliance [Ff]lag") or string.find(msg, "captured the [Ss]ilverwing [Ff]lag") or string.find(msg, "[Aa]lliance [Ff]lag was captured") or string.find(msg, "[Ss]ilverwing [Ff]lag was captured") or string.find(msg, "[Aa]lliance [Ff]lag was returned") or string.find(msg, "[Ss]ilverwing [Ff]lag was returned") or string.find(msg, "flags are now placed at their bases") then
         carrierAlliance = nil; UpdateFCButton(AllianceFC, nil)
     end
-    if string.find(msg, "[Hh]orde [Ff]lag was dropped") or string.find(msg, "captured the [Hh]orde [Ff]lag") or string.find(msg, "[Hh]orde [Ff]lag was returned") or string.find(msg, "flags are now placed at their bases") then
+    if string.find(msg, "[Hh]orde [Ff]lag was dropped") or string.find(msg, "[Ww]arsong [Ff]lag was dropped") or string.find(msg, "captured the [Hh]orde [Ff]lag") or string.find(msg, "captured the [Ww]arsong [Ff]lag") or string.find(msg, "[Hh]orde [Ff]lag was captured") or string.find(msg, "[Ww]arsong [Ff]lag was captured") or string.find(msg, "[Hh]orde [Ff]lag was returned") or string.find(msg, "[Ww]arsong [Ff]lag was returned") or string.find(msg, "flags are now placed at their bases") then
         carrierHorde = nil; UpdateFCButton(HordeFC, nil)
     end
 end)
@@ -320,3 +326,35 @@ if C_Timer and C_Timer.NewTicker then
 end
 
 function AutoBG_FC_UpdateVisibility() ScanFlagCarriers() end
+
+-- Public Domain API: Battlefield Flag Carrier Authority
+-- Allows any external addon (e.g. BattlegroundTargets, FosterFrames, macros) to query active flag carriers passively.
+function AutoBG_GetCarrier(faction)
+    if not faction then return carrierAlliance, carrierHorde end
+    if type(faction) == "number" then
+        if faction == 0 then return carrierHorde
+        elseif faction == 1 then return carrierAlliance end
+    end
+    local f = string.lower(tostring(faction))
+    if string.find(f, "alli") or f == "a" then
+        return carrierAlliance
+    elseif string.find(f, "horde") or f == "h" then
+        return carrierHorde
+    end
+    return nil
+end
+
+function AutoBG_GetCarrierInfo(faction)
+    local name = AutoBG_GetCarrier(faction)
+    local frame = nil
+    if name then
+        if name == carrierAlliance then frame = AllianceFC
+        elseif name == carrierHorde then frame = HordeFC end
+    end
+    if frame and frame:IsShown() then
+        local hp = frame.healthBar and frame.healthBar:GetValue() or nil
+        local distStr = frame.distText and frame.distText:GetText() or nil
+        return name, hp, distStr, frame.carrierGuid
+    end
+    return name, nil, nil, nil
+end

@@ -66,7 +66,9 @@ AutoBG is engineered around strict low-level system integration:
   - **2 – 5s**: Orange
   - **<= 2s**: Alert Red
 
-### 4. Warsong Flag Carrier (FC) HUD
+### 4. Warsong Flag Carrier (FC) HUD & Domain Authority
+- **Sole Architectural Authority**: Serves as the authoritative provider of Warsong Gulch Flag Carrier state, 3D Euclidean distances, and aura stacks across the entire addon suite (eliminating redundant polling engines in FosterFrames and BattlegroundTargets).
+- **Public Query API**: Exports `AutoBG_GetCarrier(faction)` and `AutoBG_GetCarrierInfo(faction)` for zero-overhead query access by external frames and macros.
 - Clickable unit cards for Alliance and Horde flag carriers with **SuperWoW Hybrid Targeting** (`TargetUnit(guid)` with `TargetByName(name, true)` fallback).
 - Native SuperWoW mouseover support (`SetMouseoverUnit`) allowing mouseover macros directly over FC cards.
 - Real-time uncapped carrier HP and percentage via **UnitXP SP3** with class-color resolution.
