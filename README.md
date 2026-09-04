@@ -48,7 +48,7 @@ AutoBG is engineered around strict low-level system integration:
 - **Instant Match Exit**: Calls `LeaveBattlefield(0)` at frame 0 upon match conclusion.
 - **Zero-Latency Auto-Rejoin**: Automatically re-queues into the same battleground (WSG, AB, AV) upon zoning out via Battleground Finder.
 - **1-Click Multi-Queue**: Automatically registers for all 3 battlegrounds (Warsong Gulch, Arathi Basin, and Alterac Valley) with sequential queuing.
-- **Auto-Accept with Configurable Delay**: Instant entry (0s) or configurable countdown slider (0–70s, up to 120s via command).
+- **Auto-Accept with Configurable Delay & AFK Guard**: Instant entry (0s) or configurable countdown slider (0–70s, up to 120s via command). Automatically pauses auto-enter and auto-queue operations whenever you are tagged as AFK to prevent deserted debuffs.
 - **Smart Spirit Release**: Auto-releases spirit upon death inside battlegrounds while safely preserving active Soulstones and Reincarnation (Ankh).
 - **Taskbar Window Flashing**: Direct OS-level notification flashing (`FlashClientIcon`) when queues pop while tabbed out.
 

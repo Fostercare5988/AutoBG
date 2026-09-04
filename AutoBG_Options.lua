@@ -7,7 +7,7 @@ if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) then return end
 
 local panel = CreateFrame("Frame", "AutoBG_OptionsPanel", UIParent)
 panel:SetWidth(460)
-panel:SetHeight(510)
+panel:SetHeight(535)
 panel:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 panel:SetFrameStrata("DIALOG")
 panel:SetToplevel(true)
@@ -114,9 +114,10 @@ local cbSound = CreateCheckbox("AutoBG_Opt_Sound", "Loud Sound Alerts", "Play a 
 local cbFlash = CreateCheckbox("AutoBG_Opt_Flash", "Taskbar Flashing", "Flash the game window in taskbar on queue pop.", "FlashTaskbar", cbSound)
 local cbChatMsg = CreateCheckbox("AutoBG_Opt_ChatMsg", "Chat Notifications", "Display status messages in chat for queues, auto-leave, and joins.", "ChatMessages", cbFlash)
 local cbAccept = CreateCheckbox("AutoBG_Opt_Accept", "Auto-Accept Queue Pop", "Automatically accept the battleground queue and enter when ready.", "AutoAccept", cbChatMsg)
+local cbSkipAFK = CreateCheckbox("AutoBG_Opt_SkipAFK", "Pause Auto-Enter if AFK", "Do not automatically enter or join battlegrounds if tagged as AFK.", "SkipIfAFK", cbAccept)
 
 local sliderDelay = CreateFrame("Slider", "AutoBG_Slider_AcceptDelay", panel, "OptionsSliderTemplate")
-sliderDelay:SetPoint("TOPLEFT", cbAccept, "BOTTOMLEFT", 20, -14)
+sliderDelay:SetPoint("TOPLEFT", cbSkipAFK, "BOTTOMLEFT", 20, -14)
 sliderDelay:SetMinMaxValues(0, 70)
 sliderDelay:SetValueStep(1)
 sliderDelay:SetWidth(150)

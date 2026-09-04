@@ -60,8 +60,17 @@ local defaultSettings = {
     AVTimers = true, RessTimer = true, QueueTimers = true,
     FCFrame = true, WSGTimers = true, HideCastbar = false,
     HideStanceBar = false, TestAllTimers = false, LastPlayedBG = nil,
-    Positions = {},
+    Positions = {}, SkipIfAFK = true,
 }
+
+local playerIsAFK = false
+
+function AutoBG_IsPlayerAFK()
+    if UnitIsAFK and UnitIsAFK("player") then
+        return true
+    end
+    return playerIsAFK
+end
 
 function AutoBG_Print(msg, force)
     if (force or (AutoBG_Settings and AutoBG_Settings.ChatMessages)) and DEFAULT_CHAT_FRAME then
@@ -230,6 +239,10 @@ local queueQueueBuffer = {}
 
 function AutoBG_QueueAllBGs()
     if isAutoQueueing or currentZonePVP then return end
+    if (AutoBG_Settings and AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+        AutoBG_Print("Auto-Queue skipped: You are tagged as |cFFFF5555AFK|r.")
+        return
+    end
     if IsPlayerDeadOrGhost() then
         needsQueueAfterResurrect = true
         AutoBG_Print("Cannot queue for battlegrounds while dead. Will auto-queue once resurrected.")
@@ -265,6 +278,11 @@ function AutoBG_QueueAllBGs()
     local idx = 1
 
     local function StepQueue()
+        if (AutoBG_Settings and AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+            isAutoQueueing = false
+            AutoBG_Print("Auto-Queue paused: You are tagged as |cFFFF5555AFK|r.")
+            return
+        end
         if IsPlayerDeadOrGhost() then
             isAutoQueueing = false; needsQueueAfterResurrect = true
             AutoBG_Print("Auto-Queue paused (player dead/ghost). Will resume upon resurrection.")
@@ -318,6 +336,10 @@ end
 -- Auto-Accept Popup Dismissal Hook (Rule B10)
 hooksecurefunc("StaticPopup_Show", function(which, text_arg1, text_arg2, data)
     if which == "CONFIRM_BATTLEFIELD_ENTRY" and AutoBG_Settings and AutoBG_Settings.AutoAccept then
+        if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+            AutoBG_Print("Auto-Accept skipped: You are tagged as |cFFFF5555AFK|r.")
+            return
+        end
         local delay = AutoBG_Settings.AutoAcceptDelay or 0
         if delay <= 0 then
             AcceptBattlefieldPort(data or 1, 1)
@@ -332,6 +354,7 @@ local frame = CreateFrame("Frame", "AutoBGFrame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 frame:RegisterEvent("BATTLEFIELDS_SHOW")
+frame:RegisterEvent("PLAYER_FLAGS_CHANGED")
 frame:RegisterEvent("PLAYER_DEAD")
 frame:RegisterEvent("PLAYER_ALIVE")
 frame:RegisterEvent("PLAYER_UNGHOST")
@@ -350,6 +373,12 @@ local function ProcessBattlefieldQueue(id)
         if not notifiedQueues[id] then
             notifiedQueues[id] = true
             if AutoBG_Settings.AutoAccept then
+                if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                    AutoBG_Print("Queue popped for |cFFFFFF00" .. (mapName or "Battleground") .. "|r, but Auto-Enter is paused because you are |cFFFF5555AFK|r!")
+                    if AutoBG_Settings.NotifySound then AutoBG_PlayNotificationSound() end
+                    if AutoBG_Settings.FlashTaskbar and FlashClientIcon then FlashClientIcon() end
+                    return
+                end
                 local delay = AutoBG_Settings.AutoAcceptDelay or 0
                 local qId, bg = id, mapName or "Battleground"
                 if delay <= 0 then
@@ -359,6 +388,10 @@ local function ProcessBattlefieldQueue(id)
                 else
                     AutoBG_Print("Queue popped for |cFFFFFF00" .. bg .. "|r! Entering in |cFFFFFF00" .. delay .. "s|r...")
                     AutoBG_TimerAfter(delay, function()
+                        if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                            AutoBG_Print("Auto-Enter cancelled: Player became |cFFFF5555AFK|r!")
+                            return
+                        end
                         if GetBattlefieldStatus(qId) == "confirm" then
                             AcceptBattlefieldPort(qId, 1)
                             DismissBattlefieldPopups()
@@ -397,8 +430,18 @@ frame:SetScript("OnEvent", function()
         if AutoBG_Settings.HideCastbar and CastingBarFrame then CastingBarFrame:UnregisterAllEvents(); CastingBarFrame:Hide() end
         if AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
 
+    elseif ev == "PLAYER_FLAGS_CHANGED" then
+        if not a1 or a1 == "player" then
+            if UnitIsAFK and UnitIsAFK("player") then
+                playerIsAFK = true
+            else
+                playerIsAFK = false
+            end
+        end
+
     elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
         UpdateZoneCache()
+        if UnitIsAFK and UnitIsAFK("player") then playerIsAFK = true else playerIsAFK = false end
         if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
 
         if currentZonePVP then
@@ -411,16 +454,28 @@ frame:SetScript("OnEvent", function()
         else
             local targetRejoin = lastPlayedBG or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG)
             if hasHandledEnd and targetRejoin and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
-                AutoBG_TimerAfter(0.05, function() if pendingAutoRejoin then AutoBG_TriggerBattlegroundFinder(targetRejoin) end end)
+                if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                    AutoBG_Print("Auto-Rejoin paused: You are tagged as |cFFFF5555AFK|r.")
+                    hasHandledEnd = false
+                else
+                    AutoBG_TimerAfter(0.05, function() if pendingAutoRejoin then AutoBG_TriggerBattlegroundFinder(targetRejoin) end end)
+                end
             else
                 hasHandledEnd = false
             end
 
             if AutoBG_Settings and AutoBG_Settings.AutoQueueLogin and not hasQueuedOnLogin then
-                if IsPlayerDeadOrGhost() then needsQueueAfterResurrect = true
+                if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                    AutoBG_Print("Auto-Queue on login skipped: You are tagged as |cFFFF5555AFK|r.")
+                elseif IsPlayerDeadOrGhost() then
+                    needsQueueAfterResurrect = true
                 else
                     hasQueuedOnLogin = true
                     AutoBG_TimerAfter(3.0, function()
+                        if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                            AutoBG_Print("Auto-Queue on login skipped: You are tagged as |cFFFF5555AFK|r.")
+                            return
+                        end
                         if not IsPlayerDeadOrGhost() then AutoBG_QueueAllBGs()
                         else needsQueueAfterResurrect = true; hasQueuedOnLogin = false end
                     end)
@@ -430,6 +485,13 @@ frame:SetScript("OnEvent", function()
 
     elseif ev == "BATTLEFIELDS_SHOW" then
         if pendingAutoRejoin or (hasHandledEnd and lastPlayedBG and AutoBG_Settings and AutoBG_Settings.AutoRejoin) or isAutoQueueing then
+            if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                AutoBG_Print("Auto-Queue / Auto-Rejoin skipped: You are tagged as |cFFFF5555AFK|r.")
+                pendingAutoRejoin = nil
+                hasHandledEnd = false
+                isAutoQueueing = false
+                return
+            end
             local bgTitle = pendingAutoRejoin or (GetBattlefieldInfo and GetBattlefieldInfo()) or "Battleground"
             if SetSelectedBattlefield then pcall(SetSelectedBattlefield, 0) end
             pcall(JoinBattlefield, 0)
@@ -446,6 +508,13 @@ frame:SetScript("OnEvent", function()
         end
 
     elseif ev == "CHAT_MSG_BG_SYSTEM_NEUTRAL" or ev == "CHAT_MSG_BG_SYSTEM_ALLIANCE" or ev == "CHAT_MSG_BG_SYSTEM_HORDE" or ev == "CHAT_MSG_SYSTEM" then
+        if ev == "CHAT_MSG_SYSTEM" and a1 then
+            if (MARKED_AFK_MESSAGE and a1 == MARKED_AFK_MESSAGE) or string.find(a1, "You are now AFK") then
+                playerIsAFK = true
+            elseif (CLEARED_AFK and a1 == CLEARED_AFK) or string.find(a1, "You are no longer AFK") then
+                playerIsAFK = false
+            end
+        end
         if a1 and (string.find(a1, "wins!") or string.find(a1, "won the battle") or string.find(a1, "wins the battle") or string.find(a1, "victorious!")) then
             if currentZonePVP then HandleMatchEnd() end
         end
