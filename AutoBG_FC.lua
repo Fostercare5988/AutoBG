@@ -1,8 +1,8 @@
 -- AutoBG Warsong Flag Carrier (FC) Tracker (Zero-Bloat Consolidated Architecture)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI v1.13.3+, SuperWoW 2.2+, NamPower 4.6.3+, UnitXP SP3, DXVK
+-- Built natively for ClassicAPI v1.13.4+, SuperWoW 2.2+, NamPower 4.6.3+, UnitXP SP3, DXVK
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.13.3+ & SuperWoW v2.2+)
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.13.4+ & SuperWoW v2.2+)
 if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) then return end
 
 local carrierAlliance = nil
@@ -250,7 +250,7 @@ local function ScanCarrier(carrierName, frame, flagType)
                 frame.hpText:SetText((rawMax and rawMax > 100 and (rawHp .. " (" .. pct .. "%)")) or (pct .. "%"))
             end
 
-            -- ClassicAPI v1.13.3+ Linear O(n) Slot-Batching Aura Tracker (Focused / Brutal Assault debuff stacks)
+            -- ClassicAPI v1.13.4+ Linear O(n) Slot-Batching Aura Tracker (Focused / Brutal Assault debuff stacks)
             local debuffStacks = 0
             if C_UnitAuras and C_UnitAuras.GetAuraSlots and C_UnitAuras.GetAuraDataBySlot then
                 local debuffSlots = C_UnitAuras.GetAuraSlots(u, "HARMFUL")
