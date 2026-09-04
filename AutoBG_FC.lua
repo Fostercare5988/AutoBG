@@ -64,13 +64,13 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
 
     -- SuperWoW Native Mouseover (Rule D1)
     frame:SetScript("OnEnter", function()
-        if this.carrierGuid and SetMouseoverUnit then
-            SetMouseoverUnit(this.carrierGuid)
+        if this.carrierGuid and type(this.carrierGuid) == "string" and this.carrierGuid:sub(1, 2) == "0x" and SetMouseoverUnit then
+            pcall(SetMouseoverUnit, this.carrierGuid)
         end
     end)
     frame:SetScript("OnLeave", function()
         if SetMouseoverUnit then
-            SetMouseoverUnit(nil)
+            pcall(SetMouseoverUnit)
         end
     end)
 
