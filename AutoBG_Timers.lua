@@ -1,6 +1,6 @@
 -- AutoBG Timers & Objective Countdown Engine (Zero-Bloat Consolidated Architecture)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI v1.13.3+, SuperWoW 2.2+, NamPower 4.6.2+, UnitXP SP3, DXVK
+-- Built natively for ClassicAPI v1.13.3+, SuperWoW 2.2+, NamPower 4.6.3+, UnitXP SP3, DXVK
 
 -- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.13.3+ & SuperWoW v2.2+)
 if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) then return end
