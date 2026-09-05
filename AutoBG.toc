@@ -2,7 +2,7 @@
 ## Title: AutoBG
 ## Notes: High-performance PvP & Battleground automation engineered natively for World of Warcraft 1.12.1 (ClassicAPI v1.13.4+, SuperWoW 2.2+, NamPower 4.6.3+, UnitXP SP3, DXVK).
 ## Author: Fostercare5988
-## Version: 1.4.0
+## Version: 1.5.0
 ## SavedVariables: AutoBG_Settings
 
 ## X-Category: Battlegrounds & PvP
