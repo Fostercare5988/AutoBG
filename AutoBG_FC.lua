@@ -9,7 +9,7 @@ local carrierAlliance = nil
 local carrierHorde = nil
 
 -- Pre-allocated static Unit IDs (Part D2)
-local SCAN_UNITS = { "target", "mouseover", "targettarget", "player" }
+local SCAN_UNITS = { "target", "mouseover", "focus", "focustarget", "targettarget", "player" }
 local scanCount = #SCAN_UNITS
 for i = 1, 40 do
     scanCount = scanCount + 1; SCAN_UNITS[scanCount] = "raid" .. i
@@ -196,32 +196,59 @@ EventFrame:SetScript("OnEvent", function()
 end)
 
 local function GetDistance(unit, flagType)
-    -- 1. UnitXP Native Yard Engine (Rule B8 & B5)
-    if unit and UnitExists(unit) and UnitXP then
-        local ok, dist = pcall(UnitXP, "distance", unit)
-        if ok and dist and dist >= 0 then return math.floor(dist + 0.5) end
+    -- 1. ClassicAPI Native Hardware Euclidean Engine (Rule B10)
+    if unit and UnitDistanceSquared then
+        local ok, dSq = pcall(UnitDistanceSquared, unit)
+        if ok and type(dSq) == "number" and dSq >= 0 then
+            return math.floor(math.sqrt(dSq) + 0.5)
+        end
     end
-    -- 2. SuperWoW 3D World Space (Instant exact yardage - Rule B9)
-    if unit and UnitExists(unit) and UnitPosition then
+
+    -- 2. SuperWoW 3D World Space Euclidean Distance (Rule B9)
+    if unit and UnitPosition then
         local ok1, px, py, pz = pcall(UnitPosition, "player")
         local ok2, ux, uy, uz = pcall(UnitPosition, unit)
-        if ok1 and ok2 and px and py and ux and uy and type(px) == "number" and type(ux) == "number" then
+        if ok1 and ok2 and type(px) == "number" and type(ux) == "number" and type(py) == "number" and type(uy) == "number" then
             local dx = px - ux
             local dy = py - uy
-            local dz = (pz and uz and type(pz) == "number" and type(uz) == "number") and (pz - uz) or 0
+            local dz = (type(pz) == "number" and type(uz) == "number") and (pz - uz) or 0
             return math.floor(math.sqrt(dx * dx + dy * dy + dz * dz) + 0.5)
         end
     end
-    -- 3. Battlefield Flag Map Coordinates Fallback (when out of sight / not targeted)
-    if flagType and GetPlayerMapPosition then
+
+    -- 3. UnitXP Native Yard Engine (Rule B8)
+    if unit and UnitXP then
+        local ok, dist = pcall(UnitXP, "distance", unit)
+        if ok and type(dist) == "number" and dist >= 0 and dist < 9999 then
+            return math.floor(dist + 0.5)
+        end
+        local ok2, dist2 = pcall(UnitXP, "distanceBetween", "player", unit)
+        if ok2 and type(dist2) == "number" and dist2 >= 0 and dist2 < 9999 then
+            return math.floor(dist2 + 0.5)
+        end
+    end
+
+    -- 4. Battlefield Flag Map Coordinates Fallback (when out of sight / not targeted)
+    if flagType and GetPlayerMapPosition and GetBattlefieldFlagPosition then
         local px, py = GetPlayerMapPosition("player")
+        if (not px or not py or (px == 0 and py == 0)) and (not WorldMapFrame or not WorldMapFrame:IsShown()) then
+            pcall(SetMapToCurrentZone)
+            px, py = GetPlayerMapPosition("player")
+        end
         if px and py and (px > 0 or py > 0) then
             local num = (GetNumBattlefieldFlagPositions and GetNumBattlefieldFlagPositions()) or 0
             for i = 1, num do
                 local fx, fy, token = GetBattlefieldFlagPosition(i)
-                if fx and fy and (fx > 0 or fy > 0) and (not token or string.find(string.lower(token), string.lower(flagType))) then
-                    local dx, dy = (px - fx) * 515, (py - fy) * 685
-                    return math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
+                if fx and fy and (fx > 0 or fy > 0) then
+                    local tokenMatch = true
+                    if token and type(token) == "string" and flagType then
+                        tokenMatch = (string.find(string.lower(token), string.lower(flagType)) ~= nil)
+                    end
+                    if tokenMatch then
+                        local dx = (px - fx) * 515
+                        local dy = (py - fy) * 685
+                        return math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
+                    end
                 end
             end
         end
@@ -236,11 +263,14 @@ local function ScanCarrier(carrierName, frame, flagType)
         local u = SCAN_UNITS[i]
         if UnitExists(u) and UnitName(u) == carrierName then
             frame.carrierGuid = (UnitGUID and UnitGUID(u)) or nil
-            local hp, maxHp = UnitHealth(u), UnitHealthMax(u)
+            local hp = UnitHealth(u) or 0
+            local maxHp = UnitHealthMax(u) or 100
             local rawHp, rawMax = nil, nil
             if UnitXP then
-                rawHp = UnitXP("health", u)
-                rawMax = UnitXP("maxhealth", u)
+                local ok1, val1 = pcall(UnitXP, "health", u)
+                if ok1 and type(val1) == "number" and val1 > 0 then rawHp = val1 end
+                local ok2, val2 = pcall(UnitXP, "maxhealth", u)
+                if ok2 and type(val2) == "number" and val2 > 0 then rawMax = val2 end
             end
 
             if maxHp > 0 then
@@ -253,11 +283,11 @@ local function ScanCarrier(carrierName, frame, flagType)
             -- ClassicAPI v1.13.4+ Linear O(n) Slot-Batching Aura Tracker (Focused / Brutal Assault debuff stacks)
             local debuffStacks = 0
             if C_UnitAuras and C_UnitAuras.GetAuraSlots and C_UnitAuras.GetAuraDataBySlot then
-                local debuffSlots = C_UnitAuras.GetAuraSlots(u, "HARMFUL")
-                if debuffSlots then
+                local okSlots, debuffSlots = pcall(C_UnitAuras.GetAuraSlots, u, "HARMFUL")
+                if okSlots and debuffSlots then
                     for s = 1, #debuffSlots do
-                        local debuff = C_UnitAuras.GetAuraDataBySlot(u, debuffSlots[s])
-                        if debuff and debuff.name and (string.find(debuff.name, "Assault") or string.find(debuff.name, "Flag")) then
+                        local okData, debuff = pcall(C_UnitAuras.GetAuraDataBySlot, u, debuffSlots[s])
+                        if okData and debuff and debuff.name and (string.find(debuff.name, "Assault") or string.find(debuff.name, "Flag")) then
                             debuffStacks = debuff.applications or 1
                             break
                         end
@@ -278,6 +308,16 @@ local function ScanCarrier(carrierName, frame, flagType)
             else
                 frame.distText:SetText("|cFF808080? yd|r")
             end
+            return
+        end
+    end
+
+    -- If carrier is not directly targeted, but GUID was cached, try 3D distance via GUID
+    if frame.carrierGuid then
+        local yard = GetDistance(frame.carrierGuid, flagType)
+        if yard then
+            frame.distText:SetText(GetDistanceColor(yard) .. yard .. " yd|r")
+            if frame.debuffText then frame.debuffText:SetText("") end
             return
         end
     end
@@ -321,11 +361,15 @@ local function ScanFlagCarriers()
     if carrierHorde then ScanCarrier(carrierHorde, HordeFC, "Horde") end
 end
 
-if C_Timer and C_Timer.NewTicker then
-    C_Timer.NewTicker(0.15, ScanFlagCarriers)
+local function SafeScanFlagCarriers()
+    pcall(ScanFlagCarriers)
 end
 
-function AutoBG_FC_UpdateVisibility() ScanFlagCarriers() end
+if C_Timer and C_Timer.NewTicker then
+    C_Timer.NewTicker(0.15, SafeScanFlagCarriers)
+end
+
+function AutoBG_FC_UpdateVisibility() SafeScanFlagCarriers() end
 
 -- Public Domain API: Battlefield Flag Carrier Authority
 -- Allows any external addon (e.g. BattlegroundTargets, FosterFrames, macros) to query active flag carriers passively.
