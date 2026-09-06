@@ -270,7 +270,6 @@ function AutoBG_QueueAllBGs()
             queueQueueBuffer[total] = bg
         end
     end
-    table.setn(queueQueueBuffer, total)
 
     if total == 0 then
         AutoBG_Print("Already queued for all 3 Battlegrounds (WSG, AB, AV).")
@@ -339,13 +338,19 @@ end
 -- Auto-Accept Popup Dismissal Hook (Rule B10)
 hooksecurefunc("StaticPopup_Show", function(which, text_arg1, text_arg2, data)
     if which == "CONFIRM_BATTLEFIELD_ENTRY" and AutoBG_Settings and AutoBG_Settings.AutoAccept then
+        local qId = data or 1
+        if notifiedQueues[qId] == "accepted" then
+            DismissBattlefieldPopups()
+            return
+        end
         if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
             AutoBG_Print("Auto-Accept skipped: You are tagged as |cFFFF5555AFK|r.")
             return
         end
         local delay = AutoBG_Settings.AutoAcceptDelay or 0
         if delay <= 0 then
-            AcceptBattlefieldPort(data or 1, 1)
+            notifiedQueues[qId] = "accepted"
+            AcceptBattlefieldPort(qId, 1)
             DismissBattlefieldPopups()
             AutoBG_Print("Instant Auto-Accepted |cFFFFFF00" .. (text_arg1 or "Battleground") .. "|r!")
         end
@@ -385,6 +390,7 @@ local function ProcessBattlefieldQueue(id)
                 local delay = AutoBG_Settings.AutoAcceptDelay or 0
                 local qId, bg = id, mapName or "Battleground"
                 if delay <= 0 then
+                    notifiedQueues[qId] = "accepted"
                     AcceptBattlefieldPort(qId, 1)
                     DismissBattlefieldPopups()
                     AutoBG_Print("Instant Auto-Accepted |cFFFFFF00" .. bg .. "|r!")
@@ -396,6 +402,7 @@ local function ProcessBattlefieldQueue(id)
                             return
                         end
                         if GetBattlefieldStatus(qId) == "confirm" then
+                            notifiedQueues[qId] = "accepted"
                             AcceptBattlefieldPort(qId, 1)
                             DismissBattlefieldPopups()
                             AutoBG_Print("Auto-Entered |cFFFFFF00" .. bg .. "|r after |cFFFFFF00" .. delay .. "s|r delay!")
@@ -461,7 +468,7 @@ frame:SetScript("OnEvent", function()
                     AutoBG_Print("Auto-Rejoin paused: You are tagged as |cFFFF5555AFK|r.")
                     hasHandledEnd = false
                 else
-                    AutoBG_TimerAfter(0.05, function() if pendingAutoRejoin then AutoBG_TriggerBattlegroundFinder(targetRejoin) end end)
+                    AutoBG_TimerAfter(1.2, function() if pendingAutoRejoin then AutoBG_TriggerBattlegroundFinder(targetRejoin) end end)
                 end
             else
                 hasHandledEnd = false
@@ -650,10 +657,16 @@ SlashCmdList["AUTOBG"] = function(msg)
         else
             AutoBG_Print("Current Auto-Accept Enter Delay: |cFFFFFF00" .. ((AutoBG_Settings.AutoAcceptDelay or 0) == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r", true)
         end
+    elseif cmd == "efc" or cmd == "tar" or cmd == "target" then
+        if AutoBG_TargetCarrier then AutoBG_TargetCarrier("enemy") end
+    elseif cmd == "ffc" then
+        if AutoBG_TargetCarrier then AutoBG_TargetCarrier("friendly") end
+    elseif cmd == "focus" then
+        if AutoBG_FocusCarrier then AutoBG_FocusCarrier("enemy") end
     elseif cmd == "reset" then
         AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg q [ab|wsg|av|tg|all], /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg stealth, /abg test, /abg reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg q [ab|wsg|av|tg|all], /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg stealth, /abg test, /abg reset", true)
     else
         if AutoBG_OptionsPanel then
             if AutoBG_OptionsPanel:IsShown() then AutoBG_OptionsPanel:Hide() else AutoBG_OptionsPanel:Show() end

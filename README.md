@@ -1,7 +1,7 @@
 # AutoBG
 
 [![Interface: 1.12.1](https://img.shields.io/badge/Interface-1.12.1%20(5875)-orange.svg)](https://github.com/Fostercare5988/AutoBG)
-[![Version: 1.5.0](https://img.shields.io/badge/Version-1.5.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
+[![Version: 1.6.0](https://img.shields.io/badge/Version-1.6.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
 [![ClassicAPI: v1.14.0+](https://img.shields.io/badge/ClassicAPI-v1.14.0+-green.svg)](https://github.com/brues-code/ClassicAPI)
 [![SuperWoW: v2.2+](https://img.shields.io/badge/SuperWoW-v2.2+-brightgreen.svg)](https://github.com/balakethelock/SuperWoW)
 [![NamPower: v4.6.3+](https://img.shields.io/badge/NamPower-v4.6.3+-blueviolet.svg)](https://github.com/Emyrk/nampower)
@@ -9,7 +9,7 @@
 [![DXVK: Vulkan](https://img.shields.io/badge/DXVK-Vulkan-red.svg)](https://github.com/doitsujin/dxvk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AutoBG v1.5.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.14.0+**, **SuperWoW v2.2+**, **NamPower v4.6.3+**, **UnitXP SP3**, and **DXVK**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
+**AutoBG v1.6.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.14.0+**, **SuperWoW v2.2+**, **NamPower v4.6.3+**, **UnitXP SP3**, and **DXVK**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
 
 
 Created and actively maintained by **[Fostercare5988](https://github.com/Fostercare5988)**.
@@ -92,11 +92,16 @@ AutoBG is engineered around strict low-level system integration:
 | `/abg l` | Toggle Auto-Leave on match conclusion |
 | `/abg r` | Toggle Auto-Release spirit on death |
 | `/abg c` | Toggle Scoreboard class colors |
+| `/abg efc` / `/abg tar` | Target enemy flag carrier via GUID / exact name |
+| `/abg ffc` | Target friendly flag carrier |
+| `/abg focus` | Focus enemy flag carrier via SuperWoW `FocusUnit` |
 | `/abg msg` | Toggle chat status notifications |
 | `/abg s` / `/abg f` | Toggle sound alerts / taskbar flashing |
 | `/abg stealth` | Toggle Stealth & Stance bar suppression |
 | `/abg test` | Toggle test mode to unlock and reposition HUD frames |
 | `/abg reset` | Reset all configuration and frame positions to defaults |
+| `Left-Click` on FC Frame | Target flag carrier via GUID / exact whole-name |
+| `Right-Click` on FC Frame | Set flag carrier as focus via SuperWoW `FocusUnit` |
 | `CTRL + Left-Click` on Timer | Broadcast countdown to Battleground chat |
 | `Left-Click Drag` on Frame | Move and persist frame position across sessions |
 
@@ -127,6 +132,17 @@ AutoBG is engineered around strict low-level system integration:
 ---
 
 ## 📜 Changelog
+
+### v1.6.0
+- **Warsong Flag Carrier Faction Correction**: Resolved architectural flag carrier inversion where Horde and Alliance carriers were swapped across frames and map coordinates; accurately binds carrier identity, flag tokens, and frame visual assets.
+- **SuperWoW Native Focus & Hybrid Targeting (AP-08 & AP-03)**: Added native right-click focus assignment (`FocusUnit(guid)`) with exact whole-name fallback on Flag Carrier frames; added `/abg efc`, `/abg ffc`, and `/abg focus` macro commands.
+- **Nameplate Unit Token Scanning**: Extended `SCAN_UNITS` with `nameplate1`..`nameplate30` for instant detection of hostile flag carriers as soon as their nameplate renders, even before any raid member targets them.
+- **Zero-GC Objective Ticker (Tier 2/3)**: Eliminated 90 heap allocations/second inside the 10 Hz `UpdateAllTimers` ticker by converting test row definitions into Tier 0 static constants.
+- **Deterministic Bounded Objective Sorting (Section 10)**: Implemented zero-closure bounded insertion sort for active contested nodes in AB and AV; objectives closest to expiring or capping always render at the top of the HUD.
+- **Anti-Deadzone Fix on Respawn Bar (Rule C3 / AP-09)**: Injected `bar:EnableMouse(false)` on `AutoBG_RespawnFrame` StatusBar, ensuring 100% dragging and announcement click passthrough.
+- **Deterministic Layout Engine (Rule C1)**: Migrated Options Panel checkboxes and controls from fragile 15-element cascading anchor chains to deterministic panel-relative coordinates.
+- **Auto-Accept & Zoning Stabilization**: Deduplicated instant auto-accept popup handling to eliminate double accept packets and redundant chat prints; stabilized `AutoRejoin` transition delay to 1.2s across loading screens.
+- **Thorn Gorge Suite Alignment**: Added `"TG"` abbreviation and estimated wait time tooltip integration (`GetBattlefieldEstimatedWaitTime`) to queue frames.
 
 ### v1.5.0
 - **Engine Startup Guard Enforcement**: Upgraded engine dependency guards across all 4 module files (`AutoBG.lua`, `AutoBG_Options.lua`, `AutoBG_Timers.lua`, `AutoBG_FC.lua`) to strictly enforce `MIN_CLASSIC_API = 11400` (`v1.14.0+`) and `SUPERWOW_VERSION` (`v2.2+`).

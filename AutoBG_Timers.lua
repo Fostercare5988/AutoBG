@@ -14,6 +14,24 @@ local timers = { AB = {}, AV = {}, WSG = {}, Global = {} }
 local spiritHealerSyncTime = 0
 local spiritHealerSynced = false
 
+-- Pre-allocated static test rows (Tier 0 - eliminates 90 dynamic allocations/sec)
+local TEST_ROWS_AB = {
+    { text = "|cFFFF4040Blacksmith: 0:59|r", announce = "Blacksmith (Horde): 0:59" },
+    { text = "|cFF4090FFLumber Mill: 0:42|r", announce = "Lumber Mill (Alliance): 0:42" }
+}
+local TEST_ROWS_AV = {
+    { text = "|cFFFF4040Stonehearth Bunker: 4:59|r", announce = "Stonehearth Bunker (Horde): 4:59" },
+    { text = "|cFF4090FFIceblood Tower: 3:30|r", announce = "Iceblood Tower (Alliance): 3:30" }
+}
+local TEST_ROWS_WSG = {
+    { text = "|cFF4090FFAlliance Flag: 0:23|r", announce = "Alliance Flag: 0:23" },
+    { text = "|cFFFF4040Horde Flag: 0:17|r", announce = "Horde Flag: 0:17" }
+}
+
+-- Pre-allocated static sort buffer (Section 10 - Bounded Array Rule)
+local activeSortBuffer = {}
+for i = 1, 30 do activeSortBuffer[i] = { name = "", expire = 0, faction = nil } end
+
 -- Pre-allocated static Unit ID array (Part D2)
 local RAID_UNITS = {}
 for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
@@ -88,6 +106,9 @@ local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minW
                 if this.announceText and this.announceText ~= "" then
                     GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
                     GameTooltip:SetText(this.announceText, 1, 1, 1)
+                    if this.estText and this.estText ~= "" then
+                        GameTooltip:AddLine(this.estText, 0.9, 0.9, 0.5)
+                    end
                     GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce to chat", 0.7, 0.7, 0.7)
                     GameTooltip:Show()
                 end
@@ -180,6 +201,8 @@ local function CreateRespawnFrame(name, xOffset, yOffset)
     bar:SetMinMaxValues(0, 30)
     bar:SetValue(30)
     bar:SetStatusBarColor(0.1, 0.85, 0.1)
+    -- Rule C3 / AP-09: Disable mouse on child statusbar to guarantee click passthrough to parent Button
+    bar:EnableMouse(false)
 
     local barBg = bar:CreateTexture(nil, "BACKGROUND")
     barBg:SetAllPoints(bar)
@@ -235,7 +258,7 @@ local function FormatQueueTime(seconds)
     end
 end
 
--- Consolidated DRY Node / Timer Renderer (Replaces 180 lines of duplicated code)
+-- Consolidated DRY Node / Timer Renderer with Deterministic Bounded Sorter (Rule C5 & Section 10)
 local function RenderGenericTimerList(frame, timerTable, isEnabled, isZone, testRows)
     local rowIndex = 1
     local now = GetTime()
@@ -248,15 +271,52 @@ local function RenderGenericTimerList(frame, timerTable, isEnabled, isZone, test
                 local row = frame:GetOrCreateRow(rowIndex)
                 row.fs:SetText(testRows[i].text)
                 row.announceText = testRows[i].announce
+                row.estText = nil
                 row:Show()
                 rowIndex = rowIndex + 1
             end
         else
+            -- Collect active elements into pre-allocated buffer
+            local sortCount = 0
             for name, data in pairs(timerTable) do
                 local expireTime = (type(data) == "table" and data.expire) or data
                 local faction = (type(data) == "table" and data.faction) or nil
                 local remaining = math.floor(expireTime - now)
 
+                if remaining > 0 then
+                    sortCount = sortCount + 1
+                    local item = activeSortBuffer[sortCount]
+                    if not item then
+                        item = {}
+                        activeSortBuffer[sortCount] = item
+                    end
+                    item.name = name
+                    item.expire = expireTime
+                    item.faction = faction
+                else
+                    timerTable[name] = nil
+                end
+            end
+
+            -- Bounded Insertion Sort (Section 10 - Zero closures, sorts 1..sortCount deterministically)
+            if sortCount > 1 then
+                for i = 2, sortCount do
+                    local key = activeSortBuffer[i]
+                    local j = i - 1
+                    while j >= 1 and activeSortBuffer[j].expire > key.expire do
+                        activeSortBuffer[j + 1] = activeSortBuffer[j]
+                        j = j - 1
+                    end
+                    activeSortBuffer[j + 1] = key
+                end
+            end
+
+            -- Render sorted rows: shortest remaining countdown at top
+            for i = 1, sortCount do
+                local item = activeSortBuffer[i]
+                local name = item.name
+                local faction = item.faction
+                local remaining = math.floor(item.expire - now)
                 if remaining > 0 then
                     local row = frame:GetOrCreateRow(rowIndex)
                     local colorPrefix = ""
@@ -269,18 +329,19 @@ local function RenderGenericTimerList(frame, timerTable, isEnabled, isZone, test
                     row.fs:SetText((colorPrefix ~= "" and (colorPrefix .. name .. ": " .. FormatTime(remaining) .. "|r")) or (name .. ": " .. FormatTime(remaining)))
                     local facText = faction and (" (" .. faction .. ")") or ""
                     row.announceText = name .. facText .. ": " .. FormatTime(remaining)
+                    row.estText = nil
                     row:Show()
                     rowIndex = rowIndex + 1
-                else
-                    timerTable[name] = nil
                 end
             end
+
             if timers.Global["Match Starts"] and isZone then
                 local remaining = math.floor(timers.Global["Match Starts"] - now)
                 if remaining > 0 then
                     local row = frame:GetOrCreateRow(rowIndex)
                     row.fs:SetText("|cFFFFFF00Match Starts: " .. FormatTime(remaining) .. "|r")
                     row.announceText = "Gates: " .. FormatTime(remaining)
+                    row.estText = nil
                     row:Show()
                     rowIndex = rowIndex + 1
                 else
@@ -307,23 +368,14 @@ local function UpdateAllTimers()
     local isWSG = (string.find(lowerZone, "warsong") ~= nil)
     local now = GetTime()
 
-    -- 1. AB Nodes
-    RenderGenericTimerList(NodeFrame, timers.AB, AutoBG_Settings.ABTimers, isAB, {
-        { text = "|cFFFF4040Blacksmith: 0:59|r", announce = "Blacksmith (Horde): 0:59" },
-        { text = "|cFF4090FFLumber Mill: 0:42|r", announce = "Lumber Mill (Alliance): 0:42" }
-    })
+    -- 1. AB Nodes (Zero-GC with static TEST_ROWS_AB)
+    RenderGenericTimerList(NodeFrame, timers.AB, AutoBG_Settings.ABTimers, isAB, TEST_ROWS_AB)
 
-    -- 2. AV Nodes
-    RenderGenericTimerList(AVNodeFrame, timers.AV, AutoBG_Settings.AVTimers, isAV, {
-        { text = "|cFFFF4040Stonehearth Bunker: 4:59|r", announce = "Stonehearth Bunker (Horde): 4:59" },
-        { text = "|cFF4090FFIceblood Tower: 3:30|r", announce = "Iceblood Tower (Alliance): 3:30" }
-    })
+    -- 2. AV Nodes (Zero-GC with static TEST_ROWS_AV)
+    RenderGenericTimerList(AVNodeFrame, timers.AV, AutoBG_Settings.AVTimers, isAV, TEST_ROWS_AV)
 
-    -- 3. WSG Flags
-    RenderGenericTimerList(WSGFlagFrame, timers.WSG, AutoBG_Settings.WSGTimers, isWSG, {
-        { text = "|cFF4090FFAlliance Flag: 0:23|r", announce = "Alliance Flag: 0:23" },
-        { text = "|cFFFF4040Horde Flag: 0:17|r", announce = "Horde Flag: 0:17" }
-    })
+    -- 3. WSG Flags (Zero-GC with static TEST_ROWS_WSG)
+    RenderGenericTimerList(WSGFlagFrame, timers.WSG, AutoBG_Settings.WSGTimers, isWSG, TEST_ROWS_WSG)
 
     -- 4. Respawn Timer (Spirit Healer 30s Wave)
     local inInstance, instanceType = IsInInstance()
@@ -365,8 +417,8 @@ local function UpdateAllTimers()
     local qIndex = 1
     if AutoBG_Settings.QueueTimers then
         if isTestAll then
-            local r1 = QueueFrame:GetOrCreateRow(1); r1.fs:SetText("WSG: 1:15"); r1.announceText = "WSG Queue: 1:15"; r1:Show()
-            local r2 = QueueFrame:GetOrCreateRow(2); r2.fs:SetText("AB: 4:32"); r2.announceText = "AB Queue: 4:32"; r2:Show()
+            local r1 = QueueFrame:GetOrCreateRow(1); r1.fs:SetText("WSG: 1:15"); r1.announceText = "WSG Queue: 1:15"; r1.estText = nil; r1:Show()
+            local r2 = QueueFrame:GetOrCreateRow(2); r2.fs:SetText("AB: 4:32"); r2.announceText = "AB Queue: 4:32"; r2.estText = nil; r2:Show()
             qIndex = 3
         else
             local maxQ = MAX_BATTLEFIELD_QUEUES or 3
@@ -374,11 +426,17 @@ local function UpdateAllTimers()
                 local status, mapName = GetBattlefieldStatus(i)
                 if status == "queued" then
                     local waitTime = (GetBattlefieldTimeWaited and GetBattlefieldTimeWaited(i)) or 0
+                    local estTime = (GetBattlefieldEstimatedWaitTime and GetBattlefieldEstimatedWaitTime(i)) or 0
                     local sec = math.floor(waitTime / 1000)
                     local row = QueueFrame:GetOrCreateRow(qIndex)
-                    local abbrev = (mapName == "Warsong Gulch" and "WSG") or (mapName == "Arathi Basin" and "AB") or (mapName == "Alterac Valley" and "AV") or mapName or "BG"
+                    local abbrev = (mapName == "Warsong Gulch" and "WSG") or (mapName == "Arathi Basin" and "AB") or (mapName == "Alterac Valley" and "AV") or (mapName == "Thorn Gorge" and "TG") or mapName or "BG"
                     row.fs:SetText(abbrev .. ": " .. FormatQueueTime(sec))
                     row.announceText = abbrev .. " Queue: " .. FormatQueueTime(sec)
+                    if estTime > 0 then
+                        row.estText = "Estimated: " .. FormatQueueTime(math.floor(estTime / 1000))
+                    else
+                        row.estText = nil
+                    end
                     row:Show()
                     qIndex = qIndex + 1
                 end

@@ -24,6 +24,9 @@ for i = 1, 4 do
     scanCount = scanCount + 1; SCAN_UNITS[scanCount] = "party" .. i
     scanCount = scanCount + 1; SCAN_UNITS[scanCount] = "party" .. i .. "target"
 end
+for i = 1, 30 do
+    scanCount = scanCount + 1; SCAN_UNITS[scanCount] = "nameplate" .. i
+end
 
 
 -- Canonical 4-Stage Distance Color Grading (Rule B8)
@@ -57,26 +60,45 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     end)
     frame:Hide()
 
-    -- SuperWoW Hybrid Targeting (Rule B9 & D1)
+    -- SuperWoW Hybrid Targeting & Focus (Rule B9, C2, D1, AP-03, AP-08)
+    frame:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     frame:SetScript("OnClick", function()
+        local button = arg1
+        if button == "RightButton" then
+            if this.carrierGuid and FocusUnit then
+                if pcall(FocusUnit, this.carrierGuid) then return end
+            end
+            if this.carrierName and this.carrierName ~= "" then
+                TargetByName(this.carrierName, true)
+                if FocusUnit then pcall(FocusUnit, "target") end
+            end
+            return
+        end
+
         if this.carrierGuid and TargetUnit then
-            if TargetUnit(this.carrierGuid) then return end
+            if pcall(TargetUnit, this.carrierGuid) then return end
         end
         if this.carrierName and this.carrierName ~= "" then
             TargetByName(this.carrierName, true)
         end
     end)
 
-    -- SuperWoW Native Mouseover (Rule D1)
+    -- SuperWoW Native Mouseover & Tooltip (Rule D1)
     frame:SetScript("OnEnter", function()
         if this.carrierGuid and type(this.carrierGuid) == "string" and this.carrierGuid:sub(1, 2) == "0x" and SetMouseoverUnit then
             pcall(SetMouseoverUnit, this.carrierGuid)
         end
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:SetText(this.carrierName or titleText, 1, 1, 1)
+        GameTooltip:AddLine("|cFF00FF00Left-Click:|r Target Flag Carrier", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("|cFF00FF00Right-Click:|r Focus Flag Carrier", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
     end)
     frame:SetScript("OnLeave", function()
         if SetMouseoverUnit then
             pcall(SetMouseoverUnit)
         end
+        GameTooltip:Hide()
     end)
 
     local icon = frame:CreateTexture(nil, "ARTWORK")
@@ -180,23 +202,33 @@ EventFrame:SetScript("OnEvent", function()
 
     if not string.find(zone, "warsong") or not msg then return end
 
-    local _, _, a_pick = string.find(msg, "[Aa]lliance [Ff]lag was picked up by ([^!%.]+)")
-    if not a_pick then
-        _, _, a_pick = string.find(msg, "[Ss]ilverwing [Ff]lag was picked up by ([^!%.]+)")
-    end
-    if a_pick then carrierAlliance = a_pick; UpdateFCButton(AllianceFC, carrierAlliance) end
-
+    -- Horde / Warsong Flag picked up by an Alliance player -> Alliance FC!
     local _, _, h_pick = string.find(msg, "[Hh]orde [Ff]lag was picked up by ([^!%.]+)")
     if not h_pick then
         _, _, h_pick = string.find(msg, "[Ww]arsong [Ff]lag was picked up by ([^!%.]+)")
     end
-    if h_pick then carrierHorde = h_pick; UpdateFCButton(HordeFC, carrierHorde) end
+    if h_pick then carrierAlliance = h_pick; UpdateFCButton(AllianceFC, carrierAlliance) end
 
-    if string.find(msg, "[Aa]lliance [Ff]lag was dropped") or string.find(msg, "[Ss]ilverwing [Ff]lag was dropped") or string.find(msg, "captured the [Aa]lliance [Ff]lag") or string.find(msg, "captured the [Ss]ilverwing [Ff]lag") or string.find(msg, "[Aa]lliance [Ff]lag was captured") or string.find(msg, "[Ss]ilverwing [Ff]lag was captured") or string.find(msg, "[Aa]lliance [Ff]lag was returned") or string.find(msg, "[Ss]ilverwing [Ff]lag was returned") or string.find(msg, "flags are now placed at their bases") then
+    -- Alliance / Silverwing Flag picked up by a Horde player -> Horde FC!
+    local _, _, a_pick = string.find(msg, "[Aa]lliance [Ff]lag was picked up by ([^!%.]+)")
+    if not a_pick then
+        _, _, a_pick = string.find(msg, "[Ss]ilverwing [Ff]lag was picked up by ([^!%.]+)")
+    end
+    if a_pick then carrierHorde = a_pick; UpdateFCButton(HordeFC, carrierHorde) end
+
+    -- Horde / Warsong flag dropped, captured, or returned -> clear Alliance FC
+    if string.find(msg, "[Hh]orde [Ff]lag was dropped") or string.find(msg, "[Ww]arsong [Ff]lag was dropped") or string.find(msg, "captured the [Hh]orde [Ff]lag") or string.find(msg, "captured the [Ww]arsong [Ff]lag") or string.find(msg, "[Hh]orde [Ff]lag was captured") or string.find(msg, "[Ww]arsong [Ff]lag was captured") or string.find(msg, "[Hh]orde [Ff]lag was returned") or string.find(msg, "[Ww]arsong [Ff]lag was returned") then
         carrierAlliance = nil; UpdateFCButton(AllianceFC, nil)
     end
-    if string.find(msg, "[Hh]orde [Ff]lag was dropped") or string.find(msg, "[Ww]arsong [Ff]lag was dropped") or string.find(msg, "captured the [Hh]orde [Ff]lag") or string.find(msg, "captured the [Ww]arsong [Ff]lag") or string.find(msg, "[Hh]orde [Ff]lag was captured") or string.find(msg, "[Ww]arsong [Ff]lag was captured") or string.find(msg, "[Hh]orde [Ff]lag was returned") or string.find(msg, "[Ww]arsong [Ff]lag was returned") or string.find(msg, "flags are now placed at their bases") then
+
+    -- Alliance / Silverwing flag dropped, captured, or returned -> clear Horde FC
+    if string.find(msg, "[Aa]lliance [Ff]lag was dropped") or string.find(msg, "[Ss]ilverwing [Ff]lag was dropped") or string.find(msg, "captured the [Aa]lliance [Ff]lag") or string.find(msg, "captured the [Ss]ilverwing [Ff]lag") or string.find(msg, "[Aa]lliance [Ff]lag was captured") or string.find(msg, "[Ss]ilverwing [Ff]lag was captured") or string.find(msg, "[Aa]lliance [Ff]lag was returned") or string.find(msg, "[Ss]ilverwing [Ff]lag was returned") then
         carrierHorde = nil; UpdateFCButton(HordeFC, nil)
+    end
+
+    if string.find(msg, "flags are now placed at their bases") then
+        carrierAlliance = nil; carrierHorde = nil
+        UpdateFCButton(AllianceFC, nil); UpdateFCButton(HordeFC, nil)
     end
 end)
 
@@ -361,9 +393,8 @@ local function ScanFlagCarriers()
         return
     end
 
-    if not WorldMapFrame or not WorldMapFrame:IsShown() then pcall(SetMapToCurrentZone) end
-    if carrierAlliance then ScanCarrier(carrierAlliance, AllianceFC, "Alliance") end
-    if carrierHorde then ScanCarrier(carrierHorde, HordeFC, "Horde") end
+    if carrierAlliance then ScanCarrier(carrierAlliance, AllianceFC, "Horde") end
+    if carrierHorde then ScanCarrier(carrierHorde, HordeFC, "Alliance") end
 end
 
 local function SafeScanFlagCarriers()
@@ -391,6 +422,75 @@ function AutoBG_GetCarrier(faction)
         return carrierHorde
     end
     return nil
+end
+
+function AutoBG_GetFriendlyCarrier()
+    local myFaction = UnitFactionGroup("player")
+    return (myFaction == "Horde") and carrierHorde or carrierAlliance
+end
+
+function AutoBG_GetEnemyCarrier()
+    local myFaction = UnitFactionGroup("player")
+    return (myFaction == "Horde") and carrierAlliance or carrierHorde
+end
+
+function AutoBG_TargetCarrier(which)
+    local myFaction = UnitFactionGroup("player")
+    local w = which and string.lower(which) or "enemy"
+    local target = nil
+
+    if w == "friendly" or w == "ffc" then
+        target = (myFaction == "Horde") and carrierHorde or carrierAlliance
+    else
+        target = (myFaction == "Horde") and carrierAlliance or carrierHorde
+    end
+
+    if not target or target == "" then
+        if AutoBG_Print then AutoBG_Print("No " .. (w == "friendly" and "friendly" or "enemy") .. " flag carrier detected.") end
+        return false
+    end
+
+    local frame = (target == carrierAlliance and AllianceFC) or (target == carrierHorde and HordeFC)
+    if frame and frame.carrierGuid and TargetUnit then
+        if pcall(TargetUnit, frame.carrierGuid) then
+            if AutoBG_Print then AutoBG_Print("Targeted " .. target .. " via GUID.") end
+            return true
+        end
+    end
+
+    TargetByName(target, true)
+    if AutoBG_Print then AutoBG_Print("Targeted " .. target .. " (exact match).") end
+    return true
+end
+
+function AutoBG_FocusCarrier(which)
+    local myFaction = UnitFactionGroup("player")
+    local w = which and string.lower(which) or "enemy"
+    local target = nil
+
+    if w == "friendly" or w == "ffc" then
+        target = (myFaction == "Horde") and carrierHorde or carrierAlliance
+    else
+        target = (myFaction == "Horde") and carrierAlliance or carrierHorde
+    end
+
+    if not target or target == "" then
+        if AutoBG_Print then AutoBG_Print("No " .. (w == "friendly" and "friendly" or "enemy") .. " flag carrier detected.") end
+        return false
+    end
+
+    local frame = (target == carrierAlliance and AllianceFC) or (target == carrierHorde and HordeFC)
+    if frame and frame.carrierGuid and FocusUnit then
+        if pcall(FocusUnit, frame.carrierGuid) then
+            if AutoBG_Print then AutoBG_Print("Focused " .. target .. " via GUID.") end
+            return true
+        end
+    end
+
+    TargetByName(target, true)
+    if FocusUnit then pcall(FocusUnit, "target") end
+    if AutoBG_Print then AutoBG_Print("Focused " .. target .. ".") end
+    return true
 end
 
 function AutoBG_GetCarrierInfo(faction)

@@ -41,11 +41,11 @@ title:SetText("AutoBG Settings")
 
 local checkboxes = {}
 
-local function CreateCheckbox(name, labelText, tooltipText, settingKey, anchor, x, y)
+local function CreateCheckbox(name, labelText, tooltipText, settingKey, x, y)
     local cb = CreateFrame("CheckButton", name, panel, "UICheckButtonTemplate")
     cb:SetWidth(22)
     cb:SetHeight(22)
-    cb:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", x or 0, y or -4)
+    cb:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
 
     local text = _G[name .. "Text"]
     if text then
@@ -101,9 +101,9 @@ local function CreateCheckbox(name, labelText, tooltipText, settingKey, anchor, 
     return cb
 end
 
-local function CreateHeader(text, anchor, x, y)
+local function CreateHeader(text, x, y)
     local h = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    h:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", x or 0, y or -10)
+    h:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
     h:SetText(text)
     return h
 end
@@ -111,18 +111,15 @@ end
 -- ==========================================================
 -- COLUMN 1: LEFT SIDE (Alerts & Automation + General Tweaks)
 -- ==========================================================
-local headerAlerts = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-headerAlerts:SetPoint("TOPLEFT", panel, "TOPLEFT", 22, -46)
-headerAlerts:SetText("Alerts & Automation")
-
-local cbSound = CreateCheckbox("AutoBG_Opt_Sound", "Loud Sound Alerts", "Play a loud ready check sound when queues pop or end.", "NotifySound", headerAlerts, 0, -4)
-local cbFlash = CreateCheckbox("AutoBG_Opt_Flash", "Taskbar Flashing", "Flash the game window in taskbar on queue pop.", "FlashTaskbar", cbSound)
-local cbChatMsg = CreateCheckbox("AutoBG_Opt_ChatMsg", "Chat Notifications", "Display status messages in chat for queues, auto-leave, and joins.", "ChatMessages", cbFlash)
-local cbAccept = CreateCheckbox("AutoBG_Opt_Accept", "Auto-Accept Queue Pop", "Automatically accept the battleground queue and enter when ready.", "AutoAccept", cbChatMsg)
-local cbSkipAFK = CreateCheckbox("AutoBG_Opt_SkipAFK", "Pause Auto-Enter if AFK", "Do not automatically enter or join battlegrounds if tagged as AFK.", "SkipIfAFK", cbAccept)
+CreateHeader("Alerts & Automation", 22, -46)
+local cbSound = CreateCheckbox("AutoBG_Opt_Sound", "Loud Sound Alerts", "Play a loud ready check sound when queues pop or end.", "NotifySound", 22, -68)
+local cbFlash = CreateCheckbox("AutoBG_Opt_Flash", "Taskbar Flashing", "Flash the game window in taskbar on queue pop.", "FlashTaskbar", 22, -92)
+local cbChatMsg = CreateCheckbox("AutoBG_Opt_ChatMsg", "Chat Notifications", "Display status messages in chat for queues, auto-leave, and joins.", "ChatMessages", 22, -116)
+local cbAccept = CreateCheckbox("AutoBG_Opt_Accept", "Auto-Accept Queue Pop", "Automatically accept the battleground queue and enter when ready.", "AutoAccept", 22, -140)
+local cbSkipAFK = CreateCheckbox("AutoBG_Opt_SkipAFK", "Pause Auto-Enter if AFK", "Do not automatically enter or join battlegrounds if tagged as AFK.", "SkipIfAFK", 22, -164)
 
 local sliderDelay = CreateFrame("Slider", "AutoBG_Slider_AcceptDelay", panel, "OptionsSliderTemplate")
-sliderDelay:SetPoint("TOPLEFT", cbSkipAFK, "BOTTOMLEFT", 20, -14)
+sliderDelay:SetPoint("TOPLEFT", panel, "TOPLEFT", 42, -198)
 sliderDelay:SetMinMaxValues(0, 70)
 sliderDelay:SetValueStep(1)
 sliderDelay:SetWidth(150)
@@ -139,40 +136,36 @@ sliderDelay:SetScript("OnValueChanged", function()
     end
 end)
 
+local cbLeave = CreateCheckbox("AutoBG_Opt_Leave", "Auto-Leave BG on End", "Automatically leave the Battleground when the match finishes.", "AutoLeave", 22, -232)
+local cbRejoin = CreateCheckbox("AutoBG_Opt_Rejoin", "Auto-Rejoin BG on Exit", "Automatically queue for the same Battleground after match exit via Battleground Finder.", "AutoRejoin", 22, -256)
+local cbQueueLogin = CreateCheckbox("AutoBG_Opt_QueueLogin", "Auto-Queue on Login (WSG/AB/AV)", "Automatically queue for Warsong Gulch, Arathi Basin, and Alterac Valley when logging in or reloading.", "AutoQueueLogin", 22, -280)
+local cbRelease = CreateCheckbox("AutoBG_Opt_Release", "Auto-Release Spirit", "Automatically release spirit upon dying in BG (skips if Soulstone/Ankh ready).", "AutoRelease", 22, -304)
 
-local cbLeave = CreateCheckbox("AutoBG_Opt_Leave", "Auto-Leave BG on End", "Automatically leave the Battleground when the match finishes.", "AutoLeave", sliderDelay, -20, -18)
-local cbRejoin = CreateCheckbox("AutoBG_Opt_Rejoin", "Auto-Rejoin BG on Exit", "Automatically queue for the same Battleground after match exit via Battleground Finder.", "AutoRejoin", cbLeave)
-local cbQueueLogin = CreateCheckbox("AutoBG_Opt_QueueLogin", "Auto-Queue on Login (WSG/AB/AV)", "Automatically queue for Warsong Gulch, Arathi Basin, and Alterac Valley when logging in or reloading.", "AutoQueueLogin", cbRejoin)
-local cbRelease = CreateCheckbox("AutoBG_Opt_Release", "Auto-Release Spirit", "Automatically release spirit upon dying in BG (skips if Soulstone/Ankh ready).", "AutoRelease", cbQueueLogin)
-
-local headerTweaks = CreateHeader("General Tweaks", cbRelease, 0, -12)
-local cbScoreColor = CreateCheckbox("AutoBG_Opt_ScoreColor", "Scoreboard Class Colors", "Color names on the scoreboard by player class.", "ScoreColor", headerTweaks, 0, -4)
-local cbNodeColors = CreateCheckbox("AutoBG_Opt_NodeColors", "Faction Node Colors", "Color-code AB and AV node timers (Red = Horde, Blue = Alliance).", "NodeColors", cbScoreColor, 0, -4)
-local cbHideCastbar = CreateCheckbox("AutoBG_Opt_HideCastbar", "Hide Default Castbar", "Hide default Blizzard cast bar (useful if using custom castbars).", "HideCastbar", cbNodeColors, 0, -4)
-local cbHideStanceBar = CreateCheckbox("AutoBG_Opt_HideStanceBar", "Hide Stealth/Stance Bar", "Hide default Blizzard stance/shapeshift bar (Stealth, Stances, Forms, Auras).", "HideStanceBar", cbHideCastbar, 0, -4)
+CreateHeader("General Tweaks", 22, -336)
+local cbScoreColor = CreateCheckbox("AutoBG_Opt_ScoreColor", "Scoreboard Class Colors", "Color names on the scoreboard by player class.", "ScoreColor", 22, -358)
+local cbNodeColors = CreateCheckbox("AutoBG_Opt_NodeColors", "Faction Node Colors", "Color-code AB and AV node timers (Red = Horde, Blue = Alliance).", "NodeColors", 22, -382)
+local cbHideCastbar = CreateCheckbox("AutoBG_Opt_HideCastbar", "Hide Default Castbar", "Hide default Blizzard cast bar (useful if using custom castbars).", "HideCastbar", 22, -406)
+local cbHideStanceBar = CreateCheckbox("AutoBG_Opt_HideStanceBar", "Hide Stealth/Stance Bar", "Hide default Blizzard stance/shapeshift bar (Stealth, Stances, Forms, Auras).", "HideStanceBar", 22, -430)
 
 -- ==========================================================
 -- COLUMN 2: RIGHT SIDE (Timers & Overlays + Testing)
 -- ==========================================================
-local headerTimers = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-headerTimers:SetPoint("TOPLEFT", panel, "TOPLEFT", 242, -46)
-headerTimers:SetText("Timers & Overlays")
+CreateHeader("Timers & Overlays", 242, -46)
+local cbABTimers = CreateCheckbox("AutoBG_Opt_ABTimers", "Arathi Basin Nodes", "Show 60s node capture countdowns in Arathi Basin.", "ABTimers", 242, -68)
+local cbAVTimers = CreateCheckbox("AutoBG_Opt_AVTimers", "Alterac Valley Nodes", "Show 5m bunker/tower capture countdowns in AV.", "AVTimers", 242, -92)
+local cbWSGTimers = CreateCheckbox("AutoBG_Opt_WSGTimers", "WSG Flag Respawns", "Show 23s flag respawn countdowns in Warsong Gulch.", "WSGTimers", 242, -116)
+local cbRessTimer = CreateCheckbox("AutoBG_Opt_RessTimer", "Spirit Healer Timer", "Show synced 30s Spirit Healer resurrection wave timer.", "RessTimer", 242, -140)
+local cbQueueTimers = CreateCheckbox("AutoBG_Opt_QueueTimers", "BG Queue Timers", "Show on-screen timer for active BG queue wait times.", "QueueTimers", 242, -164)
+local cbFCFrame = CreateCheckbox("AutoBG_Opt_FCFrame", "WSG Flag Carrier Frames", "Show clickable frames to target and track WSG flag carriers.", "FCFrame", 242, -188)
 
-local cbABTimers = CreateCheckbox("AutoBG_Opt_ABTimers", "Arathi Basin Nodes", "Show 60s node capture countdowns in Arathi Basin.", "ABTimers", headerTimers, 0, -4)
-local cbAVTimers = CreateCheckbox("AutoBG_Opt_AVTimers", "Alterac Valley Nodes", "Show 5m bunker/tower capture countdowns in AV.", "AVTimers", cbABTimers)
-local cbWSGTimers = CreateCheckbox("AutoBG_Opt_WSGTimers", "WSG Flag Respawns", "Show 23s flag respawn countdowns in Warsong Gulch.", "WSGTimers", cbAVTimers)
-local cbRessTimer = CreateCheckbox("AutoBG_Opt_RessTimer", "Spirit Healer Timer", "Show synced 30s Spirit Healer resurrection wave timer.", "RessTimer", cbWSGTimers)
-local cbQueueTimers = CreateCheckbox("AutoBG_Opt_QueueTimers", "BG Queue Timers", "Show on-screen timer for active BG queue wait times.", "QueueTimers", cbRessTimer)
-local cbFCFrame = CreateCheckbox("AutoBG_Opt_FCFrame", "WSG Flag Carrier Frames", "Show clickable frames to target and track WSG flag carriers.", "FCFrame", cbQueueTimers)
-
-local headerTest = CreateHeader("Positioning & Testing", cbFCFrame, 0, -12)
-local cbTestAll = CreateCheckbox("AutoBG_Opt_TestAll", "Test Mode (Unlock Timers)", "Show all timer and FC frames on screen so you can drag them to preferred positions.", "TestAllTimers", headerTest, 0, -4)
+CreateHeader("Positioning & Testing", 242, -220)
+local cbTestAll = CreateCheckbox("AutoBG_Opt_TestAll", "Test Mode (Unlock Timers)", "Show all timer and FC frames on screen so you can drag them to preferred positions.", "TestAllTimers", 242, -242)
 
 -- Reset Positions Button
 local btnResetPos = CreateFrame("Button", "AutoBG_BtnResetPos", panel, "UIPanelButtonTemplate")
 btnResetPos:SetWidth(95)
 btnResetPos:SetHeight(22)
-btnResetPos:SetPoint("TOPLEFT", cbTestAll, "BOTTOMLEFT", 0, -8)
+btnResetPos:SetPoint("TOPLEFT", panel, "TOPLEFT", 242, -274)
 btnResetPos:SetText("Reset Pos")
 btnResetPos:SetScript("OnClick", function()
     if AutoBG_Settings then
@@ -189,7 +182,7 @@ end)
 local btnTestSound = CreateFrame("Button", "AutoBG_BtnTestSound", panel, "UIPanelButtonTemplate")
 btnTestSound:SetWidth(95)
 btnTestSound:SetHeight(22)
-btnTestSound:SetPoint("LEFT", btnResetPos, "RIGHT", 8, 0)
+btnTestSound:SetPoint("TOPLEFT", panel, "TOPLEFT", 345, -274)
 btnTestSound:SetText("Test Sound")
 btnTestSound:SetScript("OnClick", function()
     if AutoBG_PlayNotificationSound then
