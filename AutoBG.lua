@@ -572,10 +572,12 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         else
             local hasDes, rem = AutoBG_HasDeserter()
             if hasDes then
-                hadDeserterDebuff = true
                 pendingAutoRejoin = nil
                 hasHandledEnd = false
-                AutoBG_Print("Auto-Rejoin / Auto-Queue halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
+                if not hadDeserterDebuff then
+                    hadDeserterDebuff = true
+                    AutoBG_Print("Auto-Rejoin / Auto-Queue halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
+                end
             else
                 local targetRejoin = lastPlayedBG or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG)
                 if hasHandledEnd and targetRejoin and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
