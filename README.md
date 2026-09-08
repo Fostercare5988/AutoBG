@@ -1,7 +1,7 @@
 # AutoBG
 
 [![Interface: 1.12.1](https://img.shields.io/badge/Interface-1.12.1%20(5875)-orange.svg)](https://github.com/Fostercare5988/AutoBG)
-[![Version: 1.6.0](https://img.shields.io/badge/Version-1.6.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
+[![Version: 1.7.0](https://img.shields.io/badge/Version-1.7.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
 [![ClassicAPI: v1.14.0+](https://img.shields.io/badge/ClassicAPI-v1.14.0+-green.svg)](https://github.com/brues-code/ClassicAPI)
 [![SuperWoW: v2.2+](https://img.shields.io/badge/SuperWoW-v2.2+-brightgreen.svg)](https://github.com/balakethelock/SuperWoW)
 [![NamPower: v4.6.3+](https://img.shields.io/badge/NamPower-v4.6.3+-blueviolet.svg)](https://github.com/Emyrk/nampower)
@@ -9,7 +9,7 @@
 [![DXVK: Vulkan](https://img.shields.io/badge/DXVK-Vulkan-red.svg)](https://github.com/doitsujin/dxvk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AutoBG v1.6.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.14.0+**, **SuperWoW v2.2+**, **NamPower v4.6.3+**, **UnitXP SP3**, and **DXVK**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
+**AutoBG v1.7.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.14.0+**, **SuperWoW v2.2+**, **NamPower v4.6.3+**, **UnitXP SP3**, and **DXVK**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
 
 
 Created and actively maintained by **[Fostercare5988](https://github.com/Fostercare5988)**.
@@ -78,13 +78,28 @@ AutoBG is engineered around strict low-level system integration:
 ### 5. Interactive Chat Announcements
 - `CTRL + Left-Click` on any timer row (AB/AV node, WSG flag, Spirit Healer, or Queue) to broadcast its exact countdown into Battleground chat (or Party/Raid).
 
+### 6. Enemy Target Frames (BattlegroundTargets)
+- **Compact PvP Roster Display**: Automatically displays live enemy target frames for 10v10 (WSG), 15v15 (AB / Thorn Gorge), and 40v40 (AV) with independent scaling, dimensions, and font sizes.
+- **Authoritative Flag Carrier Visuals**: Renders authentic 32x32 transparent flag icons directly on the enemy carrier row in Warsong Gulch, synchronized in real time with `AutoBG_FC`.
+- **Stealth & Invisibility Tracking**: Detects enemy Stealth, Prowl, Vanish, and Invisibility casts via SuperWoW `UNIT_CASTEVENT` and combat log packets.
+- **Zero-GC Roster Sorting**: Bounded insertion sort over active enemies with class color-coding and exact SuperWoW targeting (`TargetUnit(guid)`).
+
+### 7. Open-World Enemy Radar (Spy)
+- **Real-Time Hostile Tracking**: Detects nearby enemy players in the open world using SuperWoW `UNIT_CASTEVENT`, nameplate units, and combat log telemetry.
+- **Audio & Stealth Alerts**: Plays alert sounds on enemy detection and a dedicated Prowl sound when an enemy enters stealth nearby.
+- **Smart Battleground Suppression**: Automatically hides when zoning into a battleground to keep screen space dedicated to match frames.
+
 ---
 
 ## ⌨️ Commands & Shortcuts
 
 | Command / Shortcut | Description |
 | :--- | :--- |
-| `/abg` | Toggle options configuration panel |
+| `/abg` | Toggle options configuration panel (General tab) |
+| `/abg targets` / `/abg bgt` | Open options directly to Enemy Frames tab |
+| `/abg spy` | Open options directly to Spy radar tab |
+| `/abg timers` | Open options directly to Timers & FC tab |
+| `/abg test` | Toggle test mode for all frames and timers |
 | `/abg q [wsg\|ab\|av\|tg\|all]` | Quick-queue for a specific BG or all 3 BGs |
 | `/abg a` | Toggle Auto-Accept queue pop |
 | `/abg delay <sec>` | Set Auto-Accept delay countdown (0–120s) |
@@ -98,10 +113,13 @@ AutoBG is engineered around strict low-level system integration:
 | `/abg msg` | Toggle chat status notifications |
 | `/abg s` / `/abg f` | Toggle sound alerts / taskbar flashing |
 | `/abg stealth` | Toggle Stealth & Stance bar suppression |
-| `/abg test` | Toggle test mode to unlock and reposition HUD frames |
 | `/abg reset` | Reset all configuration and frame positions to defaults |
-| `Left-Click` on FC Frame | Target flag carrier via GUID / exact whole-name |
-| `Right-Click` on FC Frame | Set flag carrier as focus via SuperWoW `FocusUnit` |
+| `/bgt` | Open Enemy Frames configuration (BattlegroundTargets alias) |
+| `/bgt test [10\|15\|40]` | Toggle enemy target frames preview for bracket |
+| `/bgt spy` | Toggle open-world Spy radar test preview |
+| `/bgt reset` | Reset enemy target frames and Spy positions |
+| `Left-Click` on FC / Target | Target player via GUID / exact whole-name |
+| `Right-Click` on FC / Target | Set player as focus via SuperWoW `FocusUnit` |
 | `CTRL + Left-Click` on Timer | Broadcast countdown to Battleground chat |
 | `Left-Click Drag` on Frame | Move and persist frame position across sessions |
 
@@ -132,6 +150,14 @@ AutoBG is engineered around strict low-level system integration:
 ---
 
 ## 📜 Changelog
+
+### v1.7.0
+- **Consolidation of BattlegroundTargets & AutoBG**: Merged BattlegroundTargets (`AutoBG_Targets.lua`) and Open-World Spy (`AutoBG_Spy.lua`) natively into AutoBG, creating a single, all-in-one competitive PvP command center.
+- **De-duplicated Flag Carrier Logic**: `AutoBG_FC` is the sole authoritative state machine for Warsong Gulch flags, notifying `AutoBG_Targets` directly without redundant chat regexes or duplicate event registrations.
+- **Authentic WSG Flag Icons**: Displays real 32x32 transparent flag textures on target frame carrier rows (Red Horde flag on Alliance FC; Blue Alliance flag on Horde FC).
+- **Unified 4-Tab Control Panel (`AutoBG_Options.lua`)**: Replaced separate options dialogs with a modern 4-tab interface (`[General]`, `[Timers & FC]`, `[Enemy Frames]`, `[Spy]`) with bracket selectors and global action buttons (`[Test All Frames]`, `[Reset Positions]`, `[Close]`).
+- **Full Backward Compatibility**: Added `/bgt` and `/battlegroundtargets` aliases, cross-module tab routing (`AutoBG_OpenOptions("targets")`), and native settings profiles under `AutoBG_Settings`.
+- **Enhanced Engine Compliance**: Enforced strict startup guards (`MIN_CLASSIC_API = 11400`, `SUPERWOW_VERSION`), dual-mode event signatures (Rule C12 / AP-26), and zero-GC combat paths across all modules.
 
 ### v1.6.0
 - **Warsong Flag Carrier Faction Correction**: Resolved architectural flag carrier inversion where Horde and Alliance carriers were swapped across frames and map coordinates; accurately binds carrier identity, flag tokens, and frame visual assets.

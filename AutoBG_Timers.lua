@@ -554,8 +554,9 @@ EventFrame:RegisterEvent("PLAYER_UNGHOST")
 EventFrame:RegisterEvent("PLAYER_ALIVE")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
-EventFrame:SetScript("OnEvent", function()
-    local ev = event
+EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
+    local ev = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
+    local msg = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
     if ev == "PLAYER_ENTERING_WORLD" then
         AutoBG_LoadTimerPositions()
         table.wipe(timers.AB)
@@ -572,6 +573,6 @@ EventFrame:SetScript("OnEvent", function()
             spiritHealerSynced = true
         end
     else
-        ParseCombatMessage(arg1, ev)
+        ParseCombatMessage(msg or arg1, ev)
     end
 end)

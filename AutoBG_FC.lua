@@ -150,8 +150,8 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     return frame
 end
 
-local AllianceFC = CreateFCFrame("AutoBG_AllianceFC", "Alliance FC", -100, -150, "Interface\\Icons\\INV_BannerPVP_02")
-local HordeFC = CreateFCFrame("AutoBG_HordeFC", "Horde FC", 100, -150, "Interface\\Icons\\INV_BannerPVP_01")
+local AllianceFC = CreateFCFrame("AutoBG_AllianceFC", "Alliance FC", -100, -150, "Interface\\WorldStateFrame\\HordeFlag")
+local HordeFC = CreateFCFrame("AutoBG_HordeFC", "Horde FC", 100, -150, "Interface\\WorldStateFrame\\AllianceFlag")
 
 function AutoBG_LoadFCPositions()
     if AutoBG_LoadPosition then
@@ -165,10 +165,16 @@ function AutoBG_ResetFCPositions()
     HordeFC:ClearAllPoints(); HordeFC:SetPoint("TOP", UIParent, "TOP", 100, -150)
 end
 
+local function NotifyCarrierChanged()
+    if AutoBG_Targets and AutoBG_Targets.OnCarrierChanged then
+        AutoBG_Targets:OnCarrierChanged()
+    end
+end
+
 local function UpdateFCButton(frame, carrierName)
     frame.carrierName = carrierName
     frame.carrierGuid = nil
-    if carrierName and carrierName ~= "" then
+    if carrierName and carrierName ~= "" and (not AutoBG_Settings or AutoBG_Settings.FCFrame ~= false) then
         local color = (AutoBG_FindPlayerClass and AutoBG_GetClassColor and AutoBG_GetClassColor(AutoBG_FindPlayerClass(carrierName)))
         frame.nameText:SetText(color and (color .. carrierName .. "|r") or carrierName)
         frame.healthBar:SetValue(100)
@@ -188,15 +194,16 @@ EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
-EventFrame:SetScript("OnEvent", function()
-    if not AutoBG_Settings or not AutoBG_Settings.FCFrame then return end
-    local ev, msg = event, arg1
+EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
+    local ev = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
+    local msg = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
     local zone = string.lower((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
 
     if ev == "PLAYER_ENTERING_WORLD" then
         AutoBG_LoadFCPositions()
         carrierAlliance = nil; carrierHorde = nil
         UpdateFCButton(AllianceFC, nil); UpdateFCButton(HordeFC, nil)
+        NotifyCarrierChanged()
         return
     end
 
@@ -207,28 +214,39 @@ EventFrame:SetScript("OnEvent", function()
     if not h_pick then
         _, _, h_pick = string.find(msg, "[Ww]arsong [Ff]lag was picked up by ([^!%.]+)")
     end
-    if h_pick then carrierAlliance = h_pick; UpdateFCButton(AllianceFC, carrierAlliance) end
+    if h_pick then
+        carrierAlliance = string.gsub(h_pick, "^%s*(.-)%s*$", "%1")
+        UpdateFCButton(AllianceFC, carrierAlliance)
+        NotifyCarrierChanged()
+    end
 
     -- Alliance / Silverwing Flag picked up by a Horde player -> Horde FC!
     local _, _, a_pick = string.find(msg, "[Aa]lliance [Ff]lag was picked up by ([^!%.]+)")
     if not a_pick then
         _, _, a_pick = string.find(msg, "[Ss]ilverwing [Ff]lag was picked up by ([^!%.]+)")
     end
-    if a_pick then carrierHorde = a_pick; UpdateFCButton(HordeFC, carrierHorde) end
+    if a_pick then
+        carrierHorde = string.gsub(a_pick, "^%s*(.-)%s*$", "%1")
+        UpdateFCButton(HordeFC, carrierHorde)
+        NotifyCarrierChanged()
+    end
 
     -- Horde / Warsong flag dropped, captured, or returned -> clear Alliance FC
     if string.find(msg, "[Hh]orde [Ff]lag was dropped") or string.find(msg, "[Ww]arsong [Ff]lag was dropped") or string.find(msg, "captured the [Hh]orde [Ff]lag") or string.find(msg, "captured the [Ww]arsong [Ff]lag") or string.find(msg, "[Hh]orde [Ff]lag was captured") or string.find(msg, "[Ww]arsong [Ff]lag was captured") or string.find(msg, "[Hh]orde [Ff]lag was returned") or string.find(msg, "[Ww]arsong [Ff]lag was returned") then
         carrierAlliance = nil; UpdateFCButton(AllianceFC, nil)
+        NotifyCarrierChanged()
     end
 
     -- Alliance / Silverwing flag dropped, captured, or returned -> clear Horde FC
     if string.find(msg, "[Aa]lliance [Ff]lag was dropped") or string.find(msg, "[Ss]ilverwing [Ff]lag was dropped") or string.find(msg, "captured the [Aa]lliance [Ff]lag") or string.find(msg, "captured the [Ss]ilverwing [Ff]lag") or string.find(msg, "[Aa]lliance [Ff]lag was captured") or string.find(msg, "[Ss]ilverwing [Ff]lag was captured") or string.find(msg, "[Aa]lliance [Ff]lag was returned") or string.find(msg, "[Ss]ilverwing [Ff]lag was returned") then
         carrierHorde = nil; UpdateFCButton(HordeFC, nil)
+        NotifyCarrierChanged()
     end
 
     if string.find(msg, "flags are now placed at their bases") then
         carrierAlliance = nil; carrierHorde = nil
         UpdateFCButton(AllianceFC, nil); UpdateFCButton(HordeFC, nil)
+        NotifyCarrierChanged()
     end
 end)
 
