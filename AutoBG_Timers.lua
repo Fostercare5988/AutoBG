@@ -1,4 +1,4 @@
-﻿-- AutoBG Timers & Objective Countdown Engine (Zero-Bloat Consolidated Architecture)
+-- AutoBG Timers & Objective Countdown Engine (Zero-Bloat Consolidated Architecture)
 -- Author & Maintainer: Fostercare5988
 -- Built natively for ClassicAPI v1.14.0+, SuperWoW 2.2+, NamPower 4.6.3+, UnitXP SP3, DXVK
 
@@ -211,9 +211,111 @@ local function CreateRespawnFrame(name, xOffset, yOffset)
 end
 
 -- =========================================================
+-- Draggable Text Timer Frame Factory (BG Queues)
+-- =========================================================
+local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minWidth)
+    local frame = CreateFrame("Frame", name, UIParent)
+    frame:SetWidth(minWidth or 130)
+    frame:SetHeight(30)
+    frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
+    frame:SetBackdrop({
+        bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile     = true, tileSize = 16, edgeSize = 16,
+        insets   = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    frame:SetBackdropColor(0, 0, 0, 0.75)
+    frame:SetBackdropBorderColor(0.35, 0.10, 0.10, 0.90)
+    frame:EnableMouse(true)
+    frame:SetMovable(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function() this:StartMoving() end)
+    frame:SetScript("OnDragStop", function()
+        this:StopMovingOrSizing()
+        if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
+    end)
+    frame:Hide()
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", 0, -8)
+    title:SetText(titleText)
+    title:SetTextColor(0.85, 0.70, 0.10)
+    frame.title = title
+    frame.activeRows = {}
+
+    function frame:GetOrCreateRow(index)
+        if not self.activeRows[index] then
+            local btn = CreateFrame("Button", self:GetName() .. "Row" .. index, self)
+            btn:SetHeight(14)
+            btn:SetWidth(self:GetWidth() - 16)
+            if index == 1 then
+                btn:SetPoint("TOP", self, "TOP", 0, -26)
+            else
+                btn:SetPoint("TOP", self.activeRows[index-1], "BOTTOM", 0, -2)
+            end
+            btn:EnableMouse(true)
+            btn:RegisterForClicks("LeftButtonUp")
+            btn:RegisterForDrag("LeftButton")
+            btn:SetScript("OnDragStart", function() this:GetParent():StartMoving() end)
+            btn:SetScript("OnDragStop", function()
+                this:GetParent():StopMovingOrSizing()
+                if AutoBG_SavePosition then AutoBG_SavePosition(this:GetParent(), this:GetParent():GetName()) end
+            end)
+            btn:SetScript("OnClick", function()
+                if IsControlKeyDown() and this.announceText then
+                    SendTimerAnnouncement(this.announceText)
+                end
+            end)
+            btn:SetScript("OnEnter", function()
+                if this.announceText and this.announceText ~= "" then
+                    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(this.announceText, 1, 1, 1)
+                    if this.estText and this.estText ~= "" then
+                        GameTooltip:AddLine(this.estText, 0.9, 0.9, 0.5)
+                    end
+                    GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce to chat", 0.7, 0.7, 0.7)
+                    GameTooltip:Show()
+                end
+            end)
+            btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+            local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            fs:SetPoint("CENTER", btn, "CENTER", 0, 0)
+            btn.fs = fs
+            self.activeRows[index] = btn
+        end
+        return self.activeRows[index]
+    end
+
+    function frame:UpdateSize(index)
+        local maxWidth = self.title:GetStringWidth() + 30
+        local count = #self.activeRows
+        for i = index, count do self.activeRows[i]:Hide() end
+
+        for i = 1, index - 1 do
+            local w = self.activeRows[i].fs:GetStringWidth() + 30
+            if w > maxWidth then maxWidth = w end
+        end
+
+        if index > 1 then
+            self:SetWidth(math.max(minWidth or 130, maxWidth))
+            self:SetHeight(30 + (index - 1) * 16)
+            for i = 1, index - 1 do
+                self.activeRows[i]:SetWidth(self:GetWidth() - 16)
+            end
+            self:Show()
+        else
+            self:Hide()
+        end
+    end
+
+    return frame
+end
+
+-- =========================================================
 -- Frame Instantiation
 -- =========================================================
-local QueueFrame   = CreateBarTimerFrame("AutoBG_QueueFrame",   "BG Queues", 0.85, 0.70, 0.10, -220, -100, 3)
+local QueueFrame   = CreateDraggableTimerFrame("AutoBG_QueueFrame", "BG Queues", -220, -100, 130)
 local RespawnFrame = CreateRespawnFrame("AutoBG_RespawnFrame", 0, -100)
 local NodeBarFrame = CreateBarTimerFrame("AutoBG_NodeFrame",    "AB Nodes",  0.90, 0.20, 0.20,  220, -100, 5)
 local AVNodeFrame  = CreateBarTimerFrame("AutoBG_AVNodeFrame",  "AV Nodes",  0.75, 0.75, 0.75,  220, -150, 8)
@@ -293,10 +395,6 @@ local AV_TEST_DATA = {
 local WSG_TEST_DATA = {
     { name = "Alliance Flag", remaining = 11, faction = "Alliance" },
     { name = "Horde Flag",    remaining = 17, faction = "Horde"    },
-}
-local QUEUE_TEST_DATA = {
-    { abbrev = "WSG", elapsed = 75,  estSec = 300 },
-    { abbrev = "AB",  elapsed = 272, estSec = 600 },
 }
 
 -- =========================================================
@@ -419,68 +517,6 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
 end
 
 -- =========================================================
--- Queue Bar Renderer (count-up: elapsed vs estimated, gold)
--- =========================================================
-local function RenderQueueBars(frame, isEnabled)
-    if not frame or not frame.rows then return end
-    local isTestAll   = AutoBG_Settings and AutoBG_Settings.TestAllTimers
-    local maxRows     = #frame.rows
-    local activeCount = 0
-
-    if isEnabled and isTestAll then
-        activeCount = math.min(#QUEUE_TEST_DATA, maxRows)
-        for i = 1, activeCount do
-            local d   = QUEUE_TEST_DATA[i]
-            local row = frame.rows[i]
-            local pct = (d.estSec > 0) and math.min(d.elapsed / d.estSec, 1.0) or 0.35
-            row.labelFs:SetText(d.abbrev)
-            row.labelFs:SetTextColor(0.85, 0.70, 0.10)
-            row.timeFs:SetText(FormatQueueTime(d.elapsed))
-            row.timeFs:SetTextColor(0.85, 0.70, 0.10)
-            row.bar:SetMinMaxValues(0, 1)
-            row.bar:SetValue(pct)
-            row.bar:SetStatusBarColor(0.75, 0.60, 0.05)
-            row.announceText = d.abbrev .. " Queue: " .. FormatQueueTime(d.elapsed)
-            row:Show()
-        end
-    elseif isEnabled and not isTestAll then
-        local maxQ = MAX_BATTLEFIELD_QUEUES or 3
-        for i = 1, maxQ do
-            local status, mapName = GetBattlefieldStatus(i)
-            if status == "queued" and activeCount < maxRows then
-                local waitTime = (GetBattlefieldTimeWaited and GetBattlefieldTimeWaited(i)) or 0
-                local estTime  = (GetBattlefieldEstimatedWaitTime and GetBattlefieldEstimatedWaitTime(i)) or 0
-                local elapsed  = math.floor(waitTime / 1000)
-                local estSec   = math.floor(estTime  / 1000)
-                activeCount    = activeCount + 1
-                local row      = frame.rows[activeCount]
-                local abbrev   = (mapName == "Warsong Gulch" and "WSG") or (mapName == "Arathi Basin" and "AB") or
-                                 (mapName == "Alterac Valley" and "AV")  or (mapName == "Thorn Gorge"  and "TG") or mapName or "BG"
-                local pct = (estSec > 0) and math.min(elapsed / estSec, 1.0) or 0.35
-                row.labelFs:SetText(abbrev)
-                row.labelFs:SetTextColor(0.85, 0.70, 0.10)
-                row.timeFs:SetText(FormatQueueTime(elapsed))
-                row.timeFs:SetTextColor(0.85, 0.70, 0.10)
-                row.bar:SetMinMaxValues(0, 1)
-                row.bar:SetValue(pct)
-                row.bar:SetStatusBarColor(0.75, 0.60, 0.05)
-                local estLabel = (estSec > 0) and (" / ~" .. FormatQueueTime(estSec)) or ""
-                row.announceText = abbrev .. " Queue: " .. FormatQueueTime(elapsed) .. estLabel
-                row:Show()
-            end
-        end
-    end
-
-    for i = activeCount + 1, maxRows do frame.rows[i]:Hide() end
-    if activeCount > 0 then
-        frame:SetHeight(BAR_HEADER_H + activeCount * (BAR_ROW_H + BAR_ROW_GAP))
-        frame:Show()
-    else
-        frame:Hide()
-    end
-end
-
--- =========================================================
 -- Main 10 Hz Update Ticker
 -- =========================================================
 local function UpdateAllTimers()
@@ -541,8 +577,46 @@ local function UpdateAllTimers()
         RespawnFrame:Hide()
     end
 
-    -- 5. Queue Bars (elapsed vs estimated, gold)
-    RenderQueueBars(QueueFrame, AutoBG_Settings.QueueTimers)
+    -- 5. Queue Timers (Original Blizzard format numbers)
+    local qIndex = 1
+    if AutoBG_Settings.QueueTimers then
+        if isTestAll then
+            local r1 = QueueFrame:GetOrCreateRow(1)
+            r1.fs:SetText("WSG: 1:15")
+            r1.announceText = "WSG Queue: 1:15"
+            r1.estText = nil
+            r1:Show()
+            local r2 = QueueFrame:GetOrCreateRow(2)
+            r2.fs:SetText("AB: 4:32")
+            r2.announceText = "AB Queue: 4:32"
+            r2.estText = nil
+            r2:Show()
+            qIndex = 3
+        else
+            local maxQ = MAX_BATTLEFIELD_QUEUES or 3
+            for i = 1, maxQ do
+                local status, mapName = GetBattlefieldStatus(i)
+                if status == "queued" then
+                    local waitTime = (GetBattlefieldTimeWaited and GetBattlefieldTimeWaited(i)) or 0
+                    local estTime  = (GetBattlefieldEstimatedWaitTime and GetBattlefieldEstimatedWaitTime(i)) or 0
+                    local sec      = math.floor(waitTime / 1000)
+                    local row      = QueueFrame:GetOrCreateRow(qIndex)
+                    local abbrev   = (mapName == "Warsong Gulch" and "WSG") or (mapName == "Arathi Basin" and "AB") or
+                                     (mapName == "Alterac Valley" and "AV")  or (mapName == "Thorn Gorge"  and "TG") or mapName or "BG"
+                    row.fs:SetText(abbrev .. ": " .. FormatQueueTime(sec))
+                    row.announceText = abbrev .. " Queue: " .. FormatQueueTime(sec)
+                    if estTime > 0 then
+                        row.estText = "Estimated: " .. FormatQueueTime(math.floor(estTime / 1000))
+                    else
+                        row.estText = nil
+                    end
+                    row:Show()
+                    qIndex = qIndex + 1
+                end
+            end
+        end
+    end
+    QueueFrame:UpdateSize(qIndex)
 end
 
 if C_Timer and C_Timer.NewTicker then
