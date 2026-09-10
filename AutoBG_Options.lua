@@ -843,6 +843,15 @@ panel:SetScript("OnShow", function()
 	AutoBG_Options_Refresh()
 end)
 
+panel:SetScript("OnHide", function()
+	if Targets and Targets.isConfig then Targets:DisableConfigMode() end
+	if Spy and Spy.isTestMode then Spy:DisableTestMode() end
+	if AutoBG_Settings and AutoBG_Settings.TestAllTimers then
+		AutoBG_Settings.TestAllTimers = false
+		if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
+	end
+end)
+
 -- -------------------------------------------------------------------------- --
 -- Bottom Action Bar (Test All Frames, Reset Positions, Close)                --
 -- -------------------------------------------------------------------------- --
@@ -897,9 +906,6 @@ btnClose:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -18, 14)
 btnClose:SetText("Close")
 btnClose:SetScript("OnClick", function()
 	panel:Hide()
-	if Targets and Targets.isConfig then
-		Targets:DisableConfigMode()
-	end
 end)
 
 -- -------------------------------------------------------------------------- --
