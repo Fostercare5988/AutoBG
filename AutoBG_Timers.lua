@@ -214,28 +214,242 @@ local function CreateRespawnFrame(name, xOffset, yOffset)
     frame.bar = bar
     return frame
 end
+-- =========================================================
+-- Node Bar Frame: BigWigs-Style AB Capture Countdown Bars
+-- =========================================================
+local NODEBAR_WIDTH      = 220
+local NODEBAR_ROW_HEIGHT = 30
+local NODEBAR_ROW_GAP    = 2
+local NODEBAR_HEADER_H   = 22
+local NODEBAR_MAX_ROWS   = 5
 
-local QueueFrame = CreateDraggableTimerFrame("AutoBG_QueueFrame", "BG Queues", -220, -100, 130)
+local function CreateNodeBarFrame(name, xOffset, yOffset)
+    local frame = CreateFrame("Frame", name, UIParent)
+    frame:SetWidth(NODEBAR_WIDTH)
+    frame:SetHeight(NODEBAR_HEADER_H)
+    frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
+    frame:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    frame:SetBackdropColor(0, 0, 0, 0.75)
+    frame:SetBackdropBorderColor(0.35, 0.10, 0.10, 0.90)
+    frame:EnableMouse(true)
+    frame:SetMovable(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function() this:StartMoving() end)
+    frame:SetScript("OnDragStop", function()
+        this:StopMovingOrSizing()
+        if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
+    end)
+    frame:Hide()
+
+    local titleFs = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    titleFs:SetPoint("TOP", 0, -6)
+    titleFs:SetText("AB Nodes")
+    titleFs:SetTextColor(0.90, 0.20, 0.20)
+    frame.titleFs = titleFs
+
+    frame.rows = {}
+    for i = 1, NODEBAR_MAX_ROWS do
+        local row = CreateFrame("Button", name .. "Row" .. i, frame)
+        row:SetWidth(NODEBAR_WIDTH - 16)
+        row:SetHeight(NODEBAR_ROW_HEIGHT)
+        if i == 1 then
+            row:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -NODEBAR_HEADER_H)
+        else
+            row:SetPoint("TOPLEFT", frame.rows[i - 1], "BOTTOMLEFT", 0, -NODEBAR_ROW_GAP)
+        end
+        row:EnableMouse(true)
+        row:RegisterForClicks("LeftButtonUp")
+        row:RegisterForDrag("LeftButton")
+        row:SetScript("OnDragStart", function() this:GetParent():StartMoving() end)
+        row:SetScript("OnDragStop", function()
+            this:GetParent():StopMovingOrSizing()
+            if AutoBG_SavePosition then AutoBG_SavePosition(this:GetParent(), this:GetParent():GetName()) end
+        end)
+        row:SetScript("OnClick", function()
+            if IsControlKeyDown() and this.announceText then SendTimerAnnouncement(this.announceText) end
+        end)
+        row:SetScript("OnEnter", function()
+            if this.announceText and this.announceText ~= "" then
+                GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+                GameTooltip:SetText(this.announceText, 1, 1, 1)
+                GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce to chat", 0.7, 0.7, 0.7)
+                GameTooltip:Show()
+            end
+        end)
+        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        local labelFs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        labelFs:SetPoint("TOPLEFT", row, "TOPLEFT", 2, -3)
+        labelFs:SetPoint("TOPRIGHT", row, "TOPRIGHT", -40, -3)
+        labelFs:SetJustifyH("LEFT")
+        row.labelFs = labelFs
+
+        local timeFs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        timeFs:SetPoint("TOPRIGHT", row, "TOPRIGHT", -2, -3)
+        timeFs:SetJustifyH("RIGHT")
+        row.timeFs = timeFs
+
+        local barBgTex = row:CreateTexture(nil, "BACKGROUND")
+        barBgTex:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 3)
+        barBgTex:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 3)
+        barBgTex:SetHeight(9)
+        barBgTex:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+        barBgTex:SetVertexColor(0.15, 0.15, 0.15, 0.85)
+
+        local bar = CreateFrame("StatusBar", name .. "Row" .. i .. "Bar", row)
+        bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 3)
+        bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 3)
+        bar:SetHeight(9)
+        bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+        bar:SetMinMaxValues(0, 60)
+        bar:SetValue(60)
+        bar:SetStatusBarColor(0.1, 0.85, 0.1)
+        bar:EnableMouse(false)
+        row.bar = bar
+
+        row:Hide()
+        frame.rows[i] = row
+    end
+
+    return frame
+end
+
+local function NodeBarGetColor(remaining)
+    if remaining > 30 then return 0.10, 0.85, 0.10
+    elseif remaining > 15 then return 0.90, 0.80, 0.10
+    elseif remaining > 5  then return 1.00, 0.40, 0.00
+    else                       return 1.00, 0.10, 0.10 end
+end
+
+-- Pre-allocated static test data for TestAllTimers mode
+local NODEBAR_TEST_DATA = {
+    { name = "Blacksmith",  remaining = 31, faction = "Horde"    },
+    { name = "Lumber Mill", remaining = 52, faction = "Alliance" },
+}
+
+local function RenderNodeBars(frame, timerTable, isEnabled, isZone)
+    if not frame or not frame.rows then return end
+    local now       = GetTime()
+    local isTestAll = AutoBG_Settings and AutoBG_Settings.TestAllTimers
+    local useColors = AutoBG_Settings and AutoBG_Settings.NodeColors
+    local activeCount = 0
+
+    if isEnabled and (isTestAll or isZone) then
+        if isTestAll then
+            activeCount = #NODEBAR_TEST_DATA
+            for i = 1, activeCount do
+                local d   = NODEBAR_TEST_DATA[i]
+                local row = frame.rows[i]
+                local lr, lg, lb = 1, 1, 1
+                if useColors then
+                    if d.faction == "Horde"    then lr, lg, lb = 1.00, 0.25, 0.25
+                    elseif d.faction == "Alliance" then lr, lg, lb = 0.25, 0.56, 1.00 end
+                end
+                local barR, barG, barB = NodeBarGetColor(d.remaining)
+                row.labelFs:SetText(d.name)
+                row.labelFs:SetTextColor(lr, lg, lb)
+                row.timeFs:SetText(FormatTime(d.remaining))
+                row.timeFs:SetTextColor(barR, barG, barB)
+                row.bar:SetValue(d.remaining)
+                row.bar:SetStatusBarColor(barR, barG, barB)
+                row.announceText = d.name .. " (" .. d.faction .. "): " .. FormatTime(d.remaining)
+                row:Show()
+            end
+        else
+            local sortCount = 0
+            for nodeName, data in pairs(timerTable) do
+                local expireTime = (type(data) == "table" and data.expire) or data
+                local faction    = (type(data) == "table" and data.faction) or nil
+                local remaining  = expireTime - now
+                if remaining > 0 then
+                    sortCount = sortCount + 1
+                    local item = activeSortBuffer[sortCount]
+                    if not item then item = {}; activeSortBuffer[sortCount] = item end
+                    item.name    = nodeName
+                    item.expire  = expireTime
+                    item.faction = faction
+                else
+                    timerTable[nodeName] = nil
+                end
+            end
+            if sortCount > 1 then
+                for i = 2, sortCount do
+                    local key = activeSortBuffer[i]
+                    local j = i - 1
+                    while j >= 1 and activeSortBuffer[j].expire > key.expire do
+                        activeSortBuffer[j + 1] = activeSortBuffer[j]
+                        j = j - 1
+                    end
+                    activeSortBuffer[j + 1] = key
+                end
+            end
+            activeCount = sortCount
+            for i = 1, sortCount do
+                local item      = activeSortBuffer[i]
+                local remaining = math.floor(item.expire - now)
+                if remaining > 0 then
+                    local row = frame.rows[i]
+                    local lr, lg, lb = 1, 1, 1
+                    if useColors then
+                        if item.faction == "Horde"    then lr, lg, lb = 1.00, 0.25, 0.25
+                        elseif item.faction == "Alliance" then lr, lg, lb = 0.25, 0.56, 1.00 end
+                    end
+                    local barR, barG, barB = NodeBarGetColor(remaining)
+                    row.labelFs:SetText(item.name)
+                    row.labelFs:SetTextColor(lr, lg, lb)
+                    row.timeFs:SetText(FormatTime(remaining))
+                    row.timeFs:SetTextColor(barR, barG, barB)
+                    row.bar:SetValue(remaining)
+                    row.bar:SetStatusBarColor(barR, barG, barB)
+                    local facText = item.faction and (" (" .. item.faction .. ")") or ""
+                    row.announceText = item.name .. facText .. ": " .. FormatTime(remaining)
+                    row:Show()
+                else
+                    activeCount = activeCount - 1
+                end
+            end
+        end
+    else
+        if not isTestAll then table.wipe(timerTable) end
+    end
+
+    for i = activeCount + 1, NODEBAR_MAX_ROWS do
+        frame.rows[i]:Hide()
+    end
+    if activeCount > 0 then
+        frame:SetHeight(NODEBAR_HEADER_H + activeCount * (NODEBAR_ROW_HEIGHT + NODEBAR_ROW_GAP))
+        frame:Show()
+    else
+        frame:Hide()
+    end
+end
+
+local QueueFrame   = CreateDraggableTimerFrame("AutoBG_QueueFrame", "BG Queues", -220, -100, 130)
 local RespawnFrame = CreateRespawnFrame("AutoBG_RespawnFrame", 0, -100)
-local NodeFrame = CreateDraggableTimerFrame("AutoBG_NodeFrame", "AB Nodes", 220, -100, 160)
-local AVNodeFrame = CreateDraggableTimerFrame("AutoBG_AVNodeFrame", "AV Nodes", 220, -150, 160)
+local NodeBarFrame = CreateNodeBarFrame("AutoBG_NodeFrame", 220, -100)
+local AVNodeFrame  = CreateDraggableTimerFrame("AutoBG_AVNodeFrame", "AV Nodes", 220, -150, 160)
 local WSGFlagFrame = CreateDraggableTimerFrame("AutoBG_WSGFlagFrame", "WSG Flags", -110, -150, 140)
 
 function AutoBG_LoadTimerPositions()
     if AutoBG_LoadPosition then
-        AutoBG_LoadPosition(QueueFrame, "AutoBG_QueueFrame", "TOP", -220, -100)
-        AutoBG_LoadPosition(RespawnFrame, "AutoBG_RespawnFrame", "TOP", 0, -100)
-        AutoBG_LoadPosition(NodeFrame, "AutoBG_NodeFrame", "TOP", 220, -100)
-        AutoBG_LoadPosition(AVNodeFrame, "AutoBG_AVNodeFrame", "TOP", 220, -150)
+        AutoBG_LoadPosition(QueueFrame,   "AutoBG_QueueFrame",   "TOP", -220, -100)
+        AutoBG_LoadPosition(RespawnFrame, "AutoBG_RespawnFrame", "TOP",    0, -100)
+        AutoBG_LoadPosition(NodeBarFrame, "AutoBG_NodeFrame",    "TOP",  220, -100)
+        AutoBG_LoadPosition(AVNodeFrame,  "AutoBG_AVNodeFrame",  "TOP",  220, -150)
         AutoBG_LoadPosition(WSGFlagFrame, "AutoBG_WSGFlagFrame", "TOP", -110, -150)
     end
 end
 
 function AutoBG_ResetTimerPositions()
-    QueueFrame:ClearAllPoints(); QueueFrame:SetPoint("TOP", UIParent, "TOP", -220, -100)
-    RespawnFrame:ClearAllPoints(); RespawnFrame:SetPoint("TOP", UIParent, "TOP", 0, -100)
-    NodeFrame:ClearAllPoints(); NodeFrame:SetPoint("TOP", UIParent, "TOP", 220, -100)
-    AVNodeFrame:ClearAllPoints(); AVNodeFrame:SetPoint("TOP", UIParent, "TOP", 220, -150)
+    QueueFrame:ClearAllPoints();   QueueFrame:SetPoint("TOP", UIParent, "TOP", -220, -100)
+    RespawnFrame:ClearAllPoints(); RespawnFrame:SetPoint("TOP", UIParent, "TOP",    0, -100)
+    NodeBarFrame:ClearAllPoints(); NodeBarFrame:SetPoint("TOP", UIParent, "TOP",  220, -100)
+    AVNodeFrame:ClearAllPoints();  AVNodeFrame:SetPoint("TOP", UIParent, "TOP",  220, -150)
     WSGFlagFrame:ClearAllPoints(); WSGFlagFrame:SetPoint("TOP", UIParent, "TOP", -110, -150)
 end
 
@@ -368,8 +582,8 @@ local function UpdateAllTimers()
     local isWSG = (string.find(lowerZone, "warsong") ~= nil)
     local now = GetTime()
 
-    -- 1. AB Nodes (Zero-GC with static TEST_ROWS_AB)
-    RenderGenericTimerList(NodeFrame, timers.AB, AutoBG_Settings.ABTimers, isAB, TEST_ROWS_AB)
+    -- 1. AB Nodes — BigWigs-style countdown bars
+    RenderNodeBars(NodeBarFrame, timers.AB, AutoBG_Settings.ABTimers, isAB)
 
     -- 2. AV Nodes (Zero-GC with static TEST_ROWS_AV)
     RenderGenericTimerList(AVNodeFrame, timers.AV, AutoBG_Settings.AVTimers, isAV, TEST_ROWS_AV)
