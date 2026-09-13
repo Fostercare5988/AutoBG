@@ -65,10 +65,10 @@ local defaultSettings = {
     HideStanceBar = false, TestAllTimers = false, LastPlayedBG = nil,
     Positions = {}, SkipIfAFK = true,
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
-    AutoQueue_TG = false, AutoQueue_BR = false, ABProjection = true,
+    AutoQueue_BR = false, ABProjection = true,
 }
 
--- Battleground Icons & Daily Rotation Engine (Turtle WoW 5-Day Cycle Anchor)
+-- Battleground Icons
 local BG_ICONS = {
     ["Warsong Gulch"]  = "Interface\\Icons\\INV_Misc_Rune_07",
     ["Arathi Basin"]   = "Interface\\Icons\\INV_Jewelry_Amulet_07",
@@ -93,24 +93,6 @@ function AutoBG_GetBGIcon(keyOrName)
     elseif string.find(lower, "blood") or string.find(lower, "ring") or lower == "br" then return BG_ICONS["br"]
     end
     return nil
-end
-
-local DAILY_BG_CYCLE = {
-    [0] = "wsg",
-    [1] = "ab",
-    [2] = "br",
-    [3] = "tg",
-    [4] = "av",
-}
-local DAILY_BG_ANCHOR = 20534 -- floor(time({2026,3,22,0,0,0}) / 86400) in UTC days
-
-function AutoBG_GetDailyBGKey()
-    local serverTime = (_G.ClassicAPI and _G.ClassicAPI.GetServerTime and _G.ClassicAPI.GetServerTime()) or time()
-    local utcDay = math.floor(serverTime / 86400)
-    local diff = utcDay - DAILY_BG_ANCHOR
-    local idx = diff % 5
-    if idx < 0 then idx = idx + 5 end
-    return DAILY_BG_CYCLE[idx]
 end
 
 function AutoBG_CancelAllQueues()
@@ -382,7 +364,6 @@ function AutoBG_GetSelectedBGs()
         if AutoBG_Settings.AutoQueue_WSG ~= false then table.insert(list, "Warsong Gulch") end
         if AutoBG_Settings.AutoQueue_AB ~= false then table.insert(list, "Arathi Basin") end
         if AutoBG_Settings.AutoQueue_AV ~= false then table.insert(list, "Alterac Valley") end
-        if AutoBG_Settings.AutoQueue_TG then table.insert(list, "Thorn Gorge") end
         if AutoBG_Settings.AutoQueue_BR then table.insert(list, "Blood Ring") end
     end
     if #list == 0 then

@@ -161,8 +161,8 @@ function AutoBG_LoadFCPositions()
 end
 
 function AutoBG_ResetFCPositions()
-    AllianceFC:ClearAllPoints(); AllianceFC:SetPoint("TOP", UIParent, "TOP", -100, -150)
-    HordeFC:ClearAllPoints(); HordeFC:SetPoint("TOP", UIParent, "TOP", 100, -150)
+    AllianceFC:ClearAllPoints(); AllianceFC:SetPoint("TOP", UIParent, "TOP", -100, -150) -- octowow-ignore: AP-31
+    HordeFC:ClearAllPoints(); HordeFC:SetPoint("TOP", UIParent, "TOP", 100, -150) -- octowow-ignore: AP-31
 end
 
 local function NotifyCarrierChanged()
