@@ -49,6 +49,50 @@ local function CreateCheckButton(name, parent, text, tooltip, onClick)
 	return cb
 end
 
+local function CreateBGCheckButton(name, parent, text, iconPath, tooltip, onClick)
+	local cb = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate")
+	cb:SetWidth(20)
+	cb:SetHeight(20)
+
+	local icon = cb:CreateTexture(nil, "ARTWORK")
+	icon:SetWidth(16)
+	icon:SetHeight(16)
+	icon:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+	icon:SetTexture(iconPath)
+	cb.Icon = icon
+
+	local label = _G[name .. "Text"] or cb:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	label:ClearAllPoints()
+	label:SetPoint("LEFT", icon, "RIGHT", 5, 0)
+	label:SetText(text)
+	cb.Label = label
+
+	local badge = cb:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	badge:SetPoint("LEFT", label, "RIGHT", 5, 0)
+	badge:SetTextColor(0.1, 1.0, 0.1)
+	badge:SetText("")
+	cb.Badge = badge
+
+	cb.tooltipText = tooltip
+
+	cb:SetScript("OnClick", function()
+		if onClick then onClick() end
+	end)
+
+	if tooltip then
+		cb:SetScript("OnEnter", function()
+			GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+			GameTooltip:SetText(this.tooltipText, 1, 1, 1, nil, 1)
+			GameTooltip:Show()
+		end)
+		cb:SetScript("OnLeave", function()
+			GameTooltip:Hide()
+		end)
+	end
+
+	return cb
+end
+
 local function CreateSlider(name, parent, text, minVal, maxVal, step, isPercent, onValChanged)
 	local s = CreateFrame("Slider", name, parent, "OptionsSliderTemplate")
 	s:SetWidth(170)
@@ -179,7 +223,7 @@ end
 -- -------------------------------------------------------------------------- --
 -- TAB 1: GENERAL (Automation, Queues, Alerts, Class Colors, Stances)         --
 -- -------------------------------------------------------------------------- --
-CreateSectionHeader(panelGeneral, "Automation & Queuing", 10, -8)
+CreateSectionHeader(panelGeneral, "Automation & Combat", 10, -8)
 
 local cbAutoAccept = CreateCheckButton("AutoBG_Opt_AutoAccept", panelGeneral, "Auto-Accept Queue Pop", "Automatically accept battleground queue pops.", function()
 	if AutoBG_Settings then AutoBG_Settings.AutoAccept = this:GetChecked() and true or false end
@@ -213,38 +257,33 @@ local cbAutoRejoin = CreateCheckButton("AutoBG_Opt_AutoRejoin", panelGeneral, "A
 end)
 cbAutoRejoin:SetPoint("TOPLEFT", cbAutoLeave, "BOTTOMLEFT", 0, -6)
 
-local cbAutoQueue = CreateCheckButton("AutoBG_Opt_AutoQueue", panelGeneral, "Auto-Queue on Login", "Automatically queue for WSG, AB, and AV upon logging in or reloading.", function()
-	if AutoBG_Settings then AutoBG_Settings.AutoQueueLogin = this:GetChecked() and true or false end
-end)
-cbAutoQueue:SetPoint("TOPLEFT", cbAutoRejoin, "BOTTOMLEFT", 0, -6)
-
 local cbAutoRelease = CreateCheckButton("AutoBG_Opt_AutoRelease", panelGeneral, "Auto-Release Spirit", "Automatically release spirit upon dying in BG (skips if Soulstone/Ankh ready).", function()
 	if AutoBG_Settings then AutoBG_Settings.AutoRelease = this:GetChecked() and true or false end
 end)
-cbAutoRelease:SetPoint("TOPLEFT", cbAutoQueue, "BOTTOMLEFT", 0, -6)
+cbAutoRelease:SetPoint("TOPLEFT", cbAutoRejoin, "BOTTOMLEFT", 0, -6)
 
--- Column 2
-CreateSectionHeader(panelGeneral, "Alerts & Visual Tweaks", 240, -8)
+-- Column 1 Section 2: Alerts & Display
+CreateSectionHeader(panelGeneral, "Alerts & Display", 10, -196)
 
 local cbSound = CreateCheckButton("AutoBG_Opt_Sound", panelGeneral, "Loud Sound Alerts", "Play a loud ready check sound when queues pop or end.", function()
 	if AutoBG_Settings then AutoBG_Settings.NotifySound = this:GetChecked() and true or false end
 end)
-cbSound:SetPoint("TOPLEFT", panelGeneral, "TOPLEFT", 240, -30)
+cbSound:SetPoint("TOPLEFT", panelGeneral, "TOPLEFT", 10, -218)
 
 local cbFlash = CreateCheckButton("AutoBG_Opt_Flash", panelGeneral, "Taskbar Flashing", "Flash game window in Windows taskbar on queue pop.", function()
 	if AutoBG_Settings then AutoBG_Settings.FlashTaskbar = this:GetChecked() and true or false end
 end)
-cbFlash:SetPoint("TOPLEFT", cbSound, "BOTTOMLEFT", 0, -6)
+cbFlash:SetPoint("TOPLEFT", cbSound, "BOTTOMLEFT", 0, -5)
 
 local cbChatMsg = CreateCheckButton("AutoBG_Opt_ChatMsg", panelGeneral, "Chat Notifications", "Display status messages in chat for queues, joins, and exits.", function()
 	if AutoBG_Settings then AutoBG_Settings.ChatMessages = this:GetChecked() and true or false end
 end)
-cbChatMsg:SetPoint("TOPLEFT", cbFlash, "BOTTOMLEFT", 0, -6)
+cbChatMsg:SetPoint("TOPLEFT", cbFlash, "BOTTOMLEFT", 0, -5)
 
 local cbScoreColor = CreateCheckButton("AutoBG_Opt_ScoreColor", panelGeneral, "Scoreboard Class Colors", "Color player names on scoreboard by character class.", function()
 	if AutoBG_Settings then AutoBG_Settings.ScoreColor = this:GetChecked() and true or false end
 end)
-cbScoreColor:SetPoint("TOPLEFT", cbChatMsg, "BOTTOMLEFT", 0, -6)
+cbScoreColor:SetPoint("TOPLEFT", cbChatMsg, "BOTTOMLEFT", 0, -5)
 
 local cbHideCastbar = CreateCheckButton("AutoBG_Opt_HideCastbar", panelGeneral, "Hide Default Castbar", "Hide default Blizzard cast bar (useful if using custom castbars).", function()
 	if AutoBG_Settings then
@@ -255,7 +294,7 @@ local cbHideCastbar = CreateCheckButton("AutoBG_Opt_HideCastbar", panelGeneral, 
 		end
 	end
 end)
-cbHideCastbar:SetPoint("TOPLEFT", cbScoreColor, "BOTTOMLEFT", 0, -6)
+cbHideCastbar:SetPoint("TOPLEFT", cbScoreColor, "BOTTOMLEFT", 0, -5)
 
 local cbHideStanceBar = CreateCheckButton("AutoBG_Opt_HideStanceBar", panelGeneral, "Hide Stealth/Stance Bar", "Hide default Blizzard stance/shapeshift bar (Stealth, Stances, Forms).", function()
 	if AutoBG_Settings then
@@ -263,12 +302,12 @@ local cbHideStanceBar = CreateCheckButton("AutoBG_Opt_HideStanceBar", panelGener
 		if AutoBG_UpdateStanceBar then AutoBG_UpdateStanceBar() end
 	end
 end)
-cbHideStanceBar:SetPoint("TOPLEFT", cbHideCastbar, "BOTTOMLEFT", 0, -6)
+cbHideStanceBar:SetPoint("TOPLEFT", cbHideCastbar, "BOTTOMLEFT", 0, -5)
 
 local btnTestSound = CreateFrame("Button", "AutoBG_BtnTestSound", panelGeneral, "UIPanelButtonTemplate")
 btnTestSound:SetWidth(110)
-btnTestSound:SetHeight(22)
-btnTestSound:SetPoint("TOPLEFT", cbHideStanceBar, "BOTTOMLEFT", 4, -14)
+btnTestSound:SetHeight(20)
+btnTestSound:SetPoint("TOPLEFT", cbHideStanceBar, "BOTTOMLEFT", 4, -8)
 btnTestSound:SetText("Test Sound")
 btnTestSound:SetScript("OnClick", function()
 	if AutoBG_PlayNotificationSound then
@@ -277,6 +316,100 @@ btnTestSound:SetScript("OnClick", function()
 		PlaySound("ReadyCheck")
 	end
 end)
+
+-- Column 2: Auto Queue Command Center
+local crest = panelGeneral:CreateTexture(nil, "ARTWORK")
+crest:SetWidth(18)
+crest:SetHeight(18)
+crest:SetPoint("TOPLEFT", panelGeneral, "TOPLEFT", 240, -8)
+local playerFaction = UnitFactionGroup and UnitFactionGroup("player")
+if playerFaction == "Horde" then
+	crest:SetTexture("Interface\\Icons\\INV_BannerPVP_01")
+else
+	crest:SetTexture("Interface\\Icons\\INV_BannerPVP_02")
+end
+
+local hQueue = panelGeneral:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+hQueue:SetPoint("LEFT", crest, "RIGHT", 6, 0)
+hQueue:SetText("Auto Queue")
+
+local subQueue = panelGeneral:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+subQueue:SetPoint("TOPLEFT", panelGeneral, "TOPLEFT", 240, -30)
+subQueue:SetText("Battlegrounds to Queue:")
+
+local cbQueueWSG = CreateBGCheckButton("AutoBG_Opt_QueueWSG", panelGeneral, "Warsong Gulch", "Interface\\Icons\\INV_Misc_Rune_07", "Include Warsong Gulch in Auto Queue.", function()
+	if AutoBG_Settings then AutoBG_Settings.AutoQueue_WSG = this:GetChecked() and true or false end
+end)
+cbQueueWSG:SetPoint("TOPLEFT", panelGeneral, "TOPLEFT", 240, -48)
+
+local cbQueueAB = CreateBGCheckButton("AutoBG_Opt_QueueAB", panelGeneral, "Arathi Basin", "Interface\\Icons\\INV_Jewelry_Amulet_07", "Include Arathi Basin in Auto Queue.", function()
+	if AutoBG_Settings then AutoBG_Settings.AutoQueue_AB = this:GetChecked() and true or false end
+end)
+cbQueueAB:SetPoint("TOPLEFT", cbQueueWSG, "BOTTOMLEFT", 0, -4)
+
+local cbQueueAV = CreateBGCheckButton("AutoBG_Opt_QueueAV", panelGeneral, "Alterac Valley", "Interface\\Icons\\INV_Jewelry_Necklace_21", "Include Alterac Valley in Auto Queue.", function()
+	if AutoBG_Settings then AutoBG_Settings.AutoQueue_AV = this:GetChecked() and true or false end
+end)
+cbQueueAV:SetPoint("TOPLEFT", cbQueueAB, "BOTTOMLEFT", 0, -4)
+
+local cbQueueTG = CreateBGCheckButton("AutoBG_Opt_QueueTG", panelGeneral, "Sunnyglade / Tel'Abim", "Interface\\Icons\\INV_Jewelry_Talisman_04", "Include Sunnyglade Valley / Tel'Abim in Auto Queue.", function()
+	if AutoBG_Settings then AutoBG_Settings.AutoQueue_TG = this:GetChecked() and true or false end
+end)
+cbQueueTG:SetPoint("TOPLEFT", cbQueueAV, "BOTTOMLEFT", 0, -4)
+
+local cbQueueBR = CreateBGCheckButton("AutoBG_Opt_QueueBR", panelGeneral, "Blood Ring (Arena)", "Interface\\Icons\\INV_Jewelry_Talisman_05", "Include Blood Ring in Auto Queue.", function()
+	if AutoBG_Settings then AutoBG_Settings.AutoQueue_BR = this:GetChecked() and true or false end
+end)
+cbQueueBR:SetPoint("TOPLEFT", cbQueueTG, "BOTTOMLEFT", 0, -4)
+
+local cbAutoQueue = CreateCheckButton("AutoBG_Opt_AutoQueue", panelGeneral, "Auto-Queue on Login", "Automatically queue for selected battlegrounds upon logging in or reloading.", function()
+	if AutoBG_Settings then AutoBG_Settings.AutoQueueLogin = this:GetChecked() and true or false end
+end)
+cbAutoQueue:SetPoint("TOPLEFT", cbQueueBR, "BOTTOMLEFT", 0, -10)
+
+local btnQueueAll = CreateFrame("Button", "AutoBG_BtnQueueAll", panelGeneral, "UIPanelButtonTemplate")
+btnQueueAll:SetWidth(102)
+btnQueueAll:SetHeight(22)
+btnQueueAll:SetPoint("TOPLEFT", cbAutoQueue, "BOTTOMLEFT", 2, -10)
+btnQueueAll:SetText("Queue Selected")
+btnQueueAll:SetScript("OnClick", function()
+	if AutoBG_QueueAllBGs then AutoBG_QueueAllBGs() end
+end)
+
+local btnCancelAll = CreateFrame("Button", "AutoBG_BtnCancelAll", panelGeneral, "UIPanelButtonTemplate")
+btnCancelAll:SetWidth(102)
+btnCancelAll:SetHeight(22)
+btnCancelAll:SetPoint("LEFT", btnQueueAll, "RIGHT", 6, 0)
+btnCancelAll:SetText("Cancel All")
+btnCancelAll:SetScript("OnClick", function()
+	if AutoBG_CancelAllQueues then AutoBG_CancelAllQueues() end
+end)
+
+local aqInfo = panelGeneral:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+aqInfo:SetPoint("TOPLEFT", btnQueueAll, "BOTTOMLEFT", 0, -10)
+aqInfo:SetPoint("RIGHT", panelGeneral, "RIGHT", -12, 0)
+aqInfo:SetJustifyH("LEFT")
+aqInfo:SetText("Commands:\n|cFFFFFF00/abg aq now|r - Queue selected\n|cFFFFFF00/abg cancel|r - Drop all queues")
+
+local function RefreshDailyLabels()
+	local dailyKey = AutoBG_GetDailyBGKey and AutoBG_GetDailyBGKey()
+	local bgButtons = {
+		wsg = cbQueueWSG,
+		ab  = cbQueueAB,
+		av  = cbQueueAV,
+		tg  = cbQueueTG,
+		br  = cbQueueBR,
+	}
+	for key, btn in pairs(bgButtons) do
+		if btn and btn.Badge then
+			if key == dailyKey then
+				btn.Badge:SetText("(Daily)")
+			else
+				btn.Badge:SetText("")
+			end
+		end
+	end
+end
 
 -- -------------------------------------------------------------------------- --
 -- TAB 2: TIMERS & FC (Node Timers, Respawn, Spirit Healer, Flag Carrier HUD) --
@@ -312,6 +445,14 @@ local cbNodeColors = CreateCheckButton("AutoBG_Opt_NodeColors", panelTimers, "Fa
 	if AutoBG_Settings then AutoBG_Settings.NodeColors = this:GetChecked() and true or false end
 end)
 cbNodeColors:SetPoint("TOPLEFT", cbQueueTimers, "BOTTOMLEFT", 0, -6)
+
+local cbABProjection = CreateCheckButton("AutoBG_Opt_ABProjection", panelTimers, "AB Score Projection", "Show clean real-time projected final score and win ETA for Arathi Basin.", function()
+	if AutoBG_Settings then
+		AutoBG_Settings.ABProjection = this:GetChecked() and true or false
+		if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
+	end
+end)
+cbABProjection:SetPoint("TOPLEFT", cbNodeColors, "BOTTOMLEFT", 0, -6)
 
 -- Column 2
 CreateSectionHeader(panelTimers, "WSG Flag Carrier HUD", 240, -8)
@@ -804,7 +945,6 @@ SelectTab = function(tabId)
 			sliderAcceptDelay.ValueText:SetText(delay == 0 and "Instant (0s)" or (delay .. "s"))
 			cbAutoLeave:SetChecked(AutoBG_Settings.AutoLeave and 1 or nil)
 			cbAutoRejoin:SetChecked(AutoBG_Settings.AutoRejoin and 1 or nil)
-			cbAutoQueue:SetChecked(AutoBG_Settings.AutoQueueLogin and 1 or nil)
 			cbAutoRelease:SetChecked(AutoBG_Settings.AutoRelease and 1 or nil)
 
 			cbSound:SetChecked(AutoBG_Settings.NotifySound and 1 or nil)
@@ -813,6 +953,15 @@ SelectTab = function(tabId)
 			cbScoreColor:SetChecked(AutoBG_Settings.ScoreColor and 1 or nil)
 			cbHideCastbar:SetChecked(AutoBG_Settings.HideCastbar and 1 or nil)
 			cbHideStanceBar:SetChecked(AutoBG_Settings.HideStanceBar and 1 or nil)
+
+			cbQueueWSG:SetChecked((AutoBG_Settings.AutoQueue_WSG ~= false) and 1 or nil)
+			cbQueueAB:SetChecked((AutoBG_Settings.AutoQueue_AB ~= false) and 1 or nil)
+			cbQueueAV:SetChecked((AutoBG_Settings.AutoQueue_AV ~= false) and 1 or nil)
+			cbQueueTG:SetChecked(AutoBG_Settings.AutoQueue_TG and 1 or nil)
+			cbQueueBR:SetChecked(AutoBG_Settings.AutoQueue_BR and 1 or nil)
+			cbAutoQueue:SetChecked(AutoBG_Settings.AutoQueueLogin and 1 or nil)
+
+			RefreshDailyLabels()
 		end
 	elseif tabId == 2 then
 		-- Timers & FC
@@ -823,6 +972,7 @@ SelectTab = function(tabId)
 			cbRessTimer:SetChecked(AutoBG_Settings.RessTimer and 1 or nil)
 			cbQueueTimers:SetChecked(AutoBG_Settings.QueueTimers and 1 or nil)
 			cbNodeColors:SetChecked(AutoBG_Settings.NodeColors and 1 or nil)
+			cbABProjection:SetChecked((AutoBG_Settings.ABProjection ~= false) and 1 or nil)
 			cbFCFrame:SetChecked(AutoBG_Settings.FCFrame and 1 or nil)
 			btnTestTimers:SetText(AutoBG_Settings.TestAllTimers and "Hide Timers Test" or "Toggle Timers Test")
 		end

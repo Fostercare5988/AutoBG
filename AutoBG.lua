@@ -64,7 +64,71 @@ local defaultSettings = {
     FCFrame = true, WSGTimers = true, HideCastbar = false,
     HideStanceBar = false, TestAllTimers = false, LastPlayedBG = nil,
     Positions = {}, SkipIfAFK = true,
+    AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
+    AutoQueue_TG = false, AutoQueue_BR = false, ABProjection = true,
 }
+
+-- Battleground Icons & Daily Rotation Engine (Turtle WoW 5-Day Cycle Anchor)
+local BG_ICONS = {
+    ["Warsong Gulch"]  = "Interface\\Icons\\INV_Misc_Rune_07",
+    ["Arathi Basin"]   = "Interface\\Icons\\INV_Jewelry_Amulet_07",
+    ["Alterac Valley"] = "Interface\\Icons\\INV_Jewelry_Necklace_21",
+    ["Thorn Gorge"]    = "Interface\\Icons\\INV_Jewelry_Talisman_04",
+    ["Blood Ring"]     = "Interface\\Icons\\INV_Jewelry_Talisman_05",
+    ["wsg"]            = "Interface\\Icons\\INV_Misc_Rune_07",
+    ["ab"]             = "Interface\\Icons\\INV_Jewelry_Amulet_07",
+    ["av"]             = "Interface\\Icons\\INV_Jewelry_Necklace_21",
+    ["tg"]             = "Interface\\Icons\\INV_Jewelry_Talisman_04",
+    ["br"]             = "Interface\\Icons\\INV_Jewelry_Talisman_05",
+}
+
+function AutoBG_GetBGIcon(keyOrName)
+    if not keyOrName then return nil end
+    if BG_ICONS[keyOrName] then return BG_ICONS[keyOrName] end
+    local lower = string.lower(keyOrName)
+    if string.find(lower, "warsong") or lower == "wsg" then return BG_ICONS["wsg"]
+    elseif string.find(lower, "arathi") or lower == "ab" then return BG_ICONS["ab"]
+    elseif string.find(lower, "alterac") or lower == "av" then return BG_ICONS["av"]
+    elseif string.find(lower, "thorn") or string.find(lower, "gorge") or lower == "tg" then return BG_ICONS["tg"]
+    elseif string.find(lower, "blood") or string.find(lower, "ring") or lower == "br" then return BG_ICONS["br"]
+    end
+    return nil
+end
+
+local DAILY_BG_CYCLE = {
+    [0] = "wsg",
+    [1] = "ab",
+    [2] = "br",
+    [3] = "tg",
+    [4] = "av",
+}
+local DAILY_BG_ANCHOR = 20534 -- floor(time({2026,3,22,0,0,0}) / 86400) in UTC days
+
+function AutoBG_GetDailyBGKey()
+    local serverTime = (_G.ClassicAPI and _G.ClassicAPI.GetServerTime and _G.ClassicAPI.GetServerTime()) or time()
+    local utcDay = math.floor(serverTime / 86400)
+    local diff = utcDay - DAILY_BG_ANCHOR
+    local idx = diff % 5
+    if idx < 0 then idx = idx + 5 end
+    return DAILY_BG_CYCLE[idx]
+end
+
+function AutoBG_CancelAllQueues()
+    local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
+    local cancelled = 0
+    for i = 1, maxQueues do
+        local status = GetBattlefieldStatus(i)
+        if status and status ~= "none" and status ~= "active" then
+            AcceptBattlefieldPort(i, 0)
+            cancelled = cancelled + 1
+        end
+    end
+    if cancelled > 0 then
+        AutoBG_Print("Cancelled " .. cancelled .. " active battleground queue(s).", true)
+    else
+        AutoBG_Print("No active queues found to cancel.", true)
+    end
+end
 
 local playerIsAFK = false
 
@@ -310,8 +374,22 @@ end
 -- Multi-BG Auto-Queue Engine (Zero-GC Pre-allocated Buffers)
 local isAutoQueueing = false
 local hasQueuedOnLogin = false
-local BGS_TO_QUEUE = { "Warsong Gulch", "Arathi Basin", "Alterac Valley" }
 local queueQueueBuffer = {}
+
+function AutoBG_GetSelectedBGs()
+    local list = {}
+    if AutoBG_Settings then
+        if AutoBG_Settings.AutoQueue_WSG ~= false then table.insert(list, "Warsong Gulch") end
+        if AutoBG_Settings.AutoQueue_AB ~= false then table.insert(list, "Arathi Basin") end
+        if AutoBG_Settings.AutoQueue_AV ~= false then table.insert(list, "Alterac Valley") end
+        if AutoBG_Settings.AutoQueue_TG then table.insert(list, "Thorn Gorge") end
+        if AutoBG_Settings.AutoQueue_BR then table.insert(list, "Blood Ring") end
+    end
+    if #list == 0 then
+        list = { "Warsong Gulch", "Arathi Basin", "Alterac Valley" }
+    end
+    return list
+end
 
 function AutoBG_QueueAllBGs()
     if isAutoQueueing or currentZonePVP then return end
@@ -333,9 +411,10 @@ function AutoBG_QueueAllBGs()
     table.wipe(queueQueueBuffer)
     local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
     local total = 0
+    local bgsToQueue = AutoBG_GetSelectedBGs()
 
-    for i = 1, #BGS_TO_QUEUE do
-        local bg = BGS_TO_QUEUE[i]
+    for i = 1, #bgsToQueue do
+        local bg = bgsToQueue[i]
         local alreadyQueued = false
         for q = 1, maxQueues do
             local status, mapName = GetBattlefieldStatus(q)
@@ -350,7 +429,7 @@ function AutoBG_QueueAllBGs()
     end
 
     if total == 0 then
-        AutoBG_Print("Already queued for all 3 Battlegrounds (WSG, AB, AV).")
+        AutoBG_Print("Already queued for all selected Battlegrounds.")
         return
     end
 
@@ -375,7 +454,7 @@ function AutoBG_QueueAllBGs()
             return
         end
         if idx > total then
-            isAutoQueueing = false; AutoBG_Print("Auto-Queue complete: Queued for WSG, AB, and AV!")
+            isAutoQueueing = false; AutoBG_Print("Auto-Queue complete: Queued for selected Battlegrounds!")
             return
         end
         local currentBG = queueQueueBuffer[idx]
@@ -756,6 +835,8 @@ local toggleCommands = {
     t = { key = "TestAllTimers", label = "Test Mode (All Timers)" },
     test = { key = "TestAllTimers", label = "Test Mode (All Timers)" },
     autoqueue = { key = "AutoQueueLogin", label = "Auto-Queue on Login" },
+    proj = { key = "ABProjection", label = "AB Score Projection" },
+    projection = { key = "ABProjection", label = "AB Score Projection" },
 }
 
 SLASH_AUTOBG1 = "/abg"
@@ -774,6 +855,18 @@ SlashCmdList["AUTOBG"] = function(msg)
         return
     elseif cmd == "timers" or cmd == "timer" or cmd == "fc" then
         if AutoBG_OpenOptions then AutoBG_OpenOptions("timers") end
+        return
+    elseif cmd == "aq" or cmd == "autoqueue" then
+        if arg == "cancel" or arg == "drop" then
+            AutoBG_CancelAllQueues()
+        elseif arg == "now" or arg == "join" or arg == "all" then
+            AutoBG_QueueAllBGs()
+        elseif AutoBG_OpenOptions then
+            AutoBG_OpenOptions("general")
+        end
+        return
+    elseif cmd == "cancel" or cmd == "drop" then
+        AutoBG_CancelAllQueues()
         return
     elseif cmd == "test" then
         local anyActive = (AutoBG_Targets and AutoBG_Targets.isConfig) or (AutoBG_Spy and AutoBG_Spy.isTestMode) or (AutoBG_Settings and AutoBG_Settings.TestAllTimers)
@@ -813,7 +906,8 @@ SlashCmdList["AUTOBG"] = function(msg)
             AutoBG_Print("Cannot queue: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(remaining) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
             return
         end
-        if arg == "all" or arg == "3" or arg == "bg" or arg == "bgs" then AutoBG_QueueAllBGs(); return end
+        if arg == "all" or arg == "3" or arg == "bg" or arg == "bgs" or arg == "" then AutoBG_QueueAllBGs(); return end
+        if arg == "cancel" or arg == "drop" then AutoBG_CancelAllQueues(); return end
         local target = (string.find(arg, "wsg") and "Warsong Gulch") or (string.find(arg, "ab") and "Arathi Basin") or (string.find(arg, "av") and "Alterac Valley") or (string.find(arg, "tg") and "Thorn Gorge") or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
         if target then
             if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = target end
@@ -842,7 +936,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "reset" then
         AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg targets, /abg spy, /abg q [ab|wsg|av|tg|all], /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg stealth, /abg test, /abg reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg proj, /abg targets, /abg spy, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg stealth, /abg test, /abg reset", true)
     else
         if AutoBG_OpenOptions then
             AutoBG_OpenOptions("general")

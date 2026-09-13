@@ -279,8 +279,15 @@ local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minW
             end)
             btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+            local icon = btn:CreateTexture(nil, "OVERLAY")
+            icon:SetWidth(12)
+            icon:SetHeight(12)
+            icon:SetPoint("LEFT", btn, "LEFT", 4, 0)
+            icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+            btn.icon = icon
+
             local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            fs:SetPoint("CENTER", btn, "CENTER", 0, 0)
+            fs:SetPoint("LEFT", icon, "RIGHT", 4, 0)
             btn.fs = fs
             self.activeRows[index] = btn
         end
@@ -293,7 +300,7 @@ local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minW
         for i = index, count do self.activeRows[i]:Hide() end
 
         for i = 1, index - 1 do
-            local w = self.activeRows[i].fs:GetStringWidth() + 30
+            local w = self.activeRows[i].fs:GetStringWidth() + 38
             if w > maxWidth then maxWidth = w end
         end
 
@@ -321,6 +328,90 @@ local NodeBarFrame = CreateBarTimerFrame("AutoBG_NodeFrame",    "AB Nodes",  0.9
 local AVNodeFrame  = CreateBarTimerFrame("AutoBG_AVNodeFrame",  "AV Nodes",  0.75, 0.75, 0.75,  220, -150, 8)
 local WSGFlagFrame = CreateBarTimerFrame("AutoBG_WSGFlagFrame", "WSG Flags", 0.70, 0.40, 1.00, -110, -150, 2)
 
+-- =========================================================
+-- Arathi Basin Score Projection Frame (Sleek 2-Row Dual-Column Layout)
+-- =========================================================
+local AB_PROJ_WIDTH = 156
+local AB_PROJ_HEIGHT = 38
+
+local function CreateABProjectionFrame(name)
+    local frame = CreateFrame("Button", name, UIParent)
+    frame:SetWidth(AB_PROJ_WIDTH)
+    frame:SetHeight(AB_PROJ_HEIGHT)
+    frame:SetFrameStrata("HIGH")
+    frame:EnableMouse(true)
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
+    frame:RegisterForDrag("LeftButton")
+
+    frame:SetBackdrop({
+        bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile     = true, tileSize = 16, edgeSize = 12,
+        insets   = { left = 3, right = 3, top = 3, bottom = 3 }
+    })
+    frame:SetBackdropColor(0, 0, 0, 0.65)
+    frame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
+
+    frame:SetScript("OnDragStart", function()
+        if IsShiftKeyDown() or (AutoBG_Settings and AutoBG_Settings.TestAllTimers) then
+            this:StartMoving()
+        end
+    end)
+    frame:SetScript("OnDragStop", function()
+        this:StopMovingOrSizing()
+        if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
+    end)
+    frame:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Arathi Basin Score Projection", 1, 0.82, 0)
+        GameTooltip:AddLine("Live score forecast based on base capture rates and impending flips.", 0.9, 0.9, 0.9, 1)
+        GameTooltip:AddLine("Row 1: Projected Alliance Score & Win/Loss ETA", 0.4, 0.7, 1.0)
+        GameTooltip:AddLine("Row 2: Projected Horde Score & Bases Needed to Win", 1.0, 0.4, 0.4)
+        GameTooltip:AddLine("|cFF00FF00Shift+LeftClick Drag:|r Reposition HUD overlay", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- Row 1: Alliance Row (y = +8 from center)
+    local r1Status = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    r1Status:SetPoint("LEFT", frame, "LEFT", 6, 8)
+    r1Status:SetPoint("RIGHT", frame, "RIGHT", -52, 8)
+    r1Status:SetJustifyH("RIGHT")
+    r1Status:SetText("")
+    frame.r1Status = r1Status
+
+    local r1Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    r1Score:SetPoint("RIGHT", frame, "RIGHT", -6, 8)
+    r1Score:SetWidth(44)
+    r1Score:SetJustifyH("RIGHT")
+    r1Score:SetTextColor(0.38, 0.69, 1.00) -- Alliance Blue
+    r1Score:SetText("")
+    frame.r1Score = r1Score
+
+    -- Row 2: Horde Row (y = -8 from center)
+    local r2Bases = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    r2Bases:SetPoint("LEFT", frame, "LEFT", 6, -8)
+    r2Bases:SetPoint("RIGHT", frame, "RIGHT", -52, -8)
+    r2Bases:SetJustifyH("RIGHT")
+    r2Bases:SetTextColor(1.00, 0.82, 0.00) -- Gold
+    r2Bases:SetText("")
+    frame.r2Bases = r2Bases
+
+    local r2Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    r2Score:SetPoint("RIGHT", frame, "RIGHT", -6, -8)
+    r2Score:SetWidth(44)
+    r2Score:SetJustifyH("RIGHT")
+    r2Score:SetTextColor(1.00, 0.38, 0.38) -- Horde Red
+    r2Score:SetText("")
+    frame.r2Score = r2Score
+
+    frame:Hide()
+    return frame
+end
+
+local ABProjectionFrame = CreateABProjectionFrame("AutoBG_ABProjectionFrame")
+
 function AutoBG_LoadTimerPositions()
     if AutoBG_LoadPosition then
         AutoBG_LoadPosition(QueueFrame,   "AutoBG_QueueFrame",   "TOP", -220, -100)
@@ -328,6 +419,22 @@ function AutoBG_LoadTimerPositions()
         AutoBG_LoadPosition(NodeBarFrame, "AutoBG_NodeFrame",    "TOP",  220, -100)
         AutoBG_LoadPosition(AVNodeFrame,  "AutoBG_AVNodeFrame",  "TOP",  220, -150)
         AutoBG_LoadPosition(WSGFlagFrame, "AutoBG_WSGFlagFrame", "TOP", -110, -150)
+
+        if AutoBG_Settings and AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] then
+            AutoBG_LoadPosition(ABProjectionFrame, "AutoBG_ABProjectionFrame", "TOP", -160, -25)
+            ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
+            ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
+        elseif AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
+            ABProjectionFrame:ClearAllPoints()
+            ABProjectionFrame:SetPoint("TOPRIGHT", AlwaysUpFrame1, "TOPLEFT", -6, 2)
+            ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.35)
+            ABProjectionFrame:SetBackdropBorderColor(0, 0, 0, 0)
+        else
+            ABProjectionFrame:ClearAllPoints()
+            ABProjectionFrame:SetPoint("TOP", UIParent, "TOP", -160, -25)
+            ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
+            ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
+        end
     end
 end
 
@@ -337,6 +444,20 @@ function AutoBG_ResetTimerPositions()
     NodeBarFrame:ClearAllPoints(); NodeBarFrame:SetPoint("TOP", UIParent, "TOP",  220, -100)
     AVNodeFrame:ClearAllPoints();  AVNodeFrame:SetPoint("TOP",  UIParent, "TOP",  220, -150)
     WSGFlagFrame:ClearAllPoints(); WSGFlagFrame:SetPoint("TOP", UIParent, "TOP", -110, -150)
+
+    ABProjectionFrame:ClearAllPoints()
+    if AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
+        ABProjectionFrame:SetPoint("TOPRIGHT", AlwaysUpFrame1, "TOPLEFT", -6, 2)
+        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.35)
+        ABProjectionFrame:SetBackdropBorderColor(0, 0, 0, 0)
+    else
+        ABProjectionFrame:SetPoint("TOP", UIParent, "TOP", -160, -25)
+        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
+        ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
+    end
+    if AutoBG_Settings and AutoBG_Settings.Positions then
+        AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] = nil
+    end
 end
 
 -- =========================================================
@@ -517,6 +638,236 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
 end
 
 -- =========================================================
+-- Arathi Basin Mathematical Projection Engine
+-- =========================================================
+local AB_MAX_RESOURCES = 2000
+local AB_RPS = {
+    [0] = 0,
+    [1] = 10 / 12,
+    [2] = 10 / 9,
+    [3] = 10 / 6,
+    [4] = 10 / 3,
+    [5] = 30,
+}
+
+local function GetABWorldStateInfo()
+    local res = {}
+    local bases = {}
+    local n = (GetNumWorldStateUI and GetNumWorldStateUI()) or 0
+    for i = 1, n do
+        local uiType, state, text = GetWorldStateUIInfo(i)
+        local str1 = (state and tostring(state)) or ""
+        local str2 = (text and tostring(text)) or ""
+        for _, s in ipairs({ str1, str2 }) do
+            if s ~= "" then
+                local _, _, r = string.find(s, "(%d+)%s*/%s*2000")
+                if r then
+                    table.insert(res, tonumber(r))
+                end
+                local _, _, b = string.find(s, "Bases:%s*(%d+)")
+                if b then
+                    table.insert(bases, tonumber(b))
+                end
+            end
+        end
+    end
+    return res[1], res[2], bases[1] or 0, bases[2] or 0
+end
+
+local pendingCapsBuffer = {}
+local function GetABPendingCaps()
+    table.wipe(pendingCapsBuffer)
+    local now = GetTime()
+    for node, data in pairs(timers.AB) do
+        local expire = (type(data) == "table" and data.expire) or data
+        local faction = (type(data) == "table" and data.faction) or nil
+        if expire and expire > now and faction then
+            local rem = expire - now
+            table.insert(pendingCapsBuffer, { node = node, time = rem, faction = faction })
+        end
+    end
+    table.sort(pendingCapsBuffer, function(x, y) return x.time < y.time end)
+    return pendingCapsBuffer
+end
+
+local function ProjectWithCaps(aRes, hRes, aBases, hBases, caps)
+    local t = 0
+    local a, h = aRes, hRes
+    local ab, hb = aBases or 0, hBases or 0
+
+    for idx = 1, #caps do
+        local cap = caps[idx]
+        local dt = cap.time - t
+        if dt > 0 then
+            local ar = AB_RPS[ab] or 0
+            local hr = AB_RPS[hb] or 0
+            local aPT = ar > 0 and (AB_MAX_RESOURCES - a) / ar or 999999
+            local hPT = hr > 0 and (AB_MAX_RESOURCES - h) / hr or 999999
+            if aPT <= dt or hPT <= dt then
+                local hAtAWin = math.min(AB_MAX_RESOURCES, h + hr * aPT)
+                local aAtHWin = math.min(AB_MAX_RESOURCES, a + ar * hPT)
+                return t + aPT, t + hPT, aAtHWin, hAtAWin
+            end
+            a = a + ar * dt
+            h = h + hr * dt
+        end
+        t = cap.time
+        if cap.faction == "Alliance" then
+            ab = math.min(5, ab + 1)
+            hb = math.max(0, hb - 1)
+        else
+            hb = math.min(5, hb + 1)
+            ab = math.max(0, ab - 1)
+        end
+    end
+
+    local ar = AB_RPS[ab] or 0
+    local hr = AB_RPS[hb] or 0
+    local aPT = ar > 0 and (AB_MAX_RESOURCES - a) / ar or 999999
+    local hPT = hr > 0 and (AB_MAX_RESOURCES - h) / hr or 999999
+    local hAtAWin = math.min(AB_MAX_RESOURCES, h + hr * aPT)
+    local aAtHWin = math.min(AB_MAX_RESOURCES, a + ar * hPT)
+    return t + aPT, t + hPT, aAtHWin, hAtAWin
+end
+
+local function BasesNeededToWin(aRes, hRes)
+    local faction = UnitFactionGroup("player")
+    if not faction then return nil end
+    local myRes, theirRes
+    if faction == "Alliance" then
+        myRes = aRes; theirRes = hRes
+    else
+        myRes = hRes; theirRes = aRes
+    end
+    for b = 1, 5 do
+        local myRate = AB_RPS[b] or 0
+        local theirRate = AB_RPS[5 - b] or 0
+        local myTime = myRate > 0 and (AB_MAX_RESOURCES - myRes) / myRate or 999999
+        local theirTime = theirRate > 0 and (AB_MAX_RESOURCES - theirRes) / theirRate or 999999
+        if myTime < theirTime then
+            local word = (b == 1) and "Base" or "Bases"
+            return string.format("Need %d %s", b, word)
+        end
+    end
+    return "Need 5 Bases"
+end
+
+local lastProjWinner = nil
+local function CalculateABProjection(aRes, hRes, aBases, hBases)
+    if not aRes or not hRes then return nil end
+    local aRate = AB_RPS[aBases] or 0
+    local hRate = AB_RPS[hBases] or 0
+
+    local caps = GetABPendingCaps()
+    local aTime, hTime, simAAtHWin, simHAtAWin
+    if #caps > 0 then
+        aTime, hTime, simAAtHWin, simHAtAWin = ProjectWithCaps(aRes, hRes, aBases, hBases, caps)
+    else
+        aTime = (aRate > 0) and (AB_MAX_RESOURCES - aRes) / aRate or 999999
+        hTime = (hRate > 0) and (AB_MAX_RESOURCES - hRes) / hRate or 999999
+    end
+
+    local DEAD_HEAT = 12
+    local timeDiff = aTime - hTime
+    local winner
+    if math.abs(timeDiff) > DEAD_HEAT or aTime >= 999999 or hTime >= 999999 then
+        winner = (aTime <= hTime) and "Alliance" or "Horde"
+    elseif lastProjWinner then
+        winner = lastProjWinner
+    else
+        winner = (aRes >= hRes) and "Alliance" or "Horde"
+    end
+    lastProjWinner = winner
+
+    local aFinal, hFinal, eta
+    if winner == "Alliance" then
+        aFinal = AB_MAX_RESOURCES
+        local hScore = simHAtAWin or (hRes + hRate * aTime)
+        hFinal = math.min(AB_MAX_RESOURCES, math.floor(hScore / 10) * 10)
+        eta = aTime
+    else
+        hFinal = AB_MAX_RESOURCES
+        local aScore = simAAtHWin or (aRes + aRate * hTime)
+        aFinal = math.min(AB_MAX_RESOURCES, math.floor(aScore / 10) * 10)
+        eta = hTime
+    end
+
+    local myFaction = UnitFactionGroup("player") or "Alliance"
+    local playerWins = (winner == myFaction)
+    local mins = math.floor(eta / 60)
+    local secs = math.floor(eta - mins * 60)
+    local etaStr = string.format("%s %d:%02d", (playerWins and "Win" or "Loss"), mins, secs)
+    local etaColor = playerWins and "|cFF00FF00" or "|cFFFF5555"
+
+    local basesNeeded = BasesNeededToWin(aRes, hRes) or "Need 3 Bases"
+
+    return aFinal, hFinal, etaStr, etaColor, basesNeeded
+end
+
+-- Diff cache for AB Projection strings to guarantee zero layout thrashing (Rule C15 / AP-31)
+local lastR1Status, lastR1Score = "", ""
+local lastR2Bases, lastR2Score = "", ""
+
+local function UpdateABProjection(isTestAll, isAB)
+    if not AutoBG_Settings or AutoBG_Settings.ABProjection == false then
+        if ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
+        return
+    end
+
+    if isTestAll then
+        local r1Stat = "|cFF00FF00Win 03:45|r"
+        local r1Sc   = "1450"
+        local r2Base = "|cFFFFD100Need 3 Bases|r"
+        local r2Sc   = "1280"
+
+        if lastR1Status ~= r1Stat then ABProjectionFrame.r1Status:SetText(r1Stat); lastR1Status = r1Stat end
+        if lastR1Score ~= r1Sc then ABProjectionFrame.r1Score:SetText(r1Sc); lastR1Score = r1Sc end
+        if lastR2Bases ~= r2Base then ABProjectionFrame.r2Bases:SetText(r2Base); lastR2Bases = r2Base end
+        if lastR2Score ~= r2Sc then ABProjectionFrame.r2Score:SetText(r2Sc); lastR2Score = r2Sc end
+
+        if not ABProjectionFrame:IsShown() then
+            AutoBG_LoadTimerPositions()
+            ABProjectionFrame:Show()
+        end
+        return
+    end
+
+    if not isAB then
+        if ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
+        lastR1Status, lastR1Score = "", ""
+        lastR2Bases, lastR2Score = "", ""
+        return
+    end
+
+    local aRes, hRes, aBases, hBases = GetABWorldStateInfo()
+    if not aRes or not hRes then
+        if ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
+        return
+    end
+
+    local aFinal, hFinal, etaStr, etaColor, basesNeeded = CalculateABProjection(aRes, hRes, aBases, hBases)
+    if not aFinal then
+        if ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
+        return
+    end
+
+    local r1Stat = (etaColor or "|cFFFFFFFF") .. (etaStr or "") .. "|r"
+    local r1Sc   = tostring(aFinal)
+    local r2Base = "|cFFFFD100" .. (basesNeeded or "") .. "|r"
+    local r2Sc   = tostring(hFinal)
+
+    if lastR1Status ~= r1Stat then ABProjectionFrame.r1Status:SetText(r1Stat); lastR1Status = r1Stat end
+    if lastR1Score ~= r1Sc then ABProjectionFrame.r1Score:SetText(r1Sc); lastR1Score = r1Sc end
+    if lastR2Bases ~= r2Base then ABProjectionFrame.r2Bases:SetText(r2Base); lastR2Bases = r2Base end
+    if lastR2Score ~= r2Sc then ABProjectionFrame.r2Score:SetText(r2Sc); lastR2Score = r2Sc end
+
+    if not ABProjectionFrame:IsShown() then
+        AutoBG_LoadTimerPositions()
+        ABProjectionFrame:Show()
+    end
+end
+
+-- =========================================================
 -- Main 10 Hz Update Ticker
 -- =========================================================
 local function UpdateAllTimers()
@@ -528,9 +879,13 @@ local function UpdateAllTimers()
     local isAV        = (string.find(lowerZone, "alterac") ~= nil)
     local isWSG       = (string.find(lowerZone, "warsong") ~= nil)
     local now         = GetTime()
+    local isTestAll   = AutoBG_Settings.TestAllTimers
 
     -- 1. AB Nodes: proportional time-color bars (60s cap)
     RenderCountdownBars(NodeBarFrame, timers.AB, AutoBG_Settings.ABTimers, isAB, 60, AB_TEST_DATA, "time")
+
+    -- 1b. AB Projected Score Overlay (Aligned 2-row dual-column HUD)
+    UpdateABProjection(isTestAll, isAB)
 
     -- 2. AV Nodes: proportional time-color bars (300s cap)
     RenderCountdownBars(AVNodeFrame, timers.AV, AutoBG_Settings.AVTimers, isAV, 300, AV_TEST_DATA, "time")
@@ -541,7 +896,6 @@ local function UpdateAllTimers()
     -- 4. Respawn Timer (Spirit Healer 30s Wave)
     local inInstance, instanceType = IsInInstance()
     local inPVP     = (inInstance and instanceType == "pvp")
-    local isTestAll = AutoBG_Settings.TestAllTimers
 
     if inPVP and AutoBG_Settings.RessTimer then
         local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
@@ -577,16 +931,33 @@ local function UpdateAllTimers()
         RespawnFrame:Hide()
     end
 
-    -- 5. Queue Timers (Original Blizzard format numbers)
+    -- 5. Queue Timers (Original Blizzard format numbers + Visual Icons)
     local qIndex = 1
     if AutoBG_Settings.QueueTimers then
         if isTestAll then
             local r1 = QueueFrame:GetOrCreateRow(1)
+            if AutoBG_GetBGIcon then
+                r1.icon:SetTexture(AutoBG_GetBGIcon("wsg"))
+                r1.icon:Show()
+                r1.fs:SetPoint("LEFT", r1.icon, "RIGHT", 4, 0)
+            else
+                r1.icon:Hide()
+                r1.fs:SetPoint("CENTER", r1, "CENTER", 0, 0)
+            end
             r1.fs:SetText("WSG: 1:15")
             r1.announceText = "WSG Queue: 1:15"
             r1.estText = nil
             r1:Show()
+
             local r2 = QueueFrame:GetOrCreateRow(2)
+            if AutoBG_GetBGIcon then
+                r2.icon:SetTexture(AutoBG_GetBGIcon("ab"))
+                r2.icon:Show()
+                r2.fs:SetPoint("LEFT", r2.icon, "RIGHT", 4, 0)
+            else
+                r2.icon:Hide()
+                r2.fs:SetPoint("CENTER", r2, "CENTER", 0, 0)
+            end
             r2.fs:SetText("AB: 4:32")
             r2.announceText = "AB Queue: 4:32"
             r2.estText = nil
@@ -603,6 +974,15 @@ local function UpdateAllTimers()
                     local row      = QueueFrame:GetOrCreateRow(qIndex)
                     local abbrev   = (mapName == "Warsong Gulch" and "WSG") or (mapName == "Arathi Basin" and "AB") or
                                      (mapName == "Alterac Valley" and "AV")  or (mapName == "Thorn Gorge"  and "TG") or mapName or "BG"
+                    local bgIcon   = (AutoBG_GetBGIcon and AutoBG_GetBGIcon(mapName))
+                    if bgIcon then
+                        row.icon:SetTexture(bgIcon)
+                        row.icon:Show()
+                        row.fs:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
+                    else
+                        row.icon:Hide()
+                        row.fs:SetPoint("CENTER", row, "CENTER", 0, 0)
+                    end
                     row.fs:SetText(abbrev .. ": " .. FormatQueueTime(sec))
                     row.announceText = abbrev .. " Queue: " .. FormatQueueTime(sec)
                     if estTime > 0 then
@@ -744,6 +1124,9 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         table.wipe(timers.AV)
         table.wipe(timers.WSG)
         table.wipe(timers.Global)
+        lastR1Status, lastR1Score = "", ""
+        lastR2Bases, lastR2Score = "", ""
+        lastProjWinner = nil
         spiritHealerSyncTime = GetTime()
         spiritHealerSynced   = false
     elseif ev == "PLAYER_UNGHOST" or ev == "PLAYER_ALIVE" then
