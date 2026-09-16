@@ -860,7 +860,7 @@ function Targets:CreateFrames()
 end
 
 function Targets:Frame_SetupPosition(frameName)
-	local frame = _G[frameName]
+	local frame = _G[frameName] or (Targets and Targets.MainFrame)
 	if not frame then return end
 
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
@@ -870,32 +870,27 @@ function Targets:Frame_SetupPosition(frameName)
 		keyPrefix = frameName .. size
 	end
 
-	local x = o and o.pos and o.pos[keyPrefix .. "_posX"]
-	local y = o and o.pos and o.pos[keyPrefix .. "_posY"]
-	frame:ClearAllPoints()
-	if x and y then
-		frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
+	if AutoBG_LoadPosition then
+		AutoBG_LoadPosition(frame, keyPrefix, "CENTER", 300, 50, "CENTER")
 	else
+		frame:ClearAllPoints()
 		frame:SetPoint("CENTER", UIParent, "CENTER", 300, 50)
 	end
 end
 
 function Targets:Frame_SavePosition(frameName)
-	local frame = _G[frameName]
+	local frame = _G[frameName] or (Targets and Targets.MainFrame)
 	if not frame then return end
 
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	if not o then return end
-	o.pos = o.pos or {}
 	local keyPrefix = frameName
-	if frameName == "AutoBG_TargetsMainFrame" and o.IndependentPositioning and o.IndependentPositioning[currentSize] then
+	if frameName == "AutoBG_TargetsMainFrame" and o and o.IndependentPositioning and o.IndependentPositioning[currentSize] then
 		keyPrefix = frameName .. currentSize
 	end
 
-	o.pos[keyPrefix .. "_posX"] = frame:GetLeft()
-	o.pos[keyPrefix .. "_posY"] = frame:GetTop()
-	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", o.pos[keyPrefix .. "_posX"], o.pos[keyPrefix .. "_posY"])
+	if AutoBG_SavePosition then
+		AutoBG_SavePosition(frame, keyPrefix)
+	end
 end
 
 function Targets:SetupButtonLayout(size)
@@ -1266,13 +1261,37 @@ end
 
 function Targets:ResetPosition(bracket)
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	if o and o.pos then
-		local frameName = "AutoBG_TargetsMainFrame"
-		o.pos[frameName .. "_posX"] = nil
-		o.pos[frameName .. "_posY"] = nil
-		for _, sz in ipairs(BRACKETS) do
-			o.pos[frameName .. sz .. "_posX"] = nil
-			o.pos[frameName .. sz .. "_posY"] = nil
+	local frameName = "AutoBG_TargetsMainFrame"
+	local positions = AutoBG_Settings and AutoBG_Settings.Positions
+
+	if bracket then
+		local key = frameName .. bracket
+		if positions then positions[key] = nil end
+		if o and o.pos then
+			o.pos[key .. "_posX"] = nil
+			o.pos[key .. "_posY"] = nil
+		end
+		if not (o and o.IndependentPositioning and o.IndependentPositioning[bracket]) then
+			if positions then positions[frameName] = nil end
+			if o and o.pos then
+				o.pos[frameName .. "_posX"] = nil
+				o.pos[frameName .. "_posY"] = nil
+			end
+		end
+	else
+		if positions then
+			positions[frameName] = nil
+			for _, sz in ipairs(BRACKETS) do
+				positions[frameName .. sz] = nil
+			end
+		end
+		if o and o.pos then
+			o.pos[frameName .. "_posX"] = nil
+			o.pos[frameName .. "_posY"] = nil
+			for _, sz in ipairs(BRACKETS) do
+				o.pos[frameName .. sz .. "_posX"] = nil
+				o.pos[frameName .. sz .. "_posY"] = nil
+			end
 		end
 	end
 	Targets:Frame_SetupPosition("AutoBG_TargetsMainFrame")

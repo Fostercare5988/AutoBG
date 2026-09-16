@@ -773,35 +773,18 @@ end
 -- -------------------------------------------------------------------------- --
 function Spy:ApplyAlertPosition()
 	if not Spy.AlertWindow then return end
-	local opt = GetSpySettings()
-	local x = opt and opt.alertPosX
-	local y = opt and opt.alertPosY
-
-	if not (x and y) and AutoBG_Settings and AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_SpyAlertWindow"] then
-		x = AutoBG_Settings.Positions["AutoBG_SpyAlertWindow"].x
-		y = AutoBG_Settings.Positions["AutoBG_SpyAlertWindow"].y
-	end
-
-	Spy.AlertWindow:ClearAllPoints()
-	if x and y then
-		Spy.AlertWindow:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
+	if AutoBG_LoadPosition then
+		AutoBG_LoadPosition(Spy.AlertWindow, "AutoBG_SpyAlertWindow", "TOP", 0, -140, "TOP")
 	else
+		Spy.AlertWindow:ClearAllPoints()
 		Spy.AlertWindow:SetPoint("TOP", UIParent, "TOP", 0, -140)
 	end
 end
 
 function Spy:SaveAlertPosition()
 	if not Spy.AlertWindow then return end
-	local opt = GetSpySettings()
-	opt.alertPosX = Spy.AlertWindow:GetLeft()
-	opt.alertPosY = Spy.AlertWindow:GetTop()
-
-	if AutoBG_Settings then
-		AutoBG_Settings.Positions = AutoBG_Settings.Positions or {}
-		AutoBG_Settings.Positions["AutoBG_SpyAlertWindow"] = {
-			x = opt.alertPosX,
-			y = opt.alertPosY,
-		}
+	if AutoBG_SavePosition then
+		AutoBG_SavePosition(Spy.AlertWindow, "AutoBG_SpyAlertWindow")
 	end
 end
 
@@ -884,42 +867,35 @@ end
 function Spy:ApplyPosition()
 	Spy:ApplyAlertPosition()
 	if not Spy.Frame then return end
-	local opt = GetSpySettings()
-	local x = opt and opt.posX
-	local y = opt and opt.posY
-
-	if not (x and y) and AutoBG_Settings and AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_SpyFrame"] then
-		x = AutoBG_Settings.Positions["AutoBG_SpyFrame"].x
-		y = AutoBG_Settings.Positions["AutoBG_SpyFrame"].y
-	end
-
-	Spy.Frame:ClearAllPoints()
-	if x and y then
-		Spy.Frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
+	if AutoBG_LoadPosition then
+		AutoBG_LoadPosition(Spy.Frame, "AutoBG_SpyFrame", "TOPLEFT", 100, -200, "TOPLEFT")
 	else
+		Spy.Frame:ClearAllPoints()
 		Spy.Frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 100, -200)
 	end
 end
 
 function Spy:SavePosition()
 	if not Spy.Frame then return end
-	local opt = GetSpySettings()
-	opt.posX = Spy.Frame:GetLeft()
-	opt.posY = Spy.Frame:GetTop()
-
-	if AutoBG_Settings and AutoBG_Settings.Targets then
-		AutoBG_Settings.Targets.pos = AutoBG_Settings.Targets.pos or {}
-		AutoBG_Settings.Targets.pos["AutoBG_SpyFrame_posX"] = opt.posX
-		AutoBG_Settings.Targets.pos["AutoBG_SpyFrame_posY"] = opt.posY
+	if AutoBG_SavePosition then
+		AutoBG_SavePosition(Spy.Frame, "AutoBG_SpyFrame")
 	end
 end
 
 function Spy:ResetPosition()
 	local opt = GetSpySettings()
-	opt.posX = nil
-	opt.posY = nil
-	if AutoBG_Settings and AutoBG_Settings.Positions then
-		AutoBG_Settings.Positions["AutoBG_SpyFrame"] = nil
+	if opt then
+		opt.posX = nil
+		opt.posY = nil
+	end
+	if AutoBG_Settings then
+		if AutoBG_Settings.Positions then
+			AutoBG_Settings.Positions["AutoBG_SpyFrame"] = nil
+		end
+		if AutoBG_Settings.Targets and AutoBG_Settings.Targets.pos then
+			AutoBG_Settings.Targets.pos["AutoBG_SpyFrame_posX"] = nil
+			AutoBG_Settings.Targets.pos["AutoBG_SpyFrame_posY"] = nil
+		end
 	end
 	Spy:ResetAlertPosition()
 	Spy:ApplyPosition()

@@ -507,6 +507,15 @@ function AutoBG_LoadTimerPositions()
 end
 
 function AutoBG_ResetTimerPositions()
+    if AutoBG_Settings and AutoBG_Settings.Positions then
+        AutoBG_Settings.Positions["AutoBG_QueueFrame"] = nil
+        AutoBG_Settings.Positions["AutoBG_RespawnFrame"] = nil
+        AutoBG_Settings.Positions["AutoBG_NodeFrame"] = nil
+        AutoBG_Settings.Positions["AutoBG_AVNodeFrame"] = nil
+        AutoBG_Settings.Positions["AutoBG_WSGFlagFrame"] = nil
+        AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] = nil
+    end
+
     QueueFrame:ClearAllPoints();   QueueFrame:SetPoint("TOP",   UIParent, "TOP", -220, -100) -- octowow-ignore: AP-31
     RespawnFrame:ClearAllPoints(); RespawnFrame:SetPoint("TOP", UIParent, "TOP",    0, -100) -- octowow-ignore: AP-31
     NodeBarFrame:ClearAllPoints(); NodeBarFrame:SetPoint("TOP", UIParent, "TOP",  220, -100) -- octowow-ignore: AP-31
@@ -522,9 +531,6 @@ function AutoBG_ResetTimerPositions()
         ABProjectionFrame:SetPoint("TOP", UIParent, "TOP", -160, -25)
         ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
         ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
-    end
-    if AutoBG_Settings and AutoBG_Settings.Positions then
-        AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] = nil
     end
 end
 

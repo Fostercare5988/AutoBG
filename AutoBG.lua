@@ -37,21 +37,111 @@ local function UpdateZoneCache()
 end
 
 -- Frame Position Helpers
+-- Frame Position Helpers & Migration (Finding 8)
 function AutoBG_SavePosition(frame, name)
-    if not AutoBG_Settings then return end
+    if not frame or not name or not AutoBG_Settings then return end
     AutoBG_Settings.Positions = AutoBG_Settings.Positions or {}
     local point, _, relPoint, x, y = frame:GetPoint()
-    AutoBG_Settings.Positions[name] = { point = point, relPoint = relPoint, x = x, y = y }
+    if not point then
+        point = "TOPLEFT"
+        relPoint = "BOTTOMLEFT"
+        x = frame:GetLeft()
+        y = frame:GetTop()
+    end
+    if point and x and y then
+        AutoBG_Settings.Positions[name] = { point = point, relPoint = relPoint or point, x = x, y = y }
+    end
 end
 
-function AutoBG_LoadPosition(frame, name, defaultPoint, defaultX, defaultY)
+function AutoBG_LoadPosition(frame, name, defaultPoint, defaultX, defaultY, defaultRelPoint)
+    if not frame then return end
+    defaultPoint = defaultPoint or "CENTER"
+    defaultRelPoint = defaultRelPoint or defaultPoint
     if AutoBG_Settings and AutoBG_Settings.Positions and AutoBG_Settings.Positions[name] then
         local pos = AutoBG_Settings.Positions[name]
         frame:ClearAllPoints()
-        frame:SetPoint(pos.point or defaultPoint or "CENTER", UIParent, pos.relPoint or defaultPoint or "CENTER", pos.x or defaultX, pos.y or defaultY)
+        frame:SetPoint(pos.point or defaultPoint, UIParent, pos.relPoint or defaultRelPoint, pos.x or defaultX, pos.y or defaultY)
     else
         frame:ClearAllPoints()
-        frame:SetPoint(defaultPoint or "CENTER", UIParent, defaultPoint or "CENTER", defaultX, defaultY)
+        frame:SetPoint(defaultPoint, UIParent, defaultRelPoint, defaultX, defaultY)
+    end
+end
+
+function AutoBG_MigratePositions()
+    if not AutoBG_Settings then return end
+    AutoBG_Settings.Positions = AutoBG_Settings.Positions or {}
+    local positions = AutoBG_Settings.Positions
+
+    -- 1. Migrate Targets positions from AutoBG_Settings.Targets.pos
+    local tPos = AutoBG_Settings.Targets and AutoBG_Settings.Targets.pos
+    if tPos and type(tPos) == "table" then
+        local targetKeys = {
+            "AutoBG_TargetsMainFrame",
+            "AutoBG_TargetsMainFrame10",
+            "AutoBG_TargetsMainFrame15",
+            "AutoBG_TargetsMainFrame40",
+        }
+        for _, key in ipairs(targetKeys) do
+            local px = tPos[key .. "_posX"]
+            local py = tPos[key .. "_posY"]
+            if px and py then
+                if not positions[key] then
+                    positions[key] = { point = "TOPLEFT", relPoint = "BOTTOMLEFT", x = px, y = py }
+                end
+                tPos[key .. "_posX"] = nil
+                tPos[key .. "_posY"] = nil
+            end
+        end
+
+        -- Clean up cross-polluted Spy keys inside Targets.pos
+        if tPos["AutoBG_SpyFrame_posX"] and tPos["AutoBG_SpyFrame_posY"] then
+            if not positions["AutoBG_SpyFrame"] then
+                positions["AutoBG_SpyFrame"] = {
+                    point = "TOPLEFT",
+                    relPoint = "BOTTOMLEFT",
+                    x = tPos["AutoBG_SpyFrame_posX"],
+                    y = tPos["AutoBG_SpyFrame_posY"],
+                }
+            end
+            tPos["AutoBG_SpyFrame_posX"] = nil
+            tPos["AutoBG_SpyFrame_posY"] = nil
+        end
+    end
+
+    -- 2. Migrate Spy positions from AutoBG_Settings.Spy
+    local spyOpt = AutoBG_Settings.Spy
+    if spyOpt and type(spyOpt) == "table" then
+        if spyOpt.posX and spyOpt.posY then
+            if not positions["AutoBG_SpyFrame"] then
+                positions["AutoBG_SpyFrame"] = {
+                    point = "TOPLEFT",
+                    relPoint = "BOTTOMLEFT",
+                    x = spyOpt.posX,
+                    y = spyOpt.posY,
+                }
+            end
+            spyOpt.posX = nil
+            spyOpt.posY = nil
+        end
+
+        if spyOpt.alertPosX and spyOpt.alertPosY then
+            if not positions["AutoBG_SpyAlertWindow"] then
+                positions["AutoBG_SpyAlertWindow"] = {
+                    point = "TOPLEFT",
+                    relPoint = "BOTTOMLEFT",
+                    x = spyOpt.alertPosX,
+                    y = spyOpt.alertPosY,
+                }
+            end
+            spyOpt.alertPosX = nil
+            spyOpt.alertPosY = nil
+        end
+    end
+
+    -- 3. Standardize existing Spy alert entries lacking point/relPoint
+    if positions["AutoBG_SpyAlertWindow"] and (not positions["AutoBG_SpyAlertWindow"].point or not positions["AutoBG_SpyAlertWindow"].relPoint) then
+        positions["AutoBG_SpyAlertWindow"].point = positions["AutoBG_SpyAlertWindow"].point or "TOPLEFT"
+        positions["AutoBG_SpyAlertWindow"].relPoint = positions["AutoBG_SpyAlertWindow"].relPoint or "BOTTOMLEFT"
     end
 end
 
@@ -621,6 +711,8 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 Scale = 1.0,
             }
         end
+
+        AutoBG_MigratePositions()
 
         UpdateZoneCache()
         AutoBG_Print("Loaded natively for ClassicAPI, SuperWoW 2.2+, NamPower, UnitXP SP3, DXVK. Type |cFFFFFF00/abg|r or |cFFFFFF00/bgt|r for options.", true)

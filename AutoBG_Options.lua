@@ -1007,6 +1007,15 @@ btnResetAll:SetText("Reset Positions")
 btnResetAll:SetScript("OnClick", function()
 	if AutoBG_Settings then
 		AutoBG_Settings.Positions = {}
+		if AutoBG_Settings.Targets and AutoBG_Settings.Targets.pos then
+			AutoBG_Settings.Targets.pos = {}
+		end
+		if AutoBG_Settings.Spy then
+			AutoBG_Settings.Spy.posX = nil
+			AutoBG_Settings.Spy.posY = nil
+			AutoBG_Settings.Spy.alertPosX = nil
+			AutoBG_Settings.Spy.alertPosY = nil
+		end
 	end
 	if AutoBG_ResetTimerPositions then AutoBG_ResetTimerPositions() end
 	if AutoBG_ResetFCPositions then AutoBG_ResetFCPositions() end
