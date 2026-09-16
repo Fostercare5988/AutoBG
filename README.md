@@ -22,7 +22,7 @@ AutoBG is engineered around strict low-level system integration:
 | :--- | :--- | :--- |
 | **ClassicAPI** | `v1.15.8+` | C++ hardware timers (`C_Timer.After`), modern linear $O(n)$ slot-batching aura queries (`C_UnitAuras.GetAuraSlots` / `GetAuraDataBySlot`), native `hooksecurefunc`, and source-rewritten Lua 5.1 syntax. |
 | **SuperWoW** | `v2.2+` | Direct memory state access, exact-name targeting fallback (`TargetByName(name, true)`), direct GUID targeting (`TargetUnit(guid)`), and native hover state tracking (`SetMouseoverUnit`). |
-| **UnitXP** | `SP3` (Optional) | High-precision raw 3D Euclidean distance calculations (`UnitXP("distance", unit)`), line-of-sight tracking, and OS taskbar alert notifications (`FlashClientIcon`). |
+| **UnitXP** | `SP3` (Optional, but recommended) | High-precision raw 3D Euclidean distance calculations (`UnitXP("distance", unit)`), line-of-sight tracking, and OS taskbar alert notifications (`FlashClientIcon`). |
 
 ### Elimination of 2006 Legacy Techniques
 - **Zero OnUpdate Polling**: Frame-based `OnUpdate` polling loops are eradicated; all periodic tasks run on C++ hardware tickers at optimal intervals (6.6 Hz for FC tracking, 10 Hz for objective timers).
