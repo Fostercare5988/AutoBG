@@ -1041,6 +1041,32 @@ function Spy:RenderRows()
 	Spy.Frame:Show()
 end
 
+function Spy:UpdateTimeText()
+	if not Spy.Frame or not Spy.Frame:IsShown() then return end
+
+	local opt = GetSpySettings()
+	if not opt or not opt.Enabled or (Targets and Targets.activeBG) then
+		Spy.Frame:Hide()
+		return
+	end
+
+	local now = GetTime()
+	local maxRows = math.min(MAX_SPY_ROWS, opt.MaxRows or 5)
+	local count = Spy.isTestMode and 3 or activeEnemyCount
+	local visibleCount = math.min(count, maxRows)
+
+	for i = 1, visibleCount do
+		local row = Spy.Frame.rows[i]
+		local data = trackedEnemies[i]
+		if row and row:IsShown() and data and data.lastSeen then
+			local newText = FormatElapsedTime(data.lastSeen, now)
+			if row.TimeText:GetText() ~= newText then
+				row.TimeText:SetText(newText)
+			end
+		end
+	end
+end
+
 -- -------------------------------------------------------------------------- --
 -- Periodic Purge Ticker (Hardware C_Timer.NewTicker, 1.0s cadence)           --
 -- -------------------------------------------------------------------------- --
@@ -1092,9 +1118,10 @@ local function OnSpyTick()
 		for k = 1, activeEnemyCount do
 			nameToTrackIndex[trackedEnemies[k].name] = k
 		end
+		Spy:RenderRows()
+	else
+		Spy:UpdateTimeText()
 	end
-
-	Spy:RenderRows()
 end
 
 if C_Timer and C_Timer.NewTicker then

@@ -13,6 +13,16 @@ end
 local carrierAlliance = nil
 local carrierHorde = nil
 
+-- Cached Zone State
+local cachedZone = ""
+local isWSG = false
+
+local function UpdateZoneCache()
+    cachedZone = string.lower((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
+    isWSG = (string.find(cachedZone, "warsong") ~= nil)
+end
+UpdateZoneCache()
+
 -- Pre-allocated static Unit IDs (Part D2)
 local SCAN_UNITS = { "target", "mouseover", "focus", "focustarget", "targettarget", "player" }
 local scanCount = #SCAN_UNITS
@@ -193,21 +203,32 @@ EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_ALLIANCE")
 EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+EventFrame:RegisterEvent("ZONE_CHANGED")
+EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 
 EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     local ev = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
     local msg = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
-    local zone = string.lower((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
 
-    if ev == "PLAYER_ENTERING_WORLD" then
-        AutoBG_LoadFCPositions()
-        carrierAlliance = nil; carrierHorde = nil
-        UpdateFCButton(AllianceFC, nil); UpdateFCButton(HordeFC, nil)
-        NotifyCarrierChanged()
+    if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
+        UpdateZoneCache()
+        if not isWSG then
+            carrierAlliance = nil; carrierHorde = nil
+            UpdateFCButton(AllianceFC, nil); UpdateFCButton(HordeFC, nil)
+            NotifyCarrierChanged()
+            if AllianceFC:IsShown() then AllianceFC:Hide() end
+            if HordeFC:IsShown() then HordeFC:Hide() end
+        end
+        if ev == "PLAYER_ENTERING_WORLD" then
+            AutoBG_LoadFCPositions()
+            carrierAlliance = nil; carrierHorde = nil
+            UpdateFCButton(AllianceFC, nil); UpdateFCButton(HordeFC, nil)
+            NotifyCarrierChanged()
+        end
         return
     end
 
-    if not string.find(zone, "warsong") or not msg then return end
+    if not isWSG or not msg then return end
 
     -- Horde / Warsong Flag picked up by an Alliance player -> Alliance FC!
     local _, _, h_pick = string.find(msg, "[Hh]orde [Ff]lag was picked up by ([^!%.]+)")
@@ -395,8 +416,6 @@ local function ScanFlagCarriers()
         return
     end
 
-    local zone = string.lower((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
-    local isWSG = (string.find(zone, "warsong") ~= nil)
     local isTestAll = AutoBG_Settings.TestAllTimers
 
     if not isTestAll and not isWSG then

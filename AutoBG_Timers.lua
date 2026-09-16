@@ -14,6 +14,20 @@ local timers = { AB = {}, AV = {}, WSG = {}, Global = {} }
 local spiritHealerSyncTime = 0
 local spiritHealerSynced = false
 
+-- Cached Zone & Instance State
+local cachedZone = ""
+local isAB, isAV, isWSG, inPVP = false, false, false, false
+
+local function UpdateZoneCache()
+    cachedZone = string.lower((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
+    isAB  = (string.find(cachedZone, "arathi")  ~= nil)
+    isAV  = (string.find(cachedZone, "alterac") ~= nil)
+    isWSG = (string.find(cachedZone, "warsong") ~= nil)
+    local inInstance, instanceType = IsInInstance()
+    inPVP = (inInstance and instanceType == "pvp")
+end
+UpdateZoneCache()
+
 -- Pre-allocated static sort buffer (Section 10 - Bounded Array Rule)
 local activeSortBuffer = {}
 for i = 1, 30 do activeSortBuffer[i] = { name = "", expire = 0, faction = nil } end
@@ -715,27 +729,37 @@ local AB_RPS = {
 }
 
 local function GetABWorldStateInfo()
-    local res = {}
-    local bases = {}
+    local aRes, hRes, aBases, hBases
     local n = (GetNumWorldStateUI and GetNumWorldStateUI()) or 0
     for i = 1, n do
         local uiType, state, text = GetWorldStateUIInfo(i)
         local str1 = (state and tostring(state)) or ""
         local str2 = (text and tostring(text)) or ""
-        for _, s in ipairs({ str1, str2 }) do
-            if s ~= "" then
-                local _, _, r = string.find(s, "(%d+)%s*/%s*2000")
-                if r then
-                    table.insert(res, tonumber(r))
-                end
-                local _, _, b = string.find(s, "Bases:%s*(%d+)")
-                if b then
-                    table.insert(bases, tonumber(b))
-                end
+        local itemScore, itemBases
+        if str1 ~= "" then
+            local _, _, r = string.find(str1, "(%d+)%s*/%s*2000")
+            if r then itemScore = tonumber(r) end
+            local _, _, b = string.find(str1, "Bases:%s*(%d+)")
+            if b then itemBases = tonumber(b) end
+        end
+        if (not itemScore or not itemBases) and str2 ~= "" then
+            if not itemScore then
+                local _, _, r = string.find(str2, "(%d+)%s*/%s*2000")
+                if r then itemScore = tonumber(r) end
+            end
+            if not itemBases then
+                local _, _, b = string.find(str2, "Bases:%s*(%d+)")
+                if b then itemBases = tonumber(b) end
             end
         end
+        if itemScore then
+            if not aRes then aRes = itemScore else hRes = itemScore end
+        end
+        if itemBases then
+            if not aBases then aBases = itemBases else hBases = itemBases end
+        end
     end
-    return res[1], res[2], bases[1] or 0, bases[2] or 0
+    return aRes, hRes, aBases or 0, hBases or 0
 end
 
 local pendingCapsBuffer = {}
@@ -937,11 +961,6 @@ end
 local function UpdateAllTimers()
     if not AutoBG_Settings then return end
 
-    local currentZone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
-    local lowerZone   = string.lower(currentZone)
-    local isAB        = (string.find(lowerZone, "arathi")  ~= nil)
-    local isAV        = (string.find(lowerZone, "alterac") ~= nil)
-    local isWSG       = (string.find(lowerZone, "warsong") ~= nil)
     local now         = GetTime()
     local isTestAll   = AutoBG_Settings.TestAllTimers
 
@@ -958,9 +977,6 @@ local function UpdateAllTimers()
     RenderCountdownBars(WSGFlagFrame, timers.WSG, AutoBG_Settings.WSGTimers, isWSG, 23, WSG_TEST_DATA, "faction")
 
     -- 4. Respawn Timer (Spirit Healer 30s Wave)
-    local inInstance, instanceType = IsInInstance()
-    local inPVP     = (inInstance and instanceType == "pvp")
-
     if inPVP and AutoBG_Settings.RessTimer then
         local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
         if healerTime > 0 then
@@ -1121,12 +1137,11 @@ end
 
 local function ParseCombatMessage(msg, ev)
     if not AutoBG_Settings or not msg then return end
-    local zone  = string.lower((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
     local lower = string.lower(msg)
     local faction = GetFactionFromMessage(msg, ev)
 
     -- 1. AB Nodes (60s)
-    if AutoBG_Settings.ABTimers and string.find(zone, "arathi") then
+    if AutoBG_Settings.ABTimers and isAB then
         local node = MatchNodeName(msg, AB_NODES)
         if node then
             if string.find(lower, "claims") or string.find(lower, "assaulted") or string.find(lower, "claimed") then
@@ -1138,7 +1153,7 @@ local function ParseCombatMessage(msg, ev)
     end
 
     -- 2. AV Nodes (300s)
-    if AutoBG_Settings.AVTimers and string.find(zone, "alterac") then
+    if AutoBG_Settings.AVTimers and isAV then
         local node = MatchNodeName(msg, AV_NODES)
         if node then
             if string.find(lower, "claims") or string.find(lower, "assaulted") or string.find(lower, "under attack") then
@@ -1159,7 +1174,7 @@ local function ParseCombatMessage(msg, ev)
     end
 
     -- 4. WSG Flag Respawns (23s)
-    if AutoBG_Settings.WSGTimers and string.find(zone, "warsong") then
+    if AutoBG_Settings.WSGTimers and isWSG then
         if     string.find(lower, "captured the alliance flag") then timers.WSG["Alliance Flag"] = GetTime() + 23
         elseif string.find(lower, "captured the horde flag")    then timers.WSG["Horde Flag"]    = GetTime() + 23
         end
@@ -1178,24 +1193,41 @@ EventFrame:RegisterEvent("CHAT_MSG_MONSTER_YELL")
 EventFrame:RegisterEvent("PLAYER_UNGHOST")
 EventFrame:RegisterEvent("PLAYER_ALIVE")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+EventFrame:RegisterEvent("ZONE_CHANGED")
+EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 
 EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     local ev  = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
     local msg = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
-    if ev == "PLAYER_ENTERING_WORLD" then
-        AutoBG_LoadTimerPositions()
-        table.wipe(timers.AB)
-        table.wipe(timers.AV)
-        table.wipe(timers.WSG)
-        table.wipe(timers.Global)
-        lastR1Status, lastR1Score = "", ""
-        lastR2Bases, lastR2Score = "", ""
-        lastProjWinner = nil
-        spiritHealerSyncTime = GetTime()
-        spiritHealerSynced   = false
+    if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
+        UpdateZoneCache()
+        if not isAB then
+            table.wipe(timers.AB)
+            if NodeBarFrame and NodeBarFrame:IsShown() then NodeBarFrame:Hide() end
+            if ABProjectionFrame and ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
+        end
+        if not isAV then
+            table.wipe(timers.AV)
+            if AVNodeFrame and AVNodeFrame:IsShown() then AVNodeFrame:Hide() end
+        end
+        if not isWSG then
+            table.wipe(timers.WSG)
+            if WSGFlagFrame and WSGFlagFrame:IsShown() then WSGFlagFrame:Hide() end
+        end
+        if not inPVP then
+            if RessFrame and RessFrame:IsShown() then RessFrame:Hide() end
+        end
+        if ev == "PLAYER_ENTERING_WORLD" then
+            AutoBG_LoadTimerPositions()
+            table.wipe(timers.Global)
+            lastR1Status, lastR1Score = "", ""
+            lastR2Bases, lastR2Score = "", ""
+            lastProjWinner = nil
+            spiritHealerSyncTime = GetTime()
+            spiritHealerSynced   = false
+        end
     elseif ev == "PLAYER_UNGHOST" or ev == "PLAYER_ALIVE" then
-        local inInstance, instanceType = IsInInstance()
-        if inInstance and instanceType == "pvp" then
+        if inPVP then
             local healerTime     = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
             spiritHealerSyncTime = (healerTime > 0) and (GetTime() - (30 - healerTime)) or GetTime()
             spiritHealerSynced   = true

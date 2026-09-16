@@ -594,6 +594,7 @@ local function UpdateRowTrinketVisual(index, name)
 end
 
 local function UpdateAllTrinketTimers()
+	if not (activeBG or Targets.isConfig) then return end
 	if not Targets.TargetButton then return end
 	for i = 1, MAX_ENEMIES do
 		local btn = Targets.TargetButton[i]
@@ -1304,8 +1305,19 @@ Targets:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
 Targets:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
 Targets:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
 
+local TARGETS_LIFECYCLE_EVENTS = {
+	PLAYER_LOGIN = true,
+	PLAYER_ENTERING_WORLD = true,
+	ZONE_CHANGED_NEW_AREA = true,
+	UPDATE_BATTLEFIELD_STATUS = true,
+	UPDATE_BATTLEFIELD_SCORE = true,
+}
+
 local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_param, arg6_param)
 	local ev = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
+	if not (activeBG or Targets.isConfig) and not TARGETS_LIFECYCLE_EVENTS[ev] then
+		return
+	end
 	local a1 = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
 	local a2 = (type(arg1_param) == "string" and (arg3_param or arg2)) or arg4_param or arg2
 	local a3 = (type(arg1_param) == "string" and (arg4_param or arg3)) or arg5_param or arg3
