@@ -25,14 +25,17 @@ for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
 local function SendTimerAnnouncement(text)
     if not text or text == "" then return end
     local inInstance, instanceType = IsInInstance()
-    local chatType = (inInstance and instanceType == "pvp") and "BATTLEGROUND" or "RAID"
+    local isPvP = (inInstance and instanceType == "pvp")
     local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
     local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
+    local chatType = "RAID"
 
-    if numRaid == 0 and numParty > 0 then
-        chatType = "PARTY"
-    elseif numRaid == 0 and numParty == 0 and not (inInstance and instanceType == "pvp") then
-        chatType = "SAY"
+    if not isPvP and numRaid == 0 then
+        if numParty > 0 then
+            chatType = "PARTY"
+        else
+            chatType = "SAY"
+        end
     end
     SendChatMessage(text, chatType)
 end
@@ -40,10 +43,15 @@ end
 -- =========================================================
 -- Shared Bar Timer Frame Factory
 -- =========================================================
-local BAR_WIDTH    = 220
-local BAR_ROW_H    = 30
+local FONT             = "Fonts\\FRIZQT__.TTF"
+local BAR_TEXTURE      = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
+local ALLIANCE_FLAG_TEX = "Interface\\WorldStateFrame\\AllianceFlag"
+local HORDE_FLAG_TEX   = "Interface\\WorldStateFrame\\HordeFlag"
+
+local BAR_WIDTH    = 156
+local BAR_ROW_H    = 17
 local BAR_ROW_GAP  = 2
-local BAR_HEADER_H = 22
+local BAR_HEADER_H = 15
 
 local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOffset, yOffset, maxRows)
     local frame = CreateFrame("Frame", name, UIParent)
@@ -51,13 +59,13 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     frame:SetHeight(BAR_HEADER_H)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
     frame:SetBackdrop({
-        bgFile  = "Interface\\Tooltips\\UI-Tooltip-Background",
+        bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        tile     = true, tileSize = 12, edgeSize = 8,
+        insets   = { left = 2, right = 2, top = 2, bottom = 2 }
     })
-    frame:SetBackdropColor(0, 0, 0, 0.75)
-    frame:SetBackdropBorderColor(0.35, 0.10, 0.10, 0.90)
+    frame:SetBackdropColor(0, 0, 0, 0.70)
+    frame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.80)
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
@@ -68,8 +76,9 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     end)
     frame:Hide()
 
-    local titleFs = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    titleFs:SetPoint("TOP", 0, -6)
+    local titleFs = frame:CreateFontString(nil, "OVERLAY")
+    titleFs:SetFont(FONT, 9, "OUTLINE")
+    titleFs:SetPoint("TOP", 0, -3)
     titleFs:SetText(titleText)
     titleFs:SetTextColor(titleR, titleG, titleB)
     frame.titleFs = titleFs
@@ -77,10 +86,10 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     frame.rows = {}
     for i = 1, maxRows do
         local row = CreateFrame("Button", name .. "Row" .. i, frame)
-        row:SetWidth(BAR_WIDTH - 16)
+        row:SetWidth(BAR_WIDTH - 8)
         row:SetHeight(BAR_ROW_H)
         if i == 1 then
-            row:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -BAR_HEADER_H)
+            row:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -BAR_HEADER_H - 1)
         else
             row:SetPoint("TOPLEFT", frame.rows[i - 1], "BOTTOMLEFT", 0, -BAR_ROW_GAP)
         end
@@ -105,34 +114,79 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         end)
         row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-        local labelFs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        labelFs:SetPoint("TOPLEFT", row, "TOPLEFT", 2, -3)
-        labelFs:SetPoint("TOPRIGHT", row, "TOPRIGHT", -40, -3)
-        labelFs:SetJustifyH("LEFT")
-        row.labelFs = labelFs
+        -- Row Background (dark translucent backplate)
+        local rowBg = row:CreateTexture(nil, "BACKGROUND")
+        rowBg:SetAllPoints(row)
+        rowBg:SetTexture(0, 0, 0, 0.65)
+        row.rowBg = rowBg
 
-        local timeFs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        timeFs:SetPoint("TOPRIGHT", row, "TOPRIGHT", -2, -3)
-        timeFs:SetJustifyH("RIGHT")
-        row.timeFs = timeFs
+        -- Border lines around row for crisp HUD modularity
+        local bTop = row:CreateTexture(nil, "OVERLAY")
+        bTop:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        bTop:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+        bTop:SetHeight(1)
+        bTop:SetTexture(0, 0, 0, 0.85)
 
-        local barBgTex = row:CreateTexture(nil, "BACKGROUND")
-        barBgTex:SetPoint("BOTTOMLEFT",  row, "BOTTOMLEFT",  0, 3)
-        barBgTex:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 3)
-        barBgTex:SetHeight(9)
-        barBgTex:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
-        barBgTex:SetVertexColor(0.15, 0.15, 0.15, 0.85)
+        local bBottom = row:CreateTexture(nil, "OVERLAY")
+        bBottom:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+        bBottom:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+        bBottom:SetHeight(1)
+        bBottom:SetTexture(0, 0, 0, 0.85)
 
+        local bLeft = row:CreateTexture(nil, "OVERLAY")
+        bLeft:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        bLeft:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+        bLeft:SetWidth(1)
+        bLeft:SetTexture(0, 0, 0, 0.85)
+
+        local bRight = row:CreateTexture(nil, "OVERLAY")
+        bRight:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+        bRight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+        bRight:SetWidth(1)
+        bRight:SetTexture(0, 0, 0, 0.85)
+
+        -- Status Bar fills the row
         local bar = CreateFrame("StatusBar", name .. "Row" .. i .. "Bar", row)
-        bar:SetPoint("BOTTOMLEFT",  row, "BOTTOMLEFT",  0, 3)
-        bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 3)
-        bar:SetHeight(9)
-        bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+        bar:SetPoint("TOPLEFT",  row, "TOPLEFT",  1, -1)
+        bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 1)
+        bar:SetStatusBarTexture(BAR_TEXTURE)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(1)
         bar:SetStatusBarColor(0.1, 0.85, 0.1)
         bar:EnableMouse(false)
         row.bar = bar
+
+        local barBg = bar:CreateTexture(nil, "BACKGROUND")
+        barBg:SetAllPoints(bar)
+        barBg:SetTexture(BAR_TEXTURE)
+        barBg:SetVertexColor(0.12, 0.12, 0.12, 0.70)
+        row.barBg = barBg
+
+        -- Faction Flag Icon (12x12)
+        local flagIcon = bar:CreateTexture(nil, "ARTWORK")
+        flagIcon:SetWidth(12)
+        flagIcon:SetHeight(12)
+        flagIcon:SetPoint("LEFT", bar, "LEFT", 2, 0)
+        flagIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        flagIcon:Hide()
+        row.flagIcon = flagIcon
+
+        -- Countdown Time inside the bar (Right aligned)
+        local timeFs = bar:CreateFontString(nil, "OVERLAY")
+        timeFs:SetFont(FONT, 9, "OUTLINE")
+        timeFs:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
+        timeFs:SetJustifyH("RIGHT")
+        timeFs:SetTextColor(1, 1, 1, 1)
+        row.timeFs = timeFs
+
+        -- Node Name inside the bar (Left aligned)
+        local labelFs = bar:CreateFontString(nil, "OVERLAY")
+        labelFs:SetFont(FONT, 9, "OUTLINE")
+        labelFs:SetPoint("LEFT", flagIcon, "RIGHT", 3, 0)
+        labelFs:SetPoint("RIGHT", timeFs, "LEFT", -3, 0)
+        labelFs:SetJustifyH("LEFT")
+        labelFs:SetTextColor(1, 1, 1, 1)
+        row.labelFs = labelFs
 
         row:Hide()
         frame.rows[i] = row
@@ -519,10 +573,64 @@ local WSG_TEST_DATA = {
 }
 
 -- =========================================================
--- Generic Countdown Bar Renderer (AB / AV / WSG)
+-- Generic Countdown Bar Row Styler & Renderer (AB / AV / WSG)
 -- colorMode = "time"    -> bar color proportional to remaining/maxTime
 -- colorMode = "faction" -> bar color fixed by faction (WSG: blue/red)
 -- =========================================================
+local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMode, useColors)
+    local barR, barG, barB
+    local lr, lg, lb
+    if colorMode == "faction" then
+        if faction == "Alliance" then
+            barR, barG, barB = 0.20, 0.50, 1.00
+            lr, lg, lb       = 0.40, 0.75, 1.00
+        else
+            barR, barG, barB = 1.00, 0.15, 0.15
+            lr, lg, lb       = 1.00, 0.40, 0.40
+        end
+    else
+        barR, barG, barB = TimeBarColor(remaining, maxTime)
+        lr, lg, lb       = FactionLabelColor(faction, useColors)
+    end
+
+    if row.lastFaction ~= faction then
+        row.lastFaction = faction
+        if faction == "Alliance" then
+            row.flagIcon:SetTexture(ALLIANCE_FLAG_TEX)
+            row.flagIcon:Show()
+            row.labelFs:ClearAllPoints()
+            row.labelFs:SetPoint("LEFT", row.flagIcon, "RIGHT", 3, 0)
+            row.labelFs:SetPoint("RIGHT", row.timeFs, "LEFT", -3, 0)
+        elseif faction == "Horde" then
+            row.flagIcon:SetTexture(HORDE_FLAG_TEX)
+            row.flagIcon:Show()
+            row.labelFs:ClearAllPoints()
+            row.labelFs:SetPoint("LEFT", row.flagIcon, "RIGHT", 3, 0)
+            row.labelFs:SetPoint("RIGHT", row.timeFs, "LEFT", -3, 0)
+        else
+            row.flagIcon:Hide()
+            row.labelFs:ClearAllPoints()
+            row.labelFs:SetPoint("LEFT", row.bar, "LEFT", 4, 0)
+            row.labelFs:SetPoint("RIGHT", row.timeFs, "LEFT", -3, 0)
+        end
+    end
+
+    row.labelFs:SetText(name)
+    row.labelFs:SetTextColor(lr, lg, lb)
+
+    local timeStr = FormatTime(remaining)
+    row.timeFs:SetText(timeStr)
+    row.timeFs:SetTextColor(1, 1, 1)
+
+    row.bar:SetMinMaxValues(0, maxTime)
+    row.bar:SetValue(remaining)
+    row.bar:SetStatusBarColor(barR, barG, barB)
+
+    local facText = faction and (" (" .. faction .. ")") or ""
+    row.announceText = name .. facText .. ": " .. timeStr
+    row:Show()
+end
+
 local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime, testData, colorMode)
     if not frame or not frame.rows then return end
     local now       = GetTime()
@@ -537,29 +645,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
             for i = 1, activeCount do
                 local d   = testData[i]
                 local row = frame.rows[i]
-                local barR, barG, barB
-                local lr,  lg,  lb
-                if colorMode == "faction" then
-                    if d.faction == "Alliance" then
-                        barR, barG, barB = 0.20, 0.50, 1.00
-                        lr,  lg,  lb   = 0.40, 0.65, 1.00
-                    else
-                        barR, barG, barB = 1.00, 0.15, 0.15
-                        lr,  lg,  lb   = 1.00, 0.35, 0.35
-                    end
-                else
-                    barR, barG, barB = TimeBarColor(d.remaining, maxTime)
-                    lr, lg, lb = FactionLabelColor(d.faction, useColors)
-                end
-                row.labelFs:SetText(d.name)
-                row.labelFs:SetTextColor(lr, lg, lb)
-                row.timeFs:SetText(FormatTime(d.remaining))
-                row.timeFs:SetTextColor(barR, barG, barB)
-                row.bar:SetMinMaxValues(0, maxTime)
-                row.bar:SetValue(d.remaining)
-                row.bar:SetStatusBarColor(barR, barG, barB)
-                row.announceText = d.name .. (d.faction and (" (" .. d.faction .. ")") or "") .. ": " .. FormatTime(d.remaining)
-                row:Show()
+                ApplyTimerRowData(row, d.name, d.faction, d.remaining, maxTime, colorMode, useColors)
             end
         else
             local sortCount = 0
@@ -589,40 +675,18 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
                     activeSortBuffer[j + 1] = key
                 end
             end
-            activeCount = math.min(sortCount, maxRows)
-            for i = 1, activeCount do
+            local displayCount = 0
+            local limit = math.min(sortCount, maxRows)
+            for i = 1, limit do
                 local item      = activeSortBuffer[i]
                 local remaining = math.floor(item.expire - now)
                 if remaining > 0 then
-                    local row = frame.rows[i]
-                    local barR, barG, barB
-                    local lr,  lg,  lb
-                    if colorMode == "faction" then
-                        if item.faction == "Alliance" then
-                            barR, barG, barB = 0.20, 0.50, 1.00
-                            lr,  lg,  lb   = 0.40, 0.65, 1.00
-                        else
-                            barR, barG, barB = 1.00, 0.15, 0.15
-                            lr,  lg,  lb   = 1.00, 0.35, 0.35
-                        end
-                    else
-                        barR, barG, barB = TimeBarColor(remaining, maxTime)
-                        lr, lg, lb = FactionLabelColor(item.faction, useColors)
-                    end
-                    row.labelFs:SetText(item.name)
-                    row.labelFs:SetTextColor(lr, lg, lb)
-                    row.timeFs:SetText(FormatTime(remaining))
-                    row.timeFs:SetTextColor(barR, barG, barB)
-                    row.bar:SetMinMaxValues(0, maxTime)
-                    row.bar:SetValue(remaining)
-                    row.bar:SetStatusBarColor(barR, barG, barB)
-                    local facText = item.faction and (" (" .. item.faction .. ")") or ""
-                    row.announceText = item.name .. facText .. ": " .. FormatTime(remaining)
-                    row:Show()
-                else
-                    activeCount = activeCount - 1
+                    displayCount = displayCount + 1
+                    local row = frame.rows[displayCount]
+                    ApplyTimerRowData(row, item.name, item.faction, remaining, maxTime, colorMode, useColors)
                 end
             end
+            activeCount = displayCount
         end
     else
         if not isTestAll then table.wipe(timerTable) end
@@ -630,7 +694,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
 
     for i = activeCount + 1, maxRows do frame.rows[i]:Hide() end
     if activeCount > 0 then
-        frame:SetHeight(BAR_HEADER_H + activeCount * (BAR_ROW_H + BAR_ROW_GAP))
+        frame:SetHeight(BAR_HEADER_H + activeCount * (BAR_ROW_H + BAR_ROW_GAP) + 3)
         frame:Show()
     else
         frame:Hide()

@@ -1180,14 +1180,8 @@ eventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
 eventFrame:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
 eventFrame:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
 
-local function Spy_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_param)
-	local ev = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
-	local a1 = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
-	local a2 = (type(arg1_param) == "string" and (arg3_param or arg2)) or arg4_param or arg2
-	local a3 = (type(arg1_param) == "string" and (arg4_param or arg3)) or arg5_param or arg3
-	local a4 = (type(arg1_param) == "string" and arg5_param) or arg4
-
-	if ev == "PLAYER_LOGIN" then
+local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
+	if event == "PLAYER_LOGIN" then
 		Spy:CreateFrames()
 		return
 	end
@@ -1196,10 +1190,12 @@ local function Spy_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_
 	local opt = GetSpySettings()
 	if not opt or not opt.Enabled then return end
 
-	if ev == "UNIT_CASTEVENT" then
-		local casterGUID = a1
-		local eventType = a3
-		local spellId = a4
+	if event == "UNIT_CASTEVENT" then
+		local casterGUID = arg1
+		local targetGUID = arg2
+		local eventType = arg3
+		local spellId = arg4
+		local castDuration = arg5
 		if not casterGUID then return end
 
 		local rawName = UnitName(casterGUID) or guidToName[casterGUID]
@@ -1241,8 +1237,8 @@ local function Spy_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_
 			end
 		end
 
-	elseif ev == "NAME_PLATE_UNIT_ADDED" then
-		local unit = a1
+	elseif event == "NAME_PLATE_UNIT_ADDED" then
+		local unit = arg1
 		if not unit or not UnitIsPlayer(unit) then return end
 		if not UnitCanAttack("player", unit) and UnitFactionGroup(unit) == GetPlayerFaction() then return end
 
@@ -1264,8 +1260,8 @@ local function Spy_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_
 		local isStealth, sName = Spy:CheckUnitStealth(unit)
 		Spy:RecordEnemy(name, classToken, level, guid, pct, isStealth, sName, rawRace)
 
-	elseif ev == "PLAYER_TARGET_CHANGED" or ev == "UPDATE_MOUSEOVER_UNIT" or ev == "PLAYER_FOCUS_CHANGED" then
-		local unit = ev == "PLAYER_TARGET_CHANGED" and "target" or (ev == "PLAYER_FOCUS_CHANGED" and "focus" or "mouseover")
+	elseif event == "PLAYER_TARGET_CHANGED" or event == "UPDATE_MOUSEOVER_UNIT" or event == "PLAYER_FOCUS_CHANGED" then
+		local unit = event == "PLAYER_TARGET_CHANGED" and "target" or (event == "PLAYER_FOCUS_CHANGED" and "focus" or "mouseover")
 		if UnitExists(unit) and UnitIsPlayer(unit) and UnitCanAttack("player", unit) then
 			local name = UnitName(unit)
 			if name then
@@ -1285,8 +1281,8 @@ local function Spy_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_
 			end
 		end
 
-	elseif ev == "UNIT_AURA" then
-		local unit = a1
+	elseif event == "UNIT_AURA" then
+		local unit = arg1
 		if unit and (unit == "target" or unit == "mouseover" or unit == "focus") then
 			if UnitExists(unit) and UnitIsPlayer(unit) and UnitCanAttack("player", unit) then
 				local name = UnitName(unit)
@@ -1308,11 +1304,11 @@ local function Spy_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_
 			end
 		end
 
-	elseif ev == "CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF" then
-		if a1 then
-			local _, _, enemyName, spellName = string.find(a1, "^(.-) casts (.-)%.$")
+	elseif event == "CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF" then
+		if arg1 then
+			local _, _, enemyName, spellName = string.find(arg1, "^(.-) casts (.-)%.$")
 			if not enemyName then
-				_, _, enemyName, spellName = string.find(a1, "^(.-) performs (.-)%.$")
+				_, _, enemyName, spellName = string.find(arg1, "^(.-) performs (.-)%.$")
 			end
 			if enemyName and spellName then
 				hostileCache[enemyName] = true
@@ -1322,9 +1318,9 @@ local function Spy_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_
 			end
 		end
 
-	elseif ev == "CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS" then
-		if a1 then
-			local _, _, enemyName, buffName = string.find(a1, "^(.-) gains (.-)%.$")
+	elseif event == "CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS" then
+		if arg1 then
+			local _, _, enemyName, buffName = string.find(arg1, "^(.-) gains (.-)%.$")
 			if enemyName and buffName then
 				hostileCache[enemyName] = true
 				local isStealth = Targets and Targets.CheckIsStealthName and Targets.CheckIsStealthName(buffName)
@@ -1333,17 +1329,17 @@ local function Spy_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_
 			end
 		end
 
-	elseif ev == "CHAT_MSG_SPELL_AURA_GONE_OTHER" then
-		if a1 then
-			local _, _, buffName, enemyName = string.find(a1, "^(.-) fades from (.-)%.$")
+	elseif event == "CHAT_MSG_SPELL_AURA_GONE_OTHER" then
+		if arg1 then
+			local _, _, buffName, enemyName = string.find(arg1, "^(.-) fades from (.-)%.$")
 			if buffName and enemyName and Targets and Targets.CheckIsStealthName and Targets.CheckIsStealthName(buffName) then
 				Spy:SetUnitStealthState(enemyName, false)
 			end
 		end
 
-	elseif ev == "CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE" then
-		if a1 then
-			local _, _, enemyName = string.find(a1, "^(.-)'s ")
+	elseif event == "CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE" then
+		if arg1 then
+			local _, _, enemyName = string.find(arg1, "^(.-)'s ")
 			if enemyName then
 				hostileCache[enemyName] = true
 				Spy:RecordEnemy(enemyName)
@@ -1351,12 +1347,12 @@ local function Spy_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_
 			end
 		end
 
-	elseif ev == "CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS" then
-		if a1 then
-			local _, _, enemyName = string.find(a1, "^(.-) hits ")
-			if not enemyName then _, _, enemyName = string.find(a1, "^(.-) crits ") end
-			if not enemyName then _, _, enemyName = string.find(a1, "^(.-) misses ") end
-			if not enemyName then _, _, enemyName = string.find(a1, "^(.-) attacks%.") end
+	elseif event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS" then
+		if arg1 then
+			local _, _, enemyName = string.find(arg1, "^(.-) hits ")
+			if not enemyName then _, _, enemyName = string.find(arg1, "^(.-) crits ") end
+			if not enemyName then _, _, enemyName = string.find(arg1, "^(.-) misses ") end
+			if not enemyName then _, _, enemyName = string.find(arg1, "^(.-) attacks%.") end
 			if enemyName then
 				hostileCache[enemyName] = true
 				Spy:RecordEnemy(enemyName)

@@ -24,15 +24,32 @@ local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 
 local TRINKET_SPELL_IDS = {
 	[52317] = 180, -- Turtle WoW PvP Trinket (Insignia of the Alliance / Horde, 3m CD)
-	[23505] = 300, -- Vanilla Warrior Insignia
-	[23506] = 300, -- Vanilla Paladin Insignia
-	[23507] = 300, -- Vanilla Hunter Insignia
-	[23508] = 300, -- Vanilla Rogue Insignia
-	[23509] = 300, -- Vanilla Priest Insignia
-	[23510] = 300, -- Vanilla Shaman Insignia
-	[23511] = 300, -- Vanilla Mage Insignia
-	[23512] = 300, -- Vanilla Warlock Insignia
-	[23513] = 300, -- Vanilla Druid Insignia
+	[5579]  = 300, -- Vanilla Warrior, Hunter, Shaman Insignia ("Immune Root/Snare/Stun", 5m CD)
+	[23276] = 300, -- Vanilla Paladin, Druid Insignia ("Immune Fear/Polymorph/Stun", 5m CD)
+	[23277] = 300, -- Vanilla Rogue Insignia ("Immune Charm/Fear/Stun", 5m CD)
+	[23273] = 300, -- Vanilla Priest, Mage Insignia ("Immune Charm/Fear/Polymorph", 5m CD)
+	[23274] = 300, -- Vanilla Warlock Insignia ("Immune Fear/Polymorph/Snare", 5m CD)
+	-- Compatibility fallback mappings
+	[23505] = 300,
+	[23506] = 300,
+	[23507] = 300,
+	[23508] = 300,
+	[23509] = 300,
+	[23510] = 300,
+	[23511] = 300,
+	[23512] = 300,
+	[23513] = 300,
+}
+
+local TRINKET_SPELL_NAMES = {
+	["Immune Root/Snare/Stun"]      = 300,
+	["Immune Fear/Polymorph/Stun"]  = 300,
+	["Immune Charm/Fear/Stun"]      = 300,
+	["Immune Charm/Fear/Polymorph"] = 300,
+	["Immune Fear/Polymorph/Snare"] = 300,
+	["PvP Trinket"]                 = 180,
+	["Insignia of the Alliance"]    = 300,
+	["Insignia of the Horde"]       = 300,
 }
 
 local function GetEnemyTrinketTexture()
@@ -546,7 +563,7 @@ local function UpdateRowTrinketVisual(index, name)
 
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	local size = currentSize
-	if (o and o.ShowTrinket and o.ShowTrinket[size] == false) or not name or not btn:IsShown() then
+	if (o and o.ShowTrinket and o.ShowTrinket[size] == false) or not name then
 		btn.Trinket:Hide()
 		return
 	end
@@ -600,9 +617,7 @@ local function TriggerTrinketCooldown(name, duration)
 end
 
 local function ClearAllTrinkets()
-	for name in pairs(trinketCooldown) do
-		trinketCooldown[name] = nil
-	end
+	wipe(trinketCooldown)
 	if Targets.TargetButton then
 		for i = 1, MAX_ENEMIES do
 			local btn = Targets.TargetButton[i]
@@ -684,24 +699,10 @@ local function TargetButton_OnClick(self, button)
 			TargetByName(name, true)
 		end
 	elseif btn == "RightButton" then
-		local isCurrentTarget = UnitExists("target") and (UnitName("target") == name)
-		if isCurrentTarget then
+		if guid and FocusUnit then
+			FocusUnit(guid)
+		elseif FocusUnit and UnitExists("target") and UnitName("target") == name then
 			FocusUnit("target")
-		else
-			local hadPriorTarget = UnitExists("target")
-			if guid then
-				TargetUnit(guid)
-			else
-				TargetByName(name, true)
-			end
-			if UnitExists("target") and UnitName("target") == name then
-				FocusUnit("target")
-			end
-			if hadPriorTarget then
-				TargetLastTarget()
-			else
-				ClearTarget()
-			end
 		end
 	end
 end
@@ -780,6 +781,7 @@ function Targets:CreateFrames()
 		-- PvP Trinket Frame
 		local trinket = CreateFrame("Frame", "AutoBG_TargetTrinket" .. i, btn)
 		btn.Trinket = trinket
+		trinket:SetFrameLevel(btn:GetFrameLevel() + 3)
 		trinket:SetWidth(20)
 		trinket:SetHeight(20)
 		trinket:Hide()
@@ -1025,10 +1027,10 @@ local function RenderRoster()
 			btn.HealthBar:SetVertexColor(color.r, color.g, color.b, 1)
 
 			btn.Name:SetText((o and o.ButtonHideRealm and o.ButtonHideRealm[currentSize]) and StripRealm(name) or name)
+			btn:Show()
 			RenderHealthForRow(i, name)
 			UpdateRowSelectionVisual(btn)
 			UpdateRowTrinketVisual(i, name)
-			btn:Show()
 		else
 			btn.targetName = nil
 			btn.targetGUID = nil
@@ -1302,12 +1304,12 @@ Targets:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
 Targets:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
 Targets:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
 
-local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_param)
+local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_param, arg6_param)
 	local ev = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
 	local a1 = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
 	local a2 = (type(arg1_param) == "string" and (arg3_param or arg2)) or arg4_param or arg2
 	local a3 = (type(arg1_param) == "string" and (arg4_param or arg3)) or arg5_param or arg3
-	local a4 = (type(arg1_param) == "string" and arg5_param) or arg4
+	local a4 = (type(arg1_param) == "string" and (arg5_param or arg4)) or arg6_param or arg4
 
 	if ev == "PLAYER_LOGIN" then
 		Targets:EnsureOptions()
@@ -1363,6 +1365,14 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 
 		if eventType == "CAST" then
 			local trinketDur = TRINKET_SPELL_IDS[spellId]
+			if not trinketDur and SpellInfo then
+				local sName = SpellInfo(spellId)
+				if sName and TRINKET_SPELL_NAMES[sName] then
+					trinketDur = TRINKET_SPELL_NAMES[sName]
+				elseif sName and (string.find(sName, "Insignia") or string.find(sName, "PvP Trinket") or string.find(sName, "^Immune ")) then
+					trinketDur = 300
+				end
+			end
 			if trinketDur then
 				TriggerTrinketCooldown(name, trinketDur)
 			end
@@ -1382,11 +1392,16 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 	elseif ev == "CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS" then
 		if a1 then
 			local _, _, enemyName, buffName = string.find(a1, "^(.-) gains (.-)%.$")
-			if enemyName and buffName and CheckIsStealthName(buffName) then
+			if enemyName and buffName then
 				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
 				if name then
-					local data = STEALTH_NAMES[buffName]
-					SetUnitStealth(name, true, data.name, data.texture, data.duration)
+					local tDur = TRINKET_SPELL_NAMES[buffName] or (string.find(buffName, "^Immune ") and 300) or (string.find(buffName, "Insignia") and 300)
+					if tDur then
+						TriggerTrinketCooldown(name, tDur)
+					elseif CheckIsStealthName(buffName) then
+						local data = STEALTH_NAMES[buffName]
+						SetUnitStealth(name, true, data.name, data.texture, data.duration)
+					end
 				end
 			end
 		end
@@ -1397,11 +1412,15 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 			if not enemyName then
 				_, _, enemyName, spellName = string.find(a1, "^(.-) performs (.-)%.$")
 			end
+			if not enemyName then
+				_, _, enemyName, spellName = string.find(a1, "^(.-) uses (.-)%.$")
+			end
 			if enemyName and spellName then
 				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
 				if name then
-					if string.find(spellName, "Insignia") or string.find(spellName, "PvP Trinket") then
-						TriggerTrinketCooldown(name, 180)
+					local tDur = TRINKET_SPELL_NAMES[spellName] or (string.find(spellName, "Insignia") and 300) or (string.find(spellName, "PvP Trinket") and 180) or (string.find(spellName, "^Immune ") and 300)
+					if tDur then
+						TriggerTrinketCooldown(name, tDur)
 					elseif CheckIsStealthName(spellName) then
 						local data = STEALTH_NAMES[spellName]
 						SetUnitStealth(name, true, data.name, data.texture, data.duration)
