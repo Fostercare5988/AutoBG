@@ -151,22 +151,41 @@ hooksecurefunc("UIParent_ManageFramePositions", function()
 end)
 
 
--- Class Color Table
-local classColors = {
-    WARRIOR = "|cffc79c6e", MAGE = "|cff69ccf0", ROGUE = "|cfffff569",
-    DRUID = "|cffff7d0a", HUNTER = "|cffabd473", PRIEST = "|cffffffff",
-    WARLOCK = "|cff9482c9", PALADIN = "|cfff58cba", SHAMAN = "|cfff58cba"
+-- Canonical Class Colors (Rule B7: Shaman Blue 0x00, 0x70, 0xDE)
+AutoBG_CLASS_COLORS = {
+    HUNTER  = { r = 0.67, g = 0.83, b = 0.45, hex = "|cffabd473" },
+    WARLOCK = { r = 0.58, g = 0.51, b = 0.79, hex = "|cff9482c9" },
+    PRIEST  = { r = 1.00, g = 1.00, b = 1.00, hex = "|cffffffff" },
+    PALADIN = { r = 0.96, g = 0.55, b = 0.73, hex = "|cfff58cba" },
+    MAGE    = { r = 0.41, g = 0.80, b = 0.94, hex = "|cff69ccf0" },
+    ROGUE   = { r = 1.00, g = 0.96, b = 0.41, hex = "|cfffff569" },
+    DRUID   = { r = 1.00, g = 0.49, b = 0.04, hex = "|cffff7d0a" },
+    SHAMAN  = { r = 0.00, g = 0.44, b = 0.87, hex = "|cff0070de" },
+    WARRIOR = { r = 0.78, g = 0.61, b = 0.43, hex = "|cffc79c6e" },
 }
 if RAID_CLASS_COLORS then
     for class, color in pairs(RAID_CLASS_COLORS) do
-        classColors[class] = string.format("|cff%02x%02x%02x", color.r * 255, color.g * 255, color.b * 255)
+        if class ~= "SHAMAN" and not AutoBG_CLASS_COLORS[class] then
+            AutoBG_CLASS_COLORS[class] = {
+                r = color.r, g = color.g, b = color.b,
+                hex = string.format("|cff%02x%02x%02x", color.r * 255, color.g * 255, color.b * 255)
+            }
+        end
     end
 end
 
 function AutoBG_GetClassColor(classOrToken)
     if not classOrToken then return nil end
     local token = string.upper(classOrToken)
-    return classColors[token], token
+    local entry = AutoBG_CLASS_COLORS[token]
+    return entry and entry.hex, token
+end
+
+local FALLBACK_CLASS_COLOR = { r = 0.60, g = 0.60, b = 0.60, hex = "|cff999999" }
+function AutoBG_GetClassColorRGB(classOrToken)
+    if not classOrToken then return FALLBACK_CLASS_COLOR end
+    local token = string.upper(classOrToken)
+    return AutoBG_CLASS_COLORS[token] or FALLBACK_CLASS_COLOR
 end
 
 function AutoBG_FindPlayerClass(playerName)

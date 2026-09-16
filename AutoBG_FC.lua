@@ -271,7 +271,7 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     end
 end)
 
-local function GetDistance(unit, flagType)
+local function GetDistance(unit)
     -- 1. ClassicAPI Native Hardware Euclidean Engine (Rule B10)
     if unit and UnitDistanceSquared then
         local ok, dSq = pcall(UnitDistanceSquared, unit)
@@ -301,32 +301,6 @@ local function GetDistance(unit, flagType)
         local ok2, dist2 = pcall(UnitXP, "distanceBetween", "player", unit)
         if ok2 and type(dist2) == "number" and dist2 >= 0 and dist2 < 9999 then
             return math.floor(dist2 + 0.5)
-        end
-    end
-
-    -- 4. Battlefield Flag Map Coordinates Fallback (when out of sight / not targeted)
-    if flagType and GetPlayerMapPosition and GetBattlefieldFlagPosition then
-        local px, py = GetPlayerMapPosition("player")
-        if (not px or not py or (px == 0 and py == 0)) and (not WorldMapFrame or not WorldMapFrame:IsShown()) then
-            pcall(SetMapToCurrentZone)
-            px, py = GetPlayerMapPosition("player")
-        end
-        if px and py and (px > 0 or py > 0) then
-            local num = (GetNumBattlefieldFlagPositions and GetNumBattlefieldFlagPositions()) or 0
-            for i = 1, num do
-                local fx, fy, token = GetBattlefieldFlagPosition(i)
-                if fx and fy and (fx > 0 or fy > 0) then
-                    local tokenMatch = true
-                    if token and type(token) == "string" and flagType then
-                        tokenMatch = (string.find(string.lower(token), string.lower(flagType)) ~= nil)
-                    end
-                    if tokenMatch then
-                        local dx = (px - fx) * 515
-                        local dy = (py - fy) * 685
-                        return math.floor(math.sqrt(dx * dx + dy * dy) + 0.5)
-                    end
-                end
-            end
         end
     end
 
@@ -378,7 +352,7 @@ local function ScanCarrier(carrierName, frame, flagType)
                 end
             end
 
-            local yard = GetDistance(u, flagType)
+            local yard = GetDistance(u)
             if yard then
                 frame.distText:SetText(GetDistanceColor(yard) .. yard .. " yd|r")
             else
@@ -390,7 +364,7 @@ local function ScanCarrier(carrierName, frame, flagType)
 
     -- If carrier is not directly targeted, but GUID was cached, try 3D distance via GUID
     if frame.carrierGuid then
-        local yard = GetDistance(frame.carrierGuid, flagType)
+        local yard = GetDistance(frame.carrierGuid)
         if yard then
             frame.distText:SetText(GetDistanceColor(yard) .. yard .. " yd|r")
             if frame.debuffText then frame.debuffText:SetText("") end
@@ -398,13 +372,8 @@ local function ScanCarrier(carrierName, frame, flagType)
         end
     end
 
-    -- Flag map coordinate fallback when carrier is not targeted by any raid member
-    local flagYard = GetDistance(nil, flagType)
-    if flagYard then
-        frame.distText:SetText(GetDistanceColor(flagYard) .. flagYard .. " yd|r")
-    else
-        frame.distText:SetText("|cFF808080? yd|r")
-    end
+    -- Carrier out of verified distance range
+    frame.distText:SetText("|cFF808080? yd|r")
     if frame.debuffText then frame.debuffText:SetText("") end
 end
 

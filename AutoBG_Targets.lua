@@ -71,7 +71,7 @@ local activeBG = false
 Targets.activeBG = false
 local currentSize = 10
 
-local CLASS_COLORS = {
+local CLASS_COLORS = AutoBG_CLASS_COLORS or {
 	HUNTER  = { r = 0.67, g = 0.83, b = 0.45 },
 	WARLOCK = { r = 0.58, g = 0.51, b = 0.79 },
 	PRIEST  = { r = 1.00, g = 1.00, b = 1.00 },
@@ -82,13 +82,6 @@ local CLASS_COLORS = {
 	SHAMAN  = { r = 0.00, g = 0.44, b = 0.87 },
 	WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
 }
-if RAID_CLASS_COLORS then
-	for k, v in pairs(RAID_CLASS_COLORS) do
-		if k ~= "SHAMAN" and not CLASS_COLORS[k] then
-			CLASS_COLORS[k] = v
-		end
-	end
-end
 
 local FALLBACK_COLOR = { r = 0.60, g = 0.60, b = 0.60 }
 local CLASS_ORDER = {
@@ -106,11 +99,14 @@ local CLASS_ORDER = {
 local function ResolveClassToken(rawClass)
 	if not rawClass or type(rawClass) ~= "string" then return "WARRIOR" end
 	local upper = string.upper(rawClass)
-	return (CLASS_COLORS[upper] and upper) or "WARRIOR"
+	local tbl = AutoBG_CLASS_COLORS or CLASS_COLORS
+	return (tbl[upper] and upper) or "WARRIOR"
 end
 
 local function GetClassColor(classToken)
-	return CLASS_COLORS[classToken] or FALLBACK_COLOR
+	if not classToken then return FALLBACK_COLOR end
+	local upper = string.upper(classToken)
+	return (AutoBG_CLASS_COLORS and AutoBG_CLASS_COLORS[upper]) or CLASS_COLORS[upper] or FALLBACK_COLOR
 end
 Targets.ResolveClassToken = ResolveClassToken
 Targets.GetClassColor = GetClassColor
@@ -708,6 +704,20 @@ local function TargetButton_OnClick(self, button)
 	end
 end
 
+local function TargetButton_OnEnter(self)
+	local b = self or this
+	local guid = b.targetGUID or (b.targetName and nameToGUID[b.targetName])
+	if guid and type(guid) == "string" and string.sub(guid, 1, 2) == "0x" and SetMouseoverUnit then
+		pcall(SetMouseoverUnit, guid)
+	end
+end
+
+local function TargetButton_OnLeave(self)
+	if SetMouseoverUnit then
+		pcall(SetMouseoverUnit)
+	end
+end
+
 function Targets:CreateFrames()
 	if Targets.MainFrame then return end
 
@@ -842,6 +852,8 @@ function Targets:CreateFrames()
 		btn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
 		btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 		btn:SetScript("OnClick", TargetButton_OnClick)
+		btn:SetScript("OnEnter", TargetButton_OnEnter)
+		btn:SetScript("OnLeave", TargetButton_OnLeave)
 	end
 
 	Targets:Frame_SetupPosition("AutoBG_TargetsMainFrame")

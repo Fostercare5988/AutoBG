@@ -555,7 +555,7 @@ local function SpyRow_OnEnter(self)
 	end
 
 	if raceClassText then
-		local color = (Targets and Targets.GetClassColor and Targets.GetClassColor(b.targetClass)) or { r = 0.8, g = 0.8, b = 0.8 }
+		local color = (Targets and Targets.GetClassColor and Targets.GetClassColor(b.targetClass)) or (AutoBG_GetClassColorRGB and AutoBG_GetClassColorRGB(b.targetClass)) or { r = 0.8, g = 0.8, b = 0.8 }
 		GameTooltip:AddLine(raceClassText, color.r, color.g, color.b)
 	end
 
@@ -856,7 +856,7 @@ function Spy:ShowAlert(spellName, enemyName, classToken, guid)
 	w.targetName = enemyName or "Unknown"
 	w.targetGUID = guid
 
-	local color = (classToken and Targets and Targets.GetClassColor and Targets.GetClassColor(classToken)) or { r = 1, g = 1, b = 1 }
+	local color = (classToken and Targets and Targets.GetClassColor and Targets.GetClassColor(classToken)) or (classToken and AutoBG_GetClassColorRGB and AutoBG_GetClassColorRGB(classToken)) or { r = 1, g = 1, b = 1 }
 	w.Name:SetText(enemyName or "Unknown")
 	w.Name:SetTextColor(color.r, color.g, color.b)
 
@@ -980,7 +980,7 @@ function Spy:RenderRows()
 		row.targetLastSeen = data.lastSeen
 
 		-- Class color
-		local color = (Targets and Targets.GetClassColor and Targets.GetClassColor(data.classToken)) or { r = 0.6, g = 0.6, b = 0.6 }
+		local color = (Targets and Targets.GetClassColor and Targets.GetClassColor(data.classToken)) or (AutoBG_GetClassColorRGB and AutoBG_GetClassColorRGB(data.classToken)) or { r = 0.6, g = 0.6, b = 0.6 }
 		row.StatusBar:SetVertexColor(color.r, color.g, color.b, 0.9)
 
 		-- Level
