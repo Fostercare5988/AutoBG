@@ -2,12 +2,12 @@
 
 [![Interface: 1.12.1](https://img.shields.io/badge/Interface-1.12.1%20(5875)-orange.svg)](https://github.com/Fostercare5988/AutoBG)
 [![Version: 1.7.0](https://img.shields.io/badge/Version-1.7.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
-[![ClassicAPI: v1.15.6+](https://img.shields.io/badge/ClassicAPI-v1.15.6+-green.svg)](https://github.com/brues-code/ClassicAPI)
+[![ClassicAPI: v1.15.8+](https://img.shields.io/badge/ClassicAPI-v1.15.8+-green.svg)](https://github.com/brues-code/ClassicAPI)
 [![SuperWoW: v2.2+](https://img.shields.io/badge/SuperWoW-v2.2+-brightgreen.svg)](https://github.com/balakethelock/SuperWoW)
 [![UnitXP: SP3](https://img.shields.io/badge/UnitXP-SP3-teal.svg)](https://codeberg.org/konaka/UnitXP_SP3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AutoBG v1.7.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.15.6+**, **SuperWoW v2.2+**, and **UnitXP SP3**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
+**AutoBG v1.7.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.15.8+**, **SuperWoW v2.2+**, and optional **UnitXP SP3**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
 
 
 Created and actively maintained by **[Fostercare5988](https://github.com/Fostercare5988)**.
@@ -26,9 +26,9 @@ AutoBG is engineered around strict low-level system integration:
 
 | Engine Component | Minimum Version | Architectural Role & Implementation |
 | :--- | :--- | :--- |
-| **ClassicAPI** | `v1.15.6+` | C++ hardware timers (`C_Timer.After`), modern linear $O(n)$ slot-batching aura queries (`C_UnitAuras.GetAuraSlots` / `GetAuraDataBySlot`), native `hooksecurefunc`, and source-rewritten Lua 5.1 syntax. |
+| **ClassicAPI** | `v1.15.8+` | C++ hardware timers (`C_Timer.After`), modern linear $O(n)$ slot-batching aura queries (`C_UnitAuras.GetAuraSlots` / `GetAuraDataBySlot`), native `hooksecurefunc`, and source-rewritten Lua 5.1 syntax. |
 | **SuperWoW** | `v2.2+` | Direct memory state access, exact-name targeting fallback (`TargetByName(name, true)`), direct GUID targeting (`TargetUnit(guid)`), and native hover state tracking (`SetMouseoverUnit`). |
-| **UnitXP** | `SP3` | High-precision raw 3D Euclidean distance calculations (`UnitXP("distance", unit)`), line-of-sight tracking, and OS taskbar alert notifications (`FlashClientIcon`). |
+| **UnitXP** | `SP3` (Optional) | High-precision raw 3D Euclidean distance calculations (`UnitXP("distance", unit)`), line-of-sight tracking, and OS taskbar alert notifications (`FlashClientIcon`). |
 
 ### Elimination of 2006 Legacy Techniques
 - **Zero OnUpdate Polling**: Frame-based `OnUpdate` polling loops are eradicated; all periodic tasks run on C++ hardware tickers at optimal intervals (6.6 Hz for FC tracking, 10 Hz for objective timers).
@@ -69,7 +69,7 @@ AutoBG is engineered around strict low-level system integration:
 - Native SuperWoW mouseover support (`SetMouseoverUnit`) allowing mouseover macros directly over FC cards.
 - Real-time uncapped carrier HP and percentage via **UnitXP SP3** with class-color resolution.
 - Live **Carrier Distance Engine** displaying yards with canonical 4-stage color grading (≤30y Green, 31–50y Yellow, 51–80y Orange, >80y Red).
-- **15.6+ Slot-Batching Aura Tracking**: Displays carrier debuff stacks (*Focused Assault* / *Brutal Assault*) in linear $O(n)$ time.
+- **ClassicAPI Slot-Batching Aura Tracking**: Displays carrier debuff stacks (*Focused Assault* / *Brutal Assault*) in linear $O(n)$ time.
 
 ### 5. Interactive Chat Announcements
 - `CTRL + Left-Click` on any timer row (AB/AV node, WSG flag, Spirit Healer, or Queue) to broadcast its exact countdown into Battleground chat (or Party/Raid).
@@ -125,9 +125,9 @@ AutoBG is engineered around strict low-level system integration:
 
 ### Prerequisites
 1. **World of Warcraft 1.12.1** (Build 5875).
-2. [**15.6+**](https://github.com/brues-code/ClassicAPI) (`ClassicAPI.dll`).
+2. [**ClassicAPI v1.15.8+**](https://github.com/brues-code/ClassicAPI) (`ClassicAPI.dll`).
 3. [**SuperWoW v2.2+**](https://github.com/balakethelock/SuperWoW) (`SuperWoW.dll`).
-4. [**UnitXP SP3**](https://codeberg.org/konaka/UnitXP_SP3) (`UnitXP_SP3.dll`).
+4. [**UnitXP SP3**](https://codeberg.org/konaka/UnitXP_SP3) (Optional, `UnitXP_SP3.dll`).
 
 ### Step-by-Step Installation
 1. Clone or download the repository into your WoW AddOns directory:
@@ -151,7 +151,7 @@ AutoBG is engineered around strict low-level system integration:
 - **Authentic WSG Flag Icons**: Displays real 32x32 transparent flag textures on target frame carrier rows (Red Horde flag on Alliance FC; Blue Alliance flag on Horde FC).
 - **Unified 4-Tab Control Panel (`AutoBG_Options.lua`)**: Replaced separate options dialogs with a modern 4-tab interface (`[General]`, `[Timers & FC]`, `[Enemy Frames]`, `[Spy]`) with bracket selectors and global action buttons (`[Test All Frames]`, `[Reset Positions]`, `[Close]`).
 - **Full Backward Compatibility**: Added `/bgt` and `/battlegroundtargets` aliases, cross-module tab routing (`AutoBG_OpenOptions("targets")`), and native settings profiles under `AutoBG_Settings`.
-- **Enhanced Engine Compliance**: Enforced strict startup guards (`MIN_CLASSIC_API = 11400`, `SUPERWOW_VERSION`), dual-mode event signatures (Rule C12 / AP-26), and zero-GC combat paths across all modules.
+- **Enhanced Engine Compliance**: Enforced strict startup guards (`MIN_CLASSIC_API = 11508`, `SUPERWOW_VERSION`), dual-mode event signatures (Rule C12 / AP-26), and zero-GC combat paths across all modules.
 
 ### v1.6.0
 - **Warsong Flag Carrier Faction Correction**: Resolved architectural flag carrier inversion where Horde and Alliance carriers were swapped across frames and map coordinates; accurately binds carrier identity, flag tokens, and frame visual assets.
@@ -165,7 +165,7 @@ AutoBG is engineered around strict low-level system integration:
 - **Thorn Gorge Suite Alignment**: Added `"TG"` abbreviation and estimated wait time tooltip integration (`GetBattlefieldEstimatedWaitTime`) to queue frames.
 
 ### v1.5.0
-- **Engine Startup Guard Enforcement**: Upgraded engine dependency guards across all 4 module files (`AutoBG.lua`, `AutoBG_Options.lua`, `AutoBG_Timers.lua`, `AutoBG_FC.lua`) to strictly enforce `MIN_CLASSIC_API = 11400` (`v1.14.0+`) and `SUPERWOW_VERSION` (`v2.2+`).
+- **Engine Startup Guard Enforcement**: Upgraded engine dependency guards across all 4 module files (`AutoBG.lua`, `AutoBG_Options.lua`, `AutoBG_Timers.lua`, `AutoBG_FC.lua`) to strictly enforce `MIN_CLASSIC_API = 11508` (`v1.15.8+`) and `SUPERWOW_VERSION` (`v2.2+`).
 - **Battleground Suite & Spatial Telemetry Audit**: Re-verified Thorn Gorge queue integration, zero-allocation pre-allocated static unit buffers, and hardware 3D Euclidean distance calculations.
 
 ### v1.4.0
@@ -177,13 +177,13 @@ AutoBG is engineered around strict low-level system integration:
 
 ### v1.3.0
 
-- **15.6+ Linear Slot-Batching**: Integrated `C_UnitAuras.GetAuraSlots` and `GetAuraDataBySlot` to track Warsong flag carrier damage amplification debuffs (*Focused Assault* / *Brutal Assault*) in linear $O(n)$ time.
+- **ClassicAPI Linear Slot-Batching**: Integrated `C_UnitAuras.GetAuraSlots` and `GetAuraDataBySlot` to track Warsong flag carrier damage amplification debuffs (*Focused Assault* / *Brutal Assault*) in linear $O(n)$ time.
 - **Rule C8 Mouse Passthrough**: Applied `:EnableMouse(false)` across all child health bars, textures, and font strings inside FC unit cards, guaranteeing 100% click reliability.
 - **SuperWoW Hybrid Targeting & Mouseover**: Upgraded FC frame targeting to prioritize `TargetUnit(guid)` with `TargetByName(name, true)` fallback, and enabled native `SetMouseoverUnit` support for mouseover macros.
 - **Eradicated Legacy Map Approximations**: Removed 2006 manual map coordinate trigonometry and magic multipliers (`(px - fx) * 515`) in favor of direct 3D Euclidean distances and native `UnitXP("distance", unit)`.
 - **Zero-GC Pre-allocated Queue Buffers**: Pre-allocated static arrays and `table.wipe` recycling in `AutoBG_QueueAllBGs`, eliminating heap churn during multi-queue operations.
 - **Modern Hook Architecture**: Replaced manual function hooks with `hooksecurefunc` for clean compatibility with other stance-modifying addons.
-- **Universal Engine Guard**: Enforced strict dependency checks across all 4 module files for 15.6+ and SuperWoW v2.2+.
+- **Universal Engine Guard**: Enforced strict dependency checks across all 4 module files for ClassicAPI v1.15.8+ and SuperWoW v2.2+.
 
 ### v1.2.0
 - **Zero-GC Scan Loop Optimizations**: Pre-allocated static `RAID_UNITS` arrays across all modules and eliminated anonymous closure allocations in recurring scan tickers.

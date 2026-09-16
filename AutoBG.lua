@@ -1,14 +1,14 @@
 -- AutoBG for World of Warcraft 1.12.1 (Vanilla Enhanced)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI, SuperWoW 2.2+, NamPower 4.6.3+, UnitXP SP3, DXVK
+-- Built natively for ClassicAPI v1.15.8+, SuperWoW 2.2+, UnitXP SP3
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.14.0+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11400
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.8+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11508
 
 if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) or 
    (type(CLASSIC_API_VERSION) == "number" and CLASSIC_API_VERSION < MIN_CLASSIC_API) then
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI (v1.14.0+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI (v1.15.8+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
     end
     return
 end
@@ -715,7 +715,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         AutoBG_MigratePositions()
 
         UpdateZoneCache()
-        AutoBG_Print("Loaded natively for ClassicAPI, SuperWoW 2.2+, NamPower, UnitXP SP3, DXVK. Type |cFFFFFF00/abg|r or |cFFFFFF00/bgt|r for options.", true)
+        AutoBG_Print("v1.7.0 loaded. Type |cFFFFFF00/abg|r or |cFFFFFF00/bgt|r for options.", true)
         if AutoBG_Settings.HideCastbar and CastingBarFrame then CastingBarFrame:UnregisterAllEvents(); CastingBarFrame:Hide() end
         if AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
 

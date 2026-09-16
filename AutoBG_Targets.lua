@@ -1,11 +1,11 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Enemy Target Frames Module (Consolidated from BattlegroundTargets)  --
 -- Engineered natively for World of Warcraft 1.12.1 (Enhanced Engine)        --
--- ClassicAPI v1.14.0+, SuperWoW v2.2+, UnitXP SP3, NamPower, and DXVK.     --
+-- ClassicAPI v1.15.8+, SuperWoW v2.2+, UnitXP SP3                            --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.14.0+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11400
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.8+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11508
 
 if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) or 
    (type(CLASSIC_API_VERSION) == "number" and CLASSIC_API_VERSION < MIN_CLASSIC_API) then
