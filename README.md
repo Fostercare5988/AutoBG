@@ -66,7 +66,7 @@ AutoBG is engineered around strict low-level system integration:
 - **ClassicAPI Slot-Batching Aura Tracking**: Displays carrier debuff stacks (*Focused Assault* / *Brutal Assault*) in linear $O(n)$ time.
 
 ### 5. Interactive Chat Announcements
-- `CTRL + Left-Click` on any timer row (AB/AV node, WSG flag, Spirit Healer, or Queue) to broadcast its exact countdown into Battleground chat (or Party/Raid).
+- `CTRL + Left-Click` on any timer row (AB/AV node, WSG flag, Spirit Healer, or Queue) to broadcast its exact countdown into Raid/Group chat.
 
 ### 6. Enemy Target Frames (BattlegroundTargets)
 - **Compact PvP Roster Display**: Automatically displays live enemy target frames for 10v10 (WSG), 15v15 (AB / Thorn Gorge), and 40v40 (AV) with independent scaling, dimensions, and font sizes.
@@ -150,7 +150,7 @@ AutoBG is engineered around strict low-level system integration:
 - **Hot-Path Optimization & Event Gating (Phase 2)**:
   - Implemented high-performance lifecycle gating for enemy target frames, suppressing open-world event overhead while guaranteeing immediate activation upon battleground entry.
   - Cached battleground zone and instance state synchronously on entry and zone events, eliminating repeated string lookups in recurring tickers.
-  - Eradicated heap churn from Arathi Basin score polling and mathematical projection calculations.
+  - Removed transient table allocations from Arathi Basin score polling and mathematical projection calculations.
   - Suspended idle trinket tickers when no active cooldowns are being tracked.
   - Optimized Spy rendering by decoupling frequent elapsed time text updates from structural roster redraws.
 - **Authoritative Targeting & Telemetry (Phase 3A)**:
