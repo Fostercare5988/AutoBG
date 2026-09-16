@@ -715,7 +715,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         AutoBG_MigratePositions()
 
         UpdateZoneCache()
-        AutoBG_Print("v1.7.0 loaded. Type |cFFFFFF00/abg|r or |cFFFFFF00/bgt|r for options.", true)
+        AutoBG_Print("v2.0.0 loaded. Type |cFFFFFF00/abg|r or |cFFFFFF00/bgt|r for options.", true)
         if AutoBG_Settings.HideCastbar and CastingBarFrame then CastingBarFrame:UnregisterAllEvents(); CastingBarFrame:Hide() end
         if AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
 

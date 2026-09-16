@@ -1,22 +1,16 @@
 # AutoBG
 
 [![Interface: 1.12.1](https://img.shields.io/badge/Interface-1.12.1%20(5875)-orange.svg)](https://github.com/Fostercare5988/AutoBG)
-[![Version: 1.7.0](https://img.shields.io/badge/Version-1.7.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
+[![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
 [![ClassicAPI: v1.15.8+](https://img.shields.io/badge/ClassicAPI-v1.15.8+-green.svg)](https://github.com/brues-code/ClassicAPI)
 [![SuperWoW: v2.2+](https://img.shields.io/badge/SuperWoW-v2.2+-brightgreen.svg)](https://github.com/balakethelock/SuperWoW)
 [![UnitXP: SP3](https://img.shields.io/badge/UnitXP-SP3-teal.svg)](https://codeberg.org/konaka/UnitXP_SP3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AutoBG v1.7.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.15.8+**, **SuperWoW v2.2+**, and optional **UnitXP SP3**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
+**AutoBG v2.0.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.15.8+**, **SuperWoW v2.2+**, and optional **UnitXP SP3**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
 
 
 Created and actively maintained by **[Fostercare5988](https://github.com/Fostercare5988)**.
-
----
-
-## 📸 Preview
-
-![AutoBG Overview](preview.jpg)
 
 ---
 
@@ -144,6 +138,35 @@ AutoBG is engineered around strict low-level system integration:
 ---
 
 ## 📜 Changelog
+
+### v2.0.0
+- **Major Architecture Modernization**: Complete multi-phase architectural overhaul across all 6 runtime modules adhering strictly to modern enhanced engine standards for World of Warcraft 1.12.1 Enhanced Client stacks.
+- **Core Runtime & Primaries Modernization (Phase 1)**:
+  - Corrected battleground timer announcements to broadcast via the authoritative WoW 1.12.1 group chat primitive (`RAID` chat channel fallback) without invalid chat types or chat errors.
+  - Standardized `Spy_OnEvent` on ClassicAPI modern positional dispatch and aligned SuperWoW `UNIT_CASTEVENT` argument mapping (`casterGUID`, `targetGUID`, `eventType`, `spellId`, `castDuration`).
+  - Implemented direct GUID focus assignment (`FocusUnit(guid)`) across Targets rows and Flag Carrier HUD cards, eliminating programmatic target swapping.
+  - Fixed countdown row expiration compaction, eliminating ghost rows and bar stacking artifacts.
+  - Converted enemy PvP trinket cooldown tracking to zero-allocation memory recycling via native C++ `table.wipe`.
+- **Hot-Path Optimization & Event Gating (Phase 2)**:
+  - Implemented high-performance lifecycle gating for enemy target frames, suppressing open-world event overhead while guaranteeing immediate activation upon battleground entry.
+  - Cached battleground zone and instance state synchronously on entry and zone events, eliminating repeated string lookups in recurring tickers.
+  - Eradicated heap churn from Arathi Basin score polling and mathematical projection calculations.
+  - Suspended idle trinket tickers when no active cooldowns are being tracked.
+  - Optimized Spy rendering by decoupling frequent elapsed time text updates from structural roster redraws.
+- **Authoritative Targeting & Telemetry (Phase 3A)**:
+  - Eradicated legacy 2006 map-coordinate approximations and `SetMapToCurrentZone` side effects in favor of pure 3D Euclidean distance calculations and native UnitXP telemetry.
+  - Added native GUID-backed mouseover support (`SetMouseoverUnit(guid)`) across enemy target rows.
+  - Centralized canonical class colors in `AutoBG_CLASS_COLORS` and corrected Shaman coloration to authentic blue (`#0070DE`), exempting it from vanilla pink `RAID_CLASS_COLORS` overwrites.
+- **Unified Position Persistence & State Migration (Phase 3B)**:
+  - Centralized frame coordinates under `AutoBG_Settings.Positions` across all modules.
+  - Built automatic, non-destructive migration on `ADDON_LOADED` for legacy `Targets.pos` and `Spy.posX/posY` state.
+  - Removed cross-module position state corruption (Spy writing into Targets).
+  - Preserved independent bracket positioning (`10`, `15`, `40`) with clean resets that never resurrect legacy keys.
+- **Engine Baseline Reconciliation & Polish (Phase 4)**:
+  - Enforced uniform `MIN_CLASSIC_API = 11508` (`ClassicAPI v1.15.8+`) and `SUPERWOW_VERSION` startup guards across all 6 modules.
+  - Aligned runtime requirements with actual API consumption, cleanly designating UnitXP SP3 as optional and eliminating unconsumed legacy claims.
+  - Replaced technical developer stack startup output with clean, player-friendly notification text (`v2.0.0 loaded`).
+  - Passed complete static linter audit with 0 errors and 0 warnings.
 
 ### v1.7.0
 - **Consolidation of BattlegroundTargets & AutoBG**: Merged BattlegroundTargets (`AutoBG_Targets.lua`) and Open-World Spy (`AutoBG_Spy.lua`) natively into AutoBG, creating a single, all-in-one competitive PvP command center.
