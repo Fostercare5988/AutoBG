@@ -42,7 +42,7 @@ local function SendTimerAnnouncement(text)
     local isPvP = (inInstance and instanceType == "pvp")
     local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
     local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
-    local chatType = "RAID"
+    local chatType = isPvP and "BATTLEGROUND" or "RAID"
 
     if not isPvP and numRaid == 0 then
         if numParty > 0 then
@@ -62,24 +62,18 @@ local BAR_TEXTURE      = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local ALLIANCE_FLAG_TEX = "Interface\\WorldStateFrame\\AllianceFlag"
 local HORDE_FLAG_TEX   = "Interface\\WorldStateFrame\\HordeFlag"
 
-local BAR_WIDTH    = 156
-local BAR_ROW_H    = 17
-local BAR_ROW_GAP  = 2
-local BAR_HEADER_H = 15
+local BAR_WIDTH    = 218
+local BAR_ROW_H    = 27
+local BAR_ROW_GAP  = 3
+local BAR_HEADER_H = 24
 
 local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOffset, yOffset, maxRows)
     local frame = CreateFrame("Frame", name, UIParent)
     frame:SetWidth(BAR_WIDTH)
     frame:SetHeight(BAR_HEADER_H)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
-    frame:SetBackdrop({
-        bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile     = true, tileSize = 12, edgeSize = 8,
-        insets   = { left = 2, right = 2, top = 2, bottom = 2 }
-    })
-    frame:SetBackdropColor(0, 0, 0, 0.70)
-    frame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.80)
+    frame:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
+    frame:SetBackdropColor(0.025, 0.035, 0.05, 0.94)
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
@@ -90,31 +84,43 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     end)
     frame:Hide()
 
+    local headerBg = frame:CreateTexture(nil, "BACKGROUND")
+    headerBg:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+    headerBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -1, -1)
+    headerBg:SetHeight(BAR_HEADER_H - 1)
+    headerBg:SetTexture(0.07, 0.10, 0.14, 0.96)
+
+    local headerRule = frame:CreateTexture(nil, "ARTWORK")
+    headerRule:SetPoint("TOPLEFT", frame, "TOPLEFT", 5, -BAR_HEADER_H)
+    headerRule:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -5, -BAR_HEADER_H)
+    headerRule:SetHeight(1)
+    headerRule:SetTexture(titleR, titleG, titleB, 0.70)
+
     local titleFs = frame:CreateFontString(nil, "OVERLAY")
-    titleFs:SetFont(FONT, 9, "OUTLINE")
-    titleFs:SetPoint("TOP", 0, -3)
+    titleFs:SetFont(FONT, 11, "OUTLINE")
+    titleFs:SetPoint("LEFT", frame, "TOPLEFT", 9, -12)
     titleFs:SetText(titleText)
-    titleFs:SetTextColor(titleR, titleG, titleB)
+    titleFs:SetTextColor(0.94, 0.97, 1)
     frame.titleFs = titleFs
+
+    local dragHint = frame:CreateFontString(nil, "OVERLAY")
+    dragHint:SetFont(FONT, 8, "OUTLINE")
+    dragHint:SetPoint("RIGHT", frame, "TOPRIGHT", -9, -12)
+    dragHint:SetText("DRAG")
+    dragHint:SetTextColor(0.57, 0.65, 0.74)
 
     frame.rows = {}
     for i = 1, maxRows do
         local row = CreateFrame("Button", name .. "Row" .. i, frame)
-        row:SetWidth(BAR_WIDTH - 8)
+        row:SetWidth(BAR_WIDTH - 10)
         row:SetHeight(BAR_ROW_H)
         if i == 1 then
-            row:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -BAR_HEADER_H - 1)
+            row:SetPoint("TOPLEFT", frame, "TOPLEFT", 5, -BAR_HEADER_H - 3)
         else
             row:SetPoint("TOPLEFT", frame.rows[i - 1], "BOTTOMLEFT", 0, -BAR_ROW_GAP)
         end
         row:EnableMouse(true)
         row:RegisterForClicks("LeftButtonUp")
-        row:RegisterForDrag("LeftButton")
-        row:SetScript("OnDragStart", function() this:GetParent():StartMoving() end)
-        row:SetScript("OnDragStop", function()
-            this:GetParent():StopMovingOrSizing()
-            if AutoBG_SavePosition then AutoBG_SavePosition(this:GetParent(), this:GetParent():GetName()) end
-        end)
         row:SetScript("OnClick", function()
             if IsControlKeyDown() and this.announceText then SendTimerAnnouncement(this.announceText) end
         end)
@@ -122,47 +128,34 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
             if this.announceText and this.announceText ~= "" then
                 GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
                 GameTooltip:SetText(this.announceText, 1, 1, 1)
-                GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce to chat", 0.7, 0.7, 0.7)
+                GameTooltip:AddLine("|cFF7CD8FFCTRL+LeftClick:|r Announce timer to /bg", 0.7, 0.7, 0.7)
                 GameTooltip:Show()
             end
         end)
         row:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-        -- Row Background (dark translucent backplate)
+        -- The row button owns the full click area; textures and font strings do not take mouse input.
         local rowBg = row:CreateTexture(nil, "BACKGROUND")
         rowBg:SetAllPoints(row)
-        rowBg:SetTexture(0, 0, 0, 0.65)
+        rowBg:SetTexture(0.09, 0.12, 0.16, 0.96)
         row.rowBg = rowBg
 
-        -- Border lines around row for crisp HUD modularity
-        local bTop = row:CreateTexture(nil, "OVERLAY")
-        bTop:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-        bTop:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
-        bTop:SetHeight(1)
-        bTop:SetTexture(0, 0, 0, 0.85)
-
+        -- A single hairline separates rows without tooltip-style chrome.
         local bBottom = row:CreateTexture(nil, "OVERLAY")
         bBottom:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
         bBottom:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
         bBottom:SetHeight(1)
-        bBottom:SetTexture(0, 0, 0, 0.85)
+        bBottom:SetTexture(0.23, 0.29, 0.36, 0.65)
 
-        local bLeft = row:CreateTexture(nil, "OVERLAY")
-        bLeft:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-        bLeft:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-        bLeft:SetWidth(1)
-        bLeft:SetTexture(0, 0, 0, 0.85)
+        local hover = row:CreateTexture(nil, "HIGHLIGHT")
+        hover:SetAllPoints(row)
+        hover:SetTexture(0.30, 0.45, 0.56, 0.14)
 
-        local bRight = row:CreateTexture(nil, "OVERLAY")
-        bRight:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
-        bRight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
-        bRight:SetWidth(1)
-        bRight:SetTexture(0, 0, 0, 0.85)
-
-        -- Status Bar fills the row
+        -- A slim progress track preserves the countdown without tinting the labels.
         local bar = CreateFrame("StatusBar", name .. "Row" .. i .. "Bar", row)
-        bar:SetPoint("TOPLEFT",  row, "TOPLEFT",  1, -1)
-        bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 1)
+        bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 1, 2)
+        bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 2)
+        bar:SetHeight(3)
         bar:SetStatusBarTexture(BAR_TEXTURE)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(1)
@@ -173,34 +166,40 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         local barBg = bar:CreateTexture(nil, "BACKGROUND")
         barBg:SetAllPoints(bar)
         barBg:SetTexture(BAR_TEXTURE)
-        barBg:SetVertexColor(0.12, 0.12, 0.12, 0.70)
+        barBg:SetVertexColor(0.20, 0.24, 0.29, 0.85)
         row.barBg = barBg
 
-        -- Faction Flag Icon (12x12)
-        local flagIcon = bar:CreateTexture(nil, "ARTWORK")
-        flagIcon:SetWidth(12)
-        flagIcon:SetHeight(12)
-        flagIcon:SetPoint("LEFT", bar, "LEFT", 2, 0)
+        -- Faction icon and color rail remain visible as the progress track empties.
+        local factionRail = row:CreateTexture(nil, "ARTWORK")
+        factionRail:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -3)
+        factionRail:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 6)
+        factionRail:SetWidth(3)
+        factionRail:SetTexture(0.45, 0.50, 0.55)
+        row.factionRail = factionRail
+
+        local flagIcon = row:CreateTexture(nil, "ARTWORK")
+        flagIcon:SetWidth(14)
+        flagIcon:SetHeight(14)
+        flagIcon:SetPoint("LEFT", row, "LEFT", 8, 3)
         flagIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
         flagIcon:Hide()
         row.flagIcon = flagIcon
 
-        -- Countdown Time inside the bar (Right aligned)
-        local timeFs = bar:CreateFontString(nil, "OVERLAY")
-        timeFs:SetFont(FONT, 9, "OUTLINE")
-        timeFs:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
+        local timeFs = row:CreateFontString(nil, "OVERLAY")
+        timeFs:SetFont(FONT, 13, "OUTLINE")
+        timeFs:SetPoint("RIGHT", row, "RIGHT", -8, 3)
         timeFs:SetJustifyH("RIGHT")
         timeFs:SetTextColor(1, 1, 1, 1)
         row.timeFs = timeFs
 
-        -- Node Name inside the bar (Left aligned)
-        local labelFs = bar:CreateFontString(nil, "OVERLAY")
-        labelFs:SetFont(FONT, 9, "OUTLINE")
-        labelFs:SetPoint("LEFT", flagIcon, "RIGHT", 3, 0)
+        local labelFs = row:CreateFontString(nil, "OVERLAY")
+        labelFs:SetFont(FONT, 10, "OUTLINE")
+        labelFs:SetPoint("LEFT", flagIcon, "RIGHT", 5, 3)
         labelFs:SetPoint("RIGHT", timeFs, "LEFT", -3, 0)
         labelFs:SetJustifyH("LEFT")
         labelFs:SetTextColor(1, 1, 1, 1)
         row.labelFs = labelFs
+        row.lastFaction = "unset"
 
         row:Hide()
         frame.rows[i] = row
@@ -598,6 +597,11 @@ local WSG_TEST_DATA = {
 -- colorMode = "faction" -> bar color fixed by faction (WSG: blue/red)
 -- =========================================================
 local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMode, useColors)
+    -- WSG live timers store a flag name and expiry; the row presentation supplies its faction.
+    if colorMode == "faction" and not faction then
+        if name == "Alliance Flag" then faction = "Alliance"
+        elseif name == "Horde Flag" then faction = "Horde" end
+    end
     local barR, barG, barB
     local lr, lg, lb
     if colorMode == "faction" then
@@ -619,20 +623,28 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
             row.flagIcon:SetTexture(ALLIANCE_FLAG_TEX)
             row.flagIcon:Show()
             row.labelFs:ClearAllPoints()
-            row.labelFs:SetPoint("LEFT", row.flagIcon, "RIGHT", 3, 0)
+            row.labelFs:SetPoint("LEFT", row.flagIcon, "RIGHT", 5, 3)
             row.labelFs:SetPoint("RIGHT", row.timeFs, "LEFT", -3, 0)
         elseif faction == "Horde" then
             row.flagIcon:SetTexture(HORDE_FLAG_TEX)
             row.flagIcon:Show()
             row.labelFs:ClearAllPoints()
-            row.labelFs:SetPoint("LEFT", row.flagIcon, "RIGHT", 3, 0)
+            row.labelFs:SetPoint("LEFT", row.flagIcon, "RIGHT", 5, 3)
             row.labelFs:SetPoint("RIGHT", row.timeFs, "LEFT", -3, 0)
         else
             row.flagIcon:Hide()
             row.labelFs:ClearAllPoints()
-            row.labelFs:SetPoint("LEFT", row.bar, "LEFT", 4, 0)
+            row.labelFs:SetPoint("LEFT", row, "LEFT", 8, 3)
             row.labelFs:SetPoint("RIGHT", row.timeFs, "LEFT", -3, 0)
         end
+    end
+
+    local railFaction = (useColors or colorMode == "faction") and faction or "neutral"
+    if row.lastRailFaction ~= railFaction then
+        row.lastRailFaction = railFaction
+        if railFaction == "Alliance" then row.factionRail:SetTexture(0.32, 0.62, 0.95)
+        elseif railFaction == "Horde" then row.factionRail:SetTexture(0.94, 0.35, 0.34)
+        else row.factionRail:SetTexture(0.45, 0.50, 0.55) end
     end
 
     row.labelFs:SetText(name)
@@ -640,7 +652,11 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
 
     local timeStr = FormatTime(remaining)
     row.timeFs:SetText(timeStr)
-    row.timeFs:SetTextColor(1, 1, 1)
+    if remaining <= 10 then
+        row.timeFs:SetTextColor(1, 0.78, 0.44)
+    else
+        row.timeFs:SetTextColor(1, 1, 1)
+    end
 
     row.bar:SetMinMaxValues(0, maxTime)
     row.bar:SetValue(remaining)
@@ -714,7 +730,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
 
     for i = activeCount + 1, maxRows do frame.rows[i]:Hide() end
     if activeCount > 0 then
-        frame:SetHeight(BAR_HEADER_H + activeCount * (BAR_ROW_H + BAR_ROW_GAP) + 3)
+        frame:SetHeight(BAR_HEADER_H + activeCount * (BAR_ROW_H + BAR_ROW_GAP) + 5)
         frame:Show()
     else
         frame:Hide()

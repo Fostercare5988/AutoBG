@@ -66,7 +66,8 @@ AutoBG is engineered around strict low-level system integration:
 - **ClassicAPI Slot-Batching Aura Tracking**: Displays carrier debuff stacks (*Focused Assault* / *Brutal Assault*) in linear $O(n)$ time.
 
 ### 5. Interactive Chat Announcements
-- `CTRL + Left-Click` on any timer row (AB/AV node, WSG flag, Spirit Healer, or Queue) to broadcast its exact countdown into Raid/Group chat.
+- `CTRL + Left-Click` on a timer row (AB/AV node, WSG flag, Spirit Healer, or Queue) to announce its displayed countdown to battleground chat while in a battleground.
+- Drag an AB/AV/WSG timer by its header; objective rows remain dedicated click targets.
 
 ### 6. Enemy Target Frames (BattlegroundTargets)
 - **Compact PvP Roster Display**: Automatically displays live enemy target frames for 10v10 (WSG), 15v15 (AB / Thorn Gorge), and 40v40 (AV) with independent scaling, dimensions, and font sizes.
@@ -110,7 +111,7 @@ AutoBG is engineered around strict low-level system integration:
 | `Left-Click` on FC / Target | Target player via GUID / exact whole-name |
 | `Right-Click` on FC / Target | Set player as focus via SuperWoW `FocusUnit` |
 | `CTRL + Left-Click` on Timer | Broadcast countdown to Battleground chat |
-| `Left-Click Drag` on Frame | Move and persist frame position across sessions |
+| `Left-Click Drag` on Objective Timer Header | Move and persist the AB/AV/WSG timer frame position |
 
 ---
 
@@ -141,7 +142,6 @@ AutoBG is engineered around strict low-level system integration:
 ### v2.0.0
 - **Major Architecture Modernization**: Complete multi-phase architectural overhaul across all 6 runtime modules adhering strictly to modern enhanced engine standards for World of Warcraft 1.12.1 Enhanced Client stacks.
 - **Core Runtime & Primaries Modernization (Phase 1)**:
-  - Corrected battleground timer announcements to broadcast via the authoritative WoW 1.12.1 group chat primitive (`RAID` chat channel fallback) without invalid chat types or chat errors.
   - Standardized `Spy_OnEvent` on ClassicAPI modern positional dispatch and aligned SuperWoW `UNIT_CASTEVENT` argument mapping (`casterGUID`, `targetGUID`, `eventType`, `spellId`, `castDuration`).
   - Implemented direct GUID focus assignment (`FocusUnit(guid)`) across Targets rows and Flag Carrier HUD cards, eliminating programmatic target swapping.
   - Fixed countdown row expiration compaction, eliminating ghost rows and bar stacking artifacts.
