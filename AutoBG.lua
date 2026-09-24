@@ -218,21 +218,17 @@ function AutoBG_Print(msg, force)
 end
 
 function AutoBG_UpdateStanceBar()
-    if not AutoBG_Settings then return end
+    if not AutoBG_Settings or not ShapeshiftBarFrame then return end
     if AutoBG_Settings.HideStanceBar then
-        if ShapeshiftBarFrame then
-            ShapeshiftBarFrame:UnregisterAllEvents()
-            ShapeshiftBarFrame:Hide()
-            ShapeshiftBarFrame:SetAlpha(0)
-        end
-        for i = 1, 12 do
-            local btn = _G["ShapeshiftButton" .. i]
-            if btn then btn:Hide(); btn:SetAlpha(0) end
-        end
+        -- Leave Blizzard's events and button state intact so disabling this
+        -- setting can use the normal FrameXML update without a UI reload.
+        ShapeshiftBarFrame:Hide()
+    elseif ShapeshiftBar_Update then
+        ShapeshiftBar_Update()
     end
 end
 
--- Hook stance updates using modern hooksecurefunc (Rule B10)
+-- Blizzard shows the bar from ShapeshiftBar_Update when forms change.
 hooksecurefunc("ShapeshiftBar_Update", function()
     if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
 end)

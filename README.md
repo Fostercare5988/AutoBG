@@ -79,6 +79,8 @@ AutoBG is engineered around strict low-level system integration:
 - **Audio & Stealth Alerts**: Plays alert sounds on enemy detection and a dedicated Prowl sound when an enemy enters stealth nearby.
 - **Smart Battleground Suppression**: Automatically hides when zoning into a battleground to keep screen space dedicated to match frames.
 
+The **Hide Stance Bar** option restores Blizzard's normal stance bar behavior as soon as it is disabled; no UI reload is needed.
+
 ---
 
 ## ⌨️ Commands & Shortcuts
