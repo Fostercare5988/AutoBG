@@ -79,8 +79,6 @@ AutoBG is engineered around strict low-level system integration:
 - **Audio & Stealth Alerts**: Plays alert sounds on enemy detection and a dedicated Prowl sound when an enemy enters stealth nearby.
 - **Smart Battleground Suppression**: Automatically hides when zoning into a battleground to keep screen space dedicated to match frames.
 
-The **Hide Stance Bar** option restores Blizzard's normal stance bar behavior as soon as it is disabled; no UI reload is needed.
-
 ---
 
 ## ⌨️ Commands & Shortcuts
@@ -104,7 +102,6 @@ The **Hide Stance Bar** option restores Blizzard's normal stance bar behavior as
 | `/abg focus` | Focus enemy flag carrier via SuperWoW `FocusUnit` |
 | `/abg msg` | Toggle chat status notifications |
 | `/abg s` / `/abg f` | Toggle sound alerts / taskbar flashing |
-| `/abg stealth` | Toggle Stealth & Stance bar suppression |
 | `/abg reset` | Reset all configuration and frame positions to defaults |
 | `/bgt` | Open Enemy Frames configuration (BattlegroundTargets alias) |
 | `/bgt test [10\|15\|40]` | Toggle enemy target frames preview for bracket |

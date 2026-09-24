@@ -294,25 +294,6 @@ local cbScoreColor = CreateCheckButton("AutoBG_Opt_ScoreColor", panelGeneral, "S
 end)
 cbScoreColor:SetPoint("TOPLEFT", cbChatMsg, "BOTTOMLEFT", 0, -4)
 
-local cbHideCastbar = CreateCheckButton("AutoBG_Opt_HideCastbar", panelGeneral, "Hide Default Castbar", "Hide default Blizzard cast bar (useful if using custom castbars).", function()
-	if AutoBG_Settings then
-		AutoBG_Settings.HideCastbar = this:GetChecked() and true or false
-		if AutoBG_Settings.HideCastbar and CastingBarFrame then
-			CastingBarFrame:UnregisterAllEvents()
-			CastingBarFrame:Hide()
-		end
-	end
-end)
-cbHideCastbar:SetPoint("TOPLEFT", cbScoreColor, "BOTTOMLEFT", 0, -4)
-
-local cbHideStanceBar = CreateCheckButton("AutoBG_Opt_HideStanceBar", panelGeneral, "Hide Stealth/Stance Bar", "Hide default Blizzard stance/shapeshift bar (Stealth, Stances, Forms).", function()
-	if AutoBG_Settings then
-		AutoBG_Settings.HideStanceBar = this:GetChecked() and true or false
-		if AutoBG_UpdateStanceBar then AutoBG_UpdateStanceBar() end
-	end
-end)
-cbHideStanceBar:SetPoint("TOPLEFT", cbHideCastbar, "BOTTOMLEFT", 0, -4)
-
 -- Column 2: Auto Queue Command Center
 local crest = panelGeneral:CreateTexture(nil, "ARTWORK")
 crest:SetWidth(18)
@@ -922,8 +903,6 @@ SelectTab = function(tabId)
 			cbFlash:SetChecked(AutoBG_Settings.FlashTaskbar and 1 or nil)
 			cbChatMsg:SetChecked(AutoBG_Settings.ChatMessages and 1 or nil)
 			cbScoreColor:SetChecked(AutoBG_Settings.ScoreColor and 1 or nil)
-			cbHideCastbar:SetChecked(AutoBG_Settings.HideCastbar and 1 or nil)
-			cbHideStanceBar:SetChecked(AutoBG_Settings.HideStanceBar and 1 or nil)
 
 			cbQueueWSG:SetChecked((AutoBG_Settings.AutoQueue_WSG ~= false) and 1 or nil)
 			cbQueueAB:SetChecked((AutoBG_Settings.AutoQueue_AB ~= false) and 1 or nil)

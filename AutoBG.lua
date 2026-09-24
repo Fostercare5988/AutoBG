@@ -151,8 +151,8 @@ local defaultSettings = {
     AutoRejoin = false, AutoQueueLogin = false, ScoreColor = true,
     NodeColors = true, AutoRelease = true, ABTimers = true,
     AVTimers = true, RessTimer = true, QueueTimers = true,
-    FCFrame = true, WSGTimers = true, HideCastbar = false,
-    HideStanceBar = false, TestAllTimers = false, LastPlayedBG = nil,
+    FCFrame = true, WSGTimers = true,
+    TestAllTimers = false, LastPlayedBG = nil,
     Positions = {}, SkipIfAFK = true,
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
     AutoQueue_BR = false, ABProjection = true,
@@ -216,26 +216,6 @@ function AutoBG_Print(msg, force)
         DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00AutoBG:|r " .. msg)
     end
 end
-
-function AutoBG_UpdateStanceBar()
-    if not AutoBG_Settings or not ShapeshiftBarFrame then return end
-    if AutoBG_Settings.HideStanceBar then
-        -- Leave Blizzard's events and button state intact so disabling this
-        -- setting can use the normal FrameXML update without a UI reload.
-        ShapeshiftBarFrame:Hide()
-    elseif ShapeshiftBar_Update then
-        ShapeshiftBar_Update()
-    end
-end
-
--- Blizzard shows the bar from ShapeshiftBar_Update when forms change.
-hooksecurefunc("ShapeshiftBar_Update", function()
-    if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
-end)
-hooksecurefunc("UIParent_ManageFramePositions", function()
-    if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
-end)
-
 
 -- Canonical Class Colors (Rule B7: Shaman Blue 0x00, 0x70, 0xDE)
 AutoBG_CLASS_COLORS = {
@@ -687,6 +667,9 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 if AutoBG_Settings[k] == nil then AutoBG_Settings[k] = v end
             end
         end
+        -- Drop settings that now belong to FostercareTweaks.
+        AutoBG_Settings.HideCastbar = nil
+        AutoBG_Settings.HideStanceBar = nil
 
         -- Initialize Targets & Spy settings natively under AutoBG_Settings
         if not AutoBG_Settings.Targets then
@@ -712,8 +695,6 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
 
         UpdateZoneCache()
         AutoBG_Print("v2.0.0 loaded. Type |cFFFFFF00/abg|r or |cFFFFFF00/bgt|r for options.", true)
-        if AutoBG_Settings.HideCastbar and CastingBarFrame then CastingBarFrame:UnregisterAllEvents(); CastingBarFrame:Hide() end
-        if AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
 
     elseif ev == "PLAYER_FLAGS_CHANGED" then
         if not a1 or a1 == "player" then
@@ -727,7 +708,6 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
         UpdateZoneCache()
         if UnitIsAFK and UnitIsAFK("player") then playerIsAFK = true else playerIsAFK = false end
-        if AutoBG_Settings and AutoBG_Settings.HideStanceBar then AutoBG_UpdateStanceBar() end
 
         if currentZonePVP then
             if currentZoneText ~= "" then
@@ -983,12 +963,7 @@ SlashCmdList["AUTOBG"] = function(msg)
         return
     end
 
-    if cmd == "stealth" or cmd == "stance" then
-        AutoBG_Settings.HideStanceBar = not AutoBG_Settings.HideStanceBar
-        AutoBG_Print("Hide Stealth/Stance Bar is now " .. (AutoBG_Settings.HideStanceBar and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
-        if AutoBG_UpdateStanceBar then AutoBG_UpdateStanceBar() end
-        if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
-    elseif cmd == "q" or cmd == "queue" or cmd == "join" or cmd == "rejoin" then
+    if cmd == "q" or cmd == "queue" or cmd == "join" or cmd == "rejoin" then
         local hasDeserter, remaining = AutoBG_HasDeserter()
         if hasDeserter then
             AutoBG_Print("Cannot queue: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(remaining) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
@@ -1024,7 +999,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "reset" then
         AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg proj, /abg targets, /abg spy, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg stealth, /abg test, /abg reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg proj, /abg targets, /abg spy, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
     else
         if AutoBG_OpenOptions then
             AutoBG_OpenOptions("general")
