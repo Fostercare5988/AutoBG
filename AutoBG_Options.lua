@@ -663,6 +663,12 @@ btnTgtResetPos:SetScript("OnClick", function()
 	end
 end)
 
+local cbTgtStealthAlert = CreateCheckButton("AutoBG_Tgt_StealthAlert", panelTargets, "Stealth alerts in BGs", "Show a popup and play a sound on observed enemy Stealth, Prowl, Vanish or Shadowmeld.", function()
+	Targets:EnsureOptions()
+	AutoBG_Settings.Targets.StealthAlert = this:GetChecked() and true or false
+end)
+cbTgtStealthAlert:SetPoint("TOPLEFT", btnTgtTogglePreview, "BOTTOMLEFT", 0, -12)
+
 UpdateTargetsWidgets = function(sz)
 	if Targets and Targets.EnsureOptions then Targets:EnsureOptions() end
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
@@ -690,6 +696,7 @@ UpdateTargetsWidgets = function(sz)
 	cbTgtDim:SetChecked(o.DimStealthed and o.DimStealthed[sz] and 1 or nil)
 	cbTgtTrinket:SetChecked(o.ShowTrinket and o.ShowTrinket[sz] and 1 or nil)
 	cbTgtTrinketLeft:SetChecked(o.TrinketPos == "LEFT" and 1 or nil)
+	cbTgtStealthAlert:SetChecked(o.StealthAlert and 1 or nil)
 
 	local fontSize = (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10
 	sliderTgtFontSize:SetValue(fontSize)
@@ -734,7 +741,7 @@ local cbSpySound = CreateCheckButton("AutoBG_Spy_SoundAlert", panelSpy, "Sound o
 end)
 cbSpySound:SetPoint("TOPLEFT", cbSpyEnable, "BOTTOMLEFT", 0, -6)
 
-local cbSpyStealth = CreateCheckButton("AutoBG_Spy_StealthAlert", panelSpy, "Sound on Stealth Detected", "Play stealth alert sound when a stealthed enemy or stealth cast is detected.", function()
+local cbSpyStealth = CreateCheckButton("AutoBG_Spy_StealthAlert", panelSpy, "Stealth alerts outside BGs", "Show a popup and play a sound on observed stealth, including Shadowmeld. BG alerts have their own setting under Targets.", function()
 	if not AutoBG_Settings then AutoBG_Settings = {} end
 	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
 	AutoBG_Settings.Spy.StealthAlert = this:GetChecked() and true or false

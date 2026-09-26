@@ -22,34 +22,26 @@ local ALLIANCE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\AllianceFlag"
 local ALLIANCE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 
+-- Deployment policy: all supported PvP trinkets use a three-minute cooldown.
+local TRINKET_COOLDOWN = 180
 local TRINKET_SPELL_IDS = {
-	[52317] = 180, -- Turtle WoW PvP Trinket (Insignia of the Alliance / Horde, 3m CD)
-	[5579]  = 300, -- Vanilla Warrior, Hunter, Shaman Insignia ("Immune Root/Snare/Stun", 5m CD)
-	[23276] = 300, -- Vanilla Paladin, Druid Insignia ("Immune Fear/Polymorph/Stun", 5m CD)
-	[23277] = 300, -- Vanilla Rogue Insignia ("Immune Charm/Fear/Stun", 5m CD)
-	[23273] = 300, -- Vanilla Priest, Mage Insignia ("Immune Charm/Fear/Polymorph", 5m CD)
-	[23274] = 300, -- Vanilla Warlock Insignia ("Immune Fear/Polymorph/Snare", 5m CD)
-	-- Compatibility fallback mappings
-	[23505] = 300,
-	[23506] = 300,
-	[23507] = 300,
-	[23508] = 300,
-	[23509] = 300,
-	[23510] = 300,
-	[23511] = 300,
-	[23512] = 300,
-	[23513] = 300,
+	[52317] = TRINKET_COOLDOWN,
+	[5579]  = TRINKET_COOLDOWN,
+	[23276] = TRINKET_COOLDOWN,
+	[23277] = TRINKET_COOLDOWN,
+	[23273] = TRINKET_COOLDOWN,
+	[23274] = TRINKET_COOLDOWN,
 }
 
 local TRINKET_SPELL_NAMES = {
-	["Immune Root/Snare/Stun"]      = 300,
-	["Immune Fear/Polymorph/Stun"]  = 300,
-	["Immune Charm/Fear/Stun"]      = 300,
-	["Immune Charm/Fear/Polymorph"] = 300,
-	["Immune Fear/Polymorph/Snare"] = 300,
-	["PvP Trinket"]                 = 180,
-	["Insignia of the Alliance"]    = 300,
-	["Insignia of the Horde"]       = 300,
+	["Immune Root/Snare/Stun"]      = TRINKET_COOLDOWN,
+	["Immune Fear/Polymorph/Stun"]  = TRINKET_COOLDOWN,
+	["Immune Charm/Fear/Stun"]      = TRINKET_COOLDOWN,
+	["Immune Charm/Fear/Polymorph"] = TRINKET_COOLDOWN,
+	["Immune Fear/Polymorph/Snare"] = TRINKET_COOLDOWN,
+	["PvP Trinket"]                 = TRINKET_COOLDOWN,
+	["Insignia of the Alliance"]    = TRINKET_COOLDOWN,
+	["Insignia of the Horde"]       = TRINKET_COOLDOWN,
 }
 
 local function GetEnemyTrinketTexture()
@@ -199,7 +191,7 @@ local function CheckIsStealthSpell(spellId)
 	local s = STEALTH_SPELLS[spellId]
 	local spellTex = s and s.texture
 	local spellName = s and s.name
-	local spellDur = s and s.duration or 0
+	local spellDur = s and s.duration
 
 	if SpellInfo then
 		local name = SpellInfo(spellId)
@@ -229,6 +221,21 @@ local function CheckIsStealthName(spellName)
 end
 Targets.CheckIsStealthSpell = CheckIsStealthSpell
 Targets.CheckIsStealthName = CheckIsStealthName
+
+-- A missing/invisible unit is unknown, not proof that stealth ended.
+local stealthAuraSlots = {}
+function Targets.CheckUnitStealth(unit)
+	if not unit or not UnitExists(unit) or not UnitIsVisible(unit) then return nil end
+	local _, count = C_UnitAuras.GetAuraSlots(unit, "HELPFUL", nil, nil, stealthAuraSlots)
+	for i = 1, count do
+		local aura = C_UnitAuras.GetAuraDataBySlot(unit, stealthAuraSlots[i])
+		if not aura then break end
+		local found, name, texture, duration = CheckIsStealthSpell(aura.spellId)
+		if not found then found, name, texture, duration = CheckIsStealthName(aura.name) end
+		if found then return true, name, texture, duration end
+	end
+	return false
+end
 
 local function StripRealm(name)
 	if not name then return "" end
@@ -330,15 +337,27 @@ function Targets:EnsureOptions()
 	o.ShowStealthText = o.ShowStealthText or {}
 	o.ShowFlagCarrier = o.ShowFlagCarrier or {}
 	o.ShowTrinket = o.ShowTrinket or {}
+	if o.StealthAlert == nil then o.StealthAlert = true end
 	if o.TrinketPos == nil then o.TrinketPos = "RIGHT" end
 
+	-- Migrate old default dimensions once; preserve custom layouts and positions.
+	if not o.ReadabilityVersion then
+		for _, size in ipairs(BRACKETS) do
+			if o.ButtonFontSize[size] == 10 then o.ButtonFontSize[size] = (size == 40 and 11) or 12 end
+			if o.ButtonWidth[size] == 150 then o.ButtonWidth[size] = 210 end
+			if o.ButtonHeight[size] == ((size == 40 and 18) or 20) then
+				o.ButtonHeight[size] = (size == 40 and 20) or 26
+			end
+		end
+		o.ReadabilityVersion = 1
+	end
 	for _, size in ipairs(BRACKETS) do
 		if o.EnableBracket[size] == nil then o.EnableBracket[size] = true end
 		if o.IndependentPositioning[size] == nil then o.IndependentPositioning[size] = false end
-		if o.ButtonFontSize[size] == nil then o.ButtonFontSize[size] = 10 end
+		if o.ButtonFontSize[size] == nil then o.ButtonFontSize[size] = (size == 40 and 11) or 12 end
 		if o.ButtonScale[size] == nil then o.ButtonScale[size] = (size == 10 and 1.10) or (size == 15 and 1.00) or 0.90 end
-		if o.ButtonWidth[size] == nil then o.ButtonWidth[size] = 150 end
-		if o.ButtonHeight[size] == nil then o.ButtonHeight[size] = (size == 40 and 18) or 20 end
+		if o.ButtonWidth[size] == nil then o.ButtonWidth[size] = 210 end
+		if o.ButtonHeight[size] == nil then o.ButtonHeight[size] = (size == 40 and 20) or 26 end
 		if o.ButtonShowHealthBar[size] == nil then o.ButtonShowHealthBar[size] = true end
 		if o.ButtonShowHealthText[size] == nil then o.ButtonShowHealthText[size] = true end
 		if o.ButtonHideRealm[size] == nil then o.ButtonHideRealm[size] = false end
@@ -445,12 +464,12 @@ local function UpdateRowStealthVisual(index, name)
 
 	if stealth and not dead and (not o or o.ShowStealthText[size] ~= false) then
 		local sName = stealth.spellName or "Stealth"
-		local tag = (sName == "Prowl" and "|cffb0b0ffPROWL|r")
-			or (sName == "Vanish" and "|cffb0b0ffVANISH|r")
-			or (sName == "Shadowmeld" and "|cff9090ffMELD|r")
+		local tag = (sName == "Prowl" and "|cffd2c2ffPROWL|r")
+			or (sName == "Vanish" and "|cffd2c2ffVANISH|r")
+			or (sName == "Shadowmeld" and "|cffc7b5ffMELD|r")
 			or (sName == "Cloaking" and "|cff00ffffCLOAK|r")
 			or (string.find(sName, "Invis") and "|cff00ffffINVIS|r")
-			or "|cff9090ffSTEALTH|r"
+			or "|cffc7b5ffSTEALTH|r"
 		btn.HealthText:SetText(tag)
 		btn.HealthText:Show()
 	else
@@ -516,6 +535,7 @@ SetUnitStealth = function(name, isStealthed, spellName, texture, duration)
 	if not name then return end
 	if isStealthed then
 		local entry = stealthedState[name]
+		local firstObservation = not entry
 		if not entry then
 			entry = AcquireStealthEntry()
 			stealthedState[name] = entry
@@ -524,7 +544,12 @@ SetUnitStealth = function(name, isStealthed, spellName, texture, duration)
 		entry.spellName = spellName or "Stealth"
 		entry.texture = texture or "Interface\\Icons\\Ability_Stealth"
 		local exp = (duration and duration > 0) and (GetTime() + duration + 0.5) or nil
-		entry.expireTime = exp
+		if firstObservation then
+			entry.expireTime = exp
+			if not Targets.isConfig and AutoBG_Spy then
+				AutoBG_Spy:NotifyStealth(name, entry.spellName, nil, nameToGUID[name], true)
+			end
+		end
 
 		if exp and stealthWatcher and not stealthWatcher:IsShown() then
 			stealthWatcher:Show()
@@ -604,9 +629,12 @@ local function UpdateAllTrinketTimers()
 	end
 end
 
-local function TriggerTrinketCooldown(name, duration)
+local function TriggerTrinketCooldown(name)
 	if not name then return end
-	trinketCooldown[name] = GetTime() + (duration or 180)
+	local now = GetTime()
+	-- CAST and combat-log observations describe the same use.
+	if trinketCooldown[name] and trinketCooldown[name] > now then return end
+	trinketCooldown[name] = now + TRINKET_COOLDOWN
 	local row = nameToRow[name]
 	if row then
 		UpdateRowTrinketVisual(row, name)
@@ -757,7 +785,7 @@ function Targets:CreateFrames()
 		btn.Background = btn:CreateTexture(nil, "BACKGROUND")
 		btn.Background:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
 		btn.Background:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
-		btn.Background:SetTexture(0, 0, 0, 0.58)
+		btn.Background:SetTexture(0.15, 0.19, 0.25, 0.95)
 
 		btn.ClassBackground = btn:CreateTexture(nil, "BORDER")
 		btn.ClassBackground:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
@@ -909,6 +937,7 @@ function Targets:SetupButtonLayout(size)
 	local scale = (o and o.ButtonScale and o.ButtonScale[size]) or 1.0
 
 	Targets.MainFrame:SetWidth(width)
+	Targets.MainFrame:SetHeight(math.max(1, math.min(enemyCount, size)) * height)
 	Targets.MainFrame:SetScale(scale)
 	Targets.MainFrame:EnableMouse(Targets.isConfig and true or false)
 
@@ -916,7 +945,7 @@ function Targets:SetupButtonLayout(size)
 		local btn = Targets.TargetButton[i]
 		btn:SetWidth(width)
 		btn:SetHeight(height)
-		btn.Name:SetFont(FONT, fontSize, "")
+		btn.Name:SetFont(FONT, fontSize, "OUTLINE")
 		btn.HealthText:SetFont(FONT, fontSize, "OUTLINE")
 		if btn.StealthIconBg then
 			btn.StealthIconBg:SetWidth(height - 2)
@@ -1009,6 +1038,8 @@ local function RenderRoster()
 	wipe(shortNameToFull)
 
 	local displayCount = math.min(enemyCount, currentSize)
+	local height = (o and o.ButtonHeight[currentSize]) or 20
+	Targets.MainFrame:SetHeight(math.max(1, displayCount) * height)
 	for i = 1, displayCount do
 		local fullName = roster[i].name
 		local shortName = StripRealm(fullName)
@@ -1031,7 +1062,7 @@ local function RenderRoster()
 			btn.classToken = data.classToken
 			nameToRow[name] = i
 
-			btn.ClassBackground:SetTexture(color.r * 0.30, color.g * 0.30, color.b * 0.30, 1)
+			btn.ClassBackground:SetTexture(0.12 + color.r * 0.30, 0.12 + color.g * 0.30, 0.12 + color.b * 0.30, 1)
 			btn.HealthBar:SetVertexColor(color.r, color.g, color.b, 1)
 
 			btn.Name:SetText((o and o.ButtonHideRealm and o.ButtonHideRealm[currentSize]) and StripRealm(name) or name)
@@ -1070,6 +1101,9 @@ function Targets:BattlefieldScoreUpdate(force)
 		prevEnemyCount = -1
 		ClearAllStealth()
 		wipe(guidToName)
+		wipe(nameToGUID)
+		wipe(healthPct)
+		wipe(deadState)
 		Targets.MainFrame:Hide()
 		return
 	end
@@ -1127,7 +1161,7 @@ function Targets:BattlefieldScoreUpdate(force)
 	RenderRoster()
 end
 
-local function ObserveUnit(unit)
+local function ObserveUnit(unit, scanAuras)
 	if not unit or not UnitExists(unit) then return end
 	local rawName = UnitName(unit)
 	if not rawName then return end
@@ -1145,6 +1179,11 @@ local function ObserveUnit(unit)
 				Targets.TargetButton[row].targetGUID = guid
 			end
 		end
+	end
+
+	if scanAuras ~= false then
+		local found, spell, texture, duration = Targets.CheckUnitStealth(unit)
+		if found ~= nil then SetUnitStealth(name, found, spell, texture, duration) end
 	end
 
 	local dead = (UnitIsDeadOrGhost and UnitIsDeadOrGhost(unit)) or (UnitIsDead(unit) or UnitIsGhost(unit)) and true or false
@@ -1321,6 +1360,7 @@ Targets:RegisterEvent("PLAYER_ENTERING_WORLD")
 Targets:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 Targets:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 Targets:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
+Targets:RegisterEvent("UNIT_AURA")
 Targets:RegisterEvent("UNIT_HEALTH")
 Targets:RegisterEvent("UNIT_HEALTH_FREQUENT")
 Targets:RegisterEvent("UNIT_TARGET")
@@ -1333,7 +1373,6 @@ Targets:RegisterEvent("UNIT_CASTEVENT")
 Targets:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS")
 Targets:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF")
 Targets:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
-Targets:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
 Targets:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
 
 local TARGETS_LIFECYCLE_EVENTS = {
@@ -1369,6 +1408,9 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 		Targets:BattlefieldScoreUpdate()
 
 	elseif ev == "UNIT_HEALTH" or ev == "UNIT_HEALTH_FREQUENT" then
+		ObserveUnit(a1, false)
+
+	elseif ev == "UNIT_AURA" then
 		ObserveUnit(a1)
 
 	elseif ev == "UNIT_TARGET" then
@@ -1412,21 +1454,17 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 				local sName = SpellInfo(spellId)
 				if sName and TRINKET_SPELL_NAMES[sName] then
 					trinketDur = TRINKET_SPELL_NAMES[sName]
-				elseif sName and (string.find(sName, "Insignia") or string.find(sName, "PvP Trinket") or string.find(sName, "^Immune ")) then
-					trinketDur = 300
 				end
 			end
 			if trinketDur then
-				TriggerTrinketCooldown(name, trinketDur)
+				TriggerTrinketCooldown(name)
 			end
 
 			local isStealth, sName, sTex, sDur = CheckIsStealthSpell(spellId)
 			if isStealth then
 				SetUnitStealth(name, true, sName, sTex, sDur)
-			elseif stealthedState[name] then
-				SetUnitStealth(name, false)
 			end
-		elseif eventType == "START" or eventType == "CHANNEL" or eventType == "MAINHAND" or eventType == "OFFHAND" then
+		elseif eventType == "MAINHAND" or eventType == "OFFHAND" then
 			if stealthedState[name] then
 				SetUnitStealth(name, false)
 			end
@@ -1438,9 +1476,9 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 			if enemyName and buffName then
 				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
 				if name then
-					local tDur = TRINKET_SPELL_NAMES[buffName] or (string.find(buffName, "^Immune ") and 300) or (string.find(buffName, "Insignia") and 300)
+					local tDur = TRINKET_SPELL_NAMES[buffName]
 					if tDur then
-						TriggerTrinketCooldown(name, tDur)
+						TriggerTrinketCooldown(name)
 					elseif CheckIsStealthName(buffName) then
 						local data = STEALTH_NAMES[buffName]
 						SetUnitStealth(name, true, data.name, data.texture, data.duration)
@@ -1461,9 +1499,9 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 			if enemyName and spellName then
 				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
 				if name then
-					local tDur = TRINKET_SPELL_NAMES[spellName] or (string.find(spellName, "Insignia") and 300) or (string.find(spellName, "PvP Trinket") and 180) or (string.find(spellName, "^Immune ") and 300)
+					local tDur = TRINKET_SPELL_NAMES[spellName]
 					if tDur then
-						TriggerTrinketCooldown(name, tDur)
+						TriggerTrinketCooldown(name)
 					elseif CheckIsStealthName(spellName) then
 						local data = STEALTH_NAMES[spellName]
 						SetUnitStealth(name, true, data.name, data.texture, data.duration)
@@ -1477,18 +1515,7 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 			local _, _, buffName, enemyName = string.find(a1, "^(.-) fades from (.-)%.$")
 			if buffName and enemyName and CheckIsStealthName(buffName) then
 				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
-				if name and stealthedState[name] then
-					SetUnitStealth(name, false)
-				end
-			end
-		end
-
-	elseif ev == "CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE" then
-		if a1 then
-			local _, _, enemyName = string.find(a1, "^(.-)'s ")
-			if enemyName then
-				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
-				if name and stealthedState[name] then
+				if name and stealthedState[name] and stealthedState[name].spellName == buffName then
 					SetUnitStealth(name, false)
 				end
 			end

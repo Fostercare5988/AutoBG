@@ -50,8 +50,8 @@ end
 
 local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     local frame = CreateFrame("Button", name, UIParent)
-    frame:SetWidth(185)
-    frame:SetHeight(48)
+    frame:SetWidth(240)
+    frame:SetHeight(56)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
     frame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -59,7 +59,7 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
         tile = true, tileSize = 16, edgeSize = 16,
         insets = { left = 4, right = 4, top = 4, bottom = 4 }
     })
-    frame:SetBackdropColor(0, 0, 0, 0.85)
+    frame:SetBackdropColor(0.12, 0.16, 0.22, 0.95)
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
@@ -125,13 +125,14 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     nameText:SetPoint("TOPLEFT", frame, "TOPLEFT", 44, -8)
     nameText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -70, -8)
-    nameText:SetHeight(14); nameText:SetJustifyH("LEFT")
+    nameText:SetFont("Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
+    nameText:SetHeight(16); nameText:SetJustifyH("LEFT")
     nameText:SetText(titleText)
 
     local healthBar = CreateFrame("StatusBar", name .. "HealthBar", frame)
     healthBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 44, 8)
     healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 8)
-    healthBar:SetHeight(13)
+    healthBar:SetHeight(16)
     healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     healthBar:SetMinMaxValues(0, 100); healthBar:SetValue(100)
     healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
@@ -160,13 +161,13 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     return frame
 end
 
-local AllianceFC = CreateFCFrame("AutoBG_AllianceFC", "Alliance FC", -100, -150, "Interface\\WorldStateFrame\\HordeFlag")
-local HordeFC = CreateFCFrame("AutoBG_HordeFC", "Horde FC", 100, -150, "Interface\\WorldStateFrame\\AllianceFlag")
+local AllianceFC = CreateFCFrame("AutoBG_AllianceFC", "Alliance FC", -130, -150, "Interface\\WorldStateFrame\\HordeFlag")
+local HordeFC = CreateFCFrame("AutoBG_HordeFC", "Horde FC", 130, -150, "Interface\\WorldStateFrame\\AllianceFlag")
 
 function AutoBG_LoadFCPositions()
     if AutoBG_LoadPosition then
-        AutoBG_LoadPosition(AllianceFC, "AutoBG_AllianceFC", "TOP", -100, -150)
-        AutoBG_LoadPosition(HordeFC, "AutoBG_HordeFC", "TOP", 100, -150)
+        AutoBG_LoadPosition(AllianceFC, "AutoBG_AllianceFC", "TOP", -130, -150)
+        AutoBG_LoadPosition(HordeFC, "AutoBG_HordeFC", "TOP", 130, -150)
     end
 end
 
@@ -175,8 +176,8 @@ function AutoBG_ResetFCPositions()
         AutoBG_Settings.Positions["AutoBG_AllianceFC"] = nil
         AutoBG_Settings.Positions["AutoBG_HordeFC"] = nil
     end
-    AllianceFC:ClearAllPoints(); AllianceFC:SetPoint("TOP", UIParent, "TOP", -100, -150) -- octowow-ignore: AP-31
-    HordeFC:ClearAllPoints(); HordeFC:SetPoint("TOP", UIParent, "TOP", 100, -150) -- octowow-ignore: AP-31
+    AllianceFC:ClearAllPoints(); AllianceFC:SetPoint("TOP", UIParent, "TOP", -130, -150) -- octowow-ignore: AP-31
+    HordeFC:ClearAllPoints(); HordeFC:SetPoint("TOP", UIParent, "TOP", 130, -150) -- octowow-ignore: AP-31
 end
 
 local function NotifyCarrierChanged()
@@ -311,6 +312,7 @@ local function GetDistance(unit)
     return nil
 end
 
+local carrierAuraSlots = {}
 local function ScanCarrier(carrierName, frame, flagType)
     if not carrierName or carrierName == "" then return end
     for i = 1, #SCAN_UNITS do
@@ -331,21 +333,17 @@ local function ScanCarrier(carrierName, frame, flagType)
                 local pct = math.floor((hp / maxHp) * 100)
                 frame.healthBar:SetValue(pct)
                 frame.healthBar:SetStatusBarColor(pct < 30 and 0.95 or (pct < 60 and 0.95 or 0.1), pct < 30 and 0.15 or (pct < 60 and 0.8 or 0.85), 0.1)
-                frame.hpText:SetText((rawMax and rawMax > 100 and (rawHp .. " (" .. pct .. "%)")) or (pct .. "%"))
+                frame.hpText:SetText((rawHp and rawMax and rawMax > 100 and (rawHp .. " (" .. pct .. "%)")) or (pct .. "%"))
             end
 
-            -- ClassicAPI v1.15.8+ Linear O(n) Slot-Batching Aura Tracker (Focused / Brutal Assault debuff stacks)
+            -- GetAuraSlots returns a continuation token, not a table.
             local debuffStacks = 0
-            if C_UnitAuras and C_UnitAuras.GetAuraSlots and C_UnitAuras.GetAuraDataBySlot then
-                local okSlots, debuffSlots = pcall(C_UnitAuras.GetAuraSlots, u, "HARMFUL")
-                if okSlots and debuffSlots then
-                    for s = 1, #debuffSlots do
-                        local okData, debuff = pcall(C_UnitAuras.GetAuraDataBySlot, u, debuffSlots[s])
-                        if okData and debuff and debuff.name and (string.find(debuff.name, "Assault") or string.find(debuff.name, "Flag")) then
-                            debuffStacks = debuff.applications or 1
-                            break
-                        end
-                    end
+            local _, count = C_UnitAuras.GetAuraSlots(u, "HARMFUL", nil, nil, carrierAuraSlots)
+            for i = 1, count do
+                local debuff = C_UnitAuras.GetAuraDataBySlot(u, carrierAuraSlots[i])
+                if debuff and (debuff.name == "Focused Assault" or debuff.name == "Brutal Assault") then
+                    debuffStacks = debuff.applications or 1
+                    break
                 end
             end
             if frame.debuffText then

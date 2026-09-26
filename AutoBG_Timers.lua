@@ -62,8 +62,8 @@ local BAR_TEXTURE      = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local ALLIANCE_FLAG_TEX = "Interface\\WorldStateFrame\\AllianceFlag"
 local HORDE_FLAG_TEX   = "Interface\\WorldStateFrame\\HordeFlag"
 
-local BAR_WIDTH    = 218
-local BAR_ROW_H    = 27
+local BAR_WIDTH    = 250
+local BAR_ROW_H    = 31
 local BAR_ROW_GAP  = 3
 local BAR_HEADER_H = 24
 
@@ -73,7 +73,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     frame:SetHeight(BAR_HEADER_H)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
     frame:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
-    frame:SetBackdropColor(0.025, 0.035, 0.05, 0.94)
+    frame:SetBackdropColor(0.10, 0.14, 0.19, 0.96)
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
@@ -88,7 +88,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     headerBg:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
     headerBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -1, -1)
     headerBg:SetHeight(BAR_HEADER_H - 1)
-    headerBg:SetTexture(0.07, 0.10, 0.14, 0.96)
+    headerBg:SetTexture(0.16, 0.21, 0.28, 0.96)
 
     local headerRule = frame:CreateTexture(nil, "ARTWORK")
     headerRule:SetPoint("TOPLEFT", frame, "TOPLEFT", 5, -BAR_HEADER_H)
@@ -97,7 +97,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     headerRule:SetTexture(titleR, titleG, titleB, 0.70)
 
     local titleFs = frame:CreateFontString(nil, "OVERLAY")
-    titleFs:SetFont(FONT, 11, "OUTLINE")
+    titleFs:SetFont(FONT, 13, "OUTLINE")
     titleFs:SetPoint("LEFT", frame, "TOPLEFT", 9, -12)
     titleFs:SetText(titleText)
     titleFs:SetTextColor(0.94, 0.97, 1)
@@ -137,7 +137,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         -- The row button owns the full click area; textures and font strings do not take mouse input.
         local rowBg = row:CreateTexture(nil, "BACKGROUND")
         rowBg:SetAllPoints(row)
-        rowBg:SetTexture(0.09, 0.12, 0.16, 0.96)
+        rowBg:SetTexture(0.14, 0.18, 0.24, 0.96)
         row.rowBg = rowBg
 
         -- A single hairline separates rows without tooltip-style chrome.
@@ -186,14 +186,14 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         row.flagIcon = flagIcon
 
         local timeFs = row:CreateFontString(nil, "OVERLAY")
-        timeFs:SetFont(FONT, 13, "OUTLINE")
+        timeFs:SetFont(FONT, 15, "OUTLINE")
         timeFs:SetPoint("RIGHT", row, "RIGHT", -8, 3)
         timeFs:SetJustifyH("RIGHT")
         timeFs:SetTextColor(1, 1, 1, 1)
         row.timeFs = timeFs
 
         local labelFs = row:CreateFontString(nil, "OVERLAY")
-        labelFs:SetFont(FONT, 10, "OUTLINE")
+        labelFs:SetFont(FONT, 12, "OUTLINE")
         labelFs:SetPoint("LEFT", flagIcon, "RIGHT", 5, 3)
         labelFs:SetPoint("RIGHT", timeFs, "LEFT", -3, 0)
         labelFs:SetJustifyH("LEFT")

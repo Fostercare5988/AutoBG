@@ -14,6 +14,12 @@ if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) or
 end
 
 local addonName = "AutoBG"
+local isAutoQueueing = false
+local queueGeneration = 0
+local inviteGeneration = {}
+local notifiedQueues = {}
+local pendingAutoRejoin = nil
+local needsQueueAfterResurrect = false
 
 -- Native C++ Hardware Timer Wrapper (Zero GC overhead)
 function AutoBG_TimerAfter(delay, func)
@@ -186,9 +192,15 @@ function AutoBG_GetBGIcon(keyOrName)
 end
 
 function AutoBG_CancelAllQueues()
+    queueGeneration = queueGeneration + 1
+    isAutoQueueing = false
+    pendingAutoRejoin = nil
+    needsQueueAfterResurrect = false
     local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
     local cancelled = 0
     for i = 1, maxQueues do
+        inviteGeneration[i] = (inviteGeneration[i] or 0) + 1
+        notifiedQueues[i] = false
         local status = GetBattlefieldStatus(i)
         if status and status ~= "none" and status ~= "active" then
             AcceptBattlefieldPort(i, 0)
@@ -289,14 +301,11 @@ function AutoBG_FindPlayerClass(playerName)
     return nil
 end
 
-local notifiedQueues = {}
 local hasHandledEnd = false
 local lastPlayedBG = nil
-local pendingAutoRejoin = nil
 local rejoinRequested = false
 local rejoinFallbackScheduled = false
 local rejoinWorldReady = false
-local needsQueueAfterResurrect = false
 
 local function IsPlayerDeadOrGhost()
     return (UnitIsDeadOrGhost and UnitIsDeadOrGhost("player")) or (UnitIsDead and UnitIsDead("player")) or (UnitIsGhost and UnitIsGhost("player"))
@@ -327,7 +336,7 @@ local function FormatDeserterRemaining(sec)
 end
 
 function AutoBG_HasDeserter()
-    -- 1. Modern ClassicAPI C_UnitAuras query (Zero-allocation)
+    -- Structured aura identity avoids false matches from shared icon textures.
     if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
         for i = 1, 32 do
             local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HARMFUL")
@@ -339,15 +348,6 @@ function AutoBG_HasDeserter()
                 end
                 return true, remaining
             end
-        end
-    end
-
-    -- 2. Native UnitDebuff fallback
-    for i = 1, 16 do
-        local tex = UnitDebuff("player", i)
-        if not tex then break end
-        if string.find(tex, "Spell_Nature_Purge") then
-            return true, 0
         end
     end
 
@@ -429,7 +429,9 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
     local mmBtn = _G["TWMiniMapBattlefieldFrame"] or _G["MiniMapBattlefieldFrame"]
     if mmBtn then ClickFrame(mmBtn) end
 
+    local requestGeneration = queueGeneration
     AutoBG_TimerAfter(0.08, function()
+        if requestGeneration ~= queueGeneration then return end
         local targetFound = false
         local lowerTarget = string.lower(cleanName)
         for i = 1, 12 do
@@ -452,7 +454,6 @@ end
 
 
 -- Multi-BG Auto-Queue Engine (Zero-GC Pre-allocated Buffers)
-local isAutoQueueing = false
 local hasQueuedOnLogin = false
 local queueQueueBuffer = {}
 
@@ -512,10 +513,14 @@ function AutoBG_QueueAllBGs()
         return
     end
 
+    queueGeneration = queueGeneration + 1
+    local generation = queueGeneration
     isAutoQueueing = true
     local idx = 1
 
     local function StepQueue()
+        if generation ~= queueGeneration or not isAutoQueueing then return end
+        if currentZonePVP then isAutoQueueing = false; return end
         local hasDes, rem = AutoBG_HasDeserter()
         if hasDes then
             isAutoQueueing = false
@@ -533,7 +538,7 @@ function AutoBG_QueueAllBGs()
             return
         end
         if idx > total then
-            isAutoQueueing = false; AutoBG_Print("Auto-Queue complete: Queued for selected Battlegrounds!")
+            isAutoQueueing = false; AutoBG_Print("Queue requests finished. Check the battleground queue status.")
             return
         end
         local currentBG = queueQueueBuffer[idx]
@@ -643,6 +648,8 @@ local function ProcessBattlefieldQueue(id)
     local status, mapName = GetBattlefieldStatus(id)
     if status == "confirm" then
         if not notifiedQueues[id] then
+            inviteGeneration[id] = (inviteGeneration[id] or 0) + 1
+            local generation = inviteGeneration[id]
             notifiedQueues[id] = true
             if AutoBG_Settings.AutoAccept then
                 if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
@@ -661,6 +668,9 @@ local function ProcessBattlefieldQueue(id)
                 else
                     AutoBG_Print("Queue popped for |cFFFFFF00" .. bg .. "|r! Entering in |cFFFFFF00" .. delay .. "s|r...")
                     AutoBG_TimerAfter(delay, function()
+                        if inviteGeneration[qId] ~= generation or notifiedQueues[qId] ~= true or not AutoBG_Settings.AutoAccept then return end
+                        local currentStatus, currentMap = GetBattlefieldStatus(qId)
+                        if currentStatus ~= "confirm" or currentMap ~= mapName then return end
                         if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
                             AutoBG_Print("Auto-Enter cancelled: Player became |cFFFF5555AFK|r!")
                             return
@@ -680,7 +690,8 @@ local function ProcessBattlefieldQueue(id)
                 AutoBG_Print("Queue is ready for |cFFFFFF00" .. (mapName or "Battleground") .. "|r! (Queue #" .. id .. ")")
             end
         end
-    elseif status == "active" or status == "none" then
+    else
+        inviteGeneration[id] = (inviteGeneration[id] or 0) + 1
         notifiedQueues[id] = false
         if status == "active" then
             if mapName and mapName ~= "" then lastPlayedBG = mapName end
@@ -790,7 +801,9 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                         needsQueueAfterResurrect = true
                     else
                         hasQueuedOnLogin = true
+                        local generation = queueGeneration
                         AutoBG_TimerAfter(3.0, function()
+                            if generation ~= queueGeneration then return end
                             local currDes, currRem = AutoBG_HasDeserter()
                             if currDes then
                                 AutoBG_Print("Auto-Queue on login halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(currRem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
@@ -867,7 +880,9 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     elseif ev == "PLAYER_ALIVE" or ev == "PLAYER_UNGHOST" then
         if needsQueueAfterResurrect and not IsPlayerDeadOrGhost() then
             needsQueueAfterResurrect = false; hasQueuedOnLogin = true
+            local generation = queueGeneration
             AutoBG_TimerAfter(2.0, function()
+                if generation ~= queueGeneration then return end
                 if not IsPlayerDeadOrGhost() then
                     AutoBG_Print("Resurrection detected! Initiating Battleground Auto-Queue...")
                     AutoBG_QueueAllBGs()

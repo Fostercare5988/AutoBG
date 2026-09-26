@@ -36,20 +36,29 @@ function Spy:PlayStealthDetectedSound()
 	PlaySoundFile(SOUND_STEALTH_DETECTED, "Master")
 end
 
+local SPY_DEFAULTS = {
+	Enabled = true, SoundAlert = true, StealthAlert = true,
+	AutoHide = false, Timeout = 30, MaxRows = 10, Scale = 1.0,
+}
 local function GetSpySettings()
 	if not AutoBG_Settings then AutoBG_Settings = {} end
-	if not AutoBG_Settings.Spy then
-		AutoBG_Settings.Spy = {
-			Enabled = true,
-			SoundAlert = true,
-			StealthAlert = true,
-			AutoHide = false,
-			Timeout = 30,
-			MaxRows = 10,
-			Scale = 1.0,
-		}
+	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
+	for key, value in pairs(SPY_DEFAULTS) do
+		if AutoBG_Settings.Spy[key] == nil then AutoBG_Settings.Spy[key] = value end
 	end
 	return AutoBG_Settings.Spy
+end
+
+-- Called on a transition into observed stealth, not on each repeated event.
+function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground)
+	local opt = GetSpySettings()
+	if inBattleground then
+		if AutoBG_Settings.Targets and AutoBG_Settings.Targets.StealthAlert == false then return end
+	elseif not opt.Enabled or not opt.StealthAlert then
+		return
+	end
+	Spy:PlayStealthDetectedSound()
+	Spy:ShowAlert(spell or "Stealth", name, classToken, guid)
 end
 
 -- Pre-allocated memory tables (Rule D1 Zero GC Churn)
@@ -231,42 +240,7 @@ local function InferRaceFromFactionAndClass(classToken)
 end
 
 function Spy:CheckUnitStealth(unit)
-	if not unit or not UnitExists(unit) then return false, nil end
-
-	-- 1. Modern ClassicAPI C_UnitAuras query
-	if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
-		for i = 1, 32 do
-			local aura = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
-			if not aura then break end
-			if aura.spellId and Targets and Targets.CheckIsStealthSpell then
-				local isS, sName = Targets.CheckIsStealthSpell(aura.spellId)
-				if isS then return true, sName end
-			end
-			if aura.name and Targets and Targets.CheckIsStealthName then
-				local isS, sName = Targets.CheckIsStealthName(aura.name)
-				if isS then return true, sName end
-			end
-		end
-	end
-
-	-- 2. Native UnitBuff fallback (by icon texture match)
-	for i = 1, 32 do
-		local tex = UnitBuff(unit, i)
-		if not tex then break end
-		if string.find(tex, "Ability_Stealth") then
-			return true, "Stealth"
-		elseif string.find(tex, "Ability_Druid_Prowl") or string.find(tex, "Prowl") then
-			return true, "Prowl"
-		elseif string.find(tex, "Ability_Racial_ShadowMeld") or string.find(tex, "ShadowMeld") or string.find(tex, "Shadowmeld") then
-			return true, "Shadowmeld"
-		elseif string.find(tex, "Spell_Nature_Invisibilty") or string.find(tex, "Invis") then
-			return true, "Invisibility"
-		elseif string.find(tex, "INV_Misc_EngGizmos_04") then
-			return true, "Cloaking"
-		end
-	end
-
-	return false, nil
+	return Targets.CheckUnitStealth(unit)
 end
 
 local function IsHostilePlayer(guid, name)
@@ -417,23 +391,16 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 		if not isStealth then e.wasStealthedAlerted = false end
 	end
 
-	-- Audio notification with debouncing
-	if opt and opt.SoundAlert and isNew then
-		local lastSound = soundDebounce[name] or 0
-		if (now - lastSound) > 8 then
-			soundDebounce[name] = now
-			if e.isStealthed and opt.StealthAlert then
-				e.wasStealthedAlerted = true
-				PlaySoundFile(SOUND_STEALTH_DETECTED, "Master")
-				Spy:ShowAlert(e.stealthSpell or "Stealth", e.name, e.classToken, e.guid)
-			else
-				PlaySoundFile(SOUND_ENEMY_DETECTED, "Master")
-			end
-		end
-	elseif opt and opt.StealthAlert and isStealth and not e.wasStealthedAlerted then
+	-- Stealth takes precedence over the nearby sound, including immediately after login.
+	if opt.StealthAlert and e.isStealthed and not e.wasStealthedAlerted then
 		e.wasStealthedAlerted = true
-		PlaySoundFile(SOUND_STEALTH_DETECTED, "Master")
-		Spy:ShowAlert(e.stealthSpell or "Stealth", e.name, e.classToken, e.guid)
+		Spy:NotifyStealth(e.name, e.stealthSpell, e.classToken, e.guid)
+	elseif opt.SoundAlert and isNew and (not e.isStealthed or not opt.StealthAlert) then
+		local lastSound = soundDebounce[name]
+		if not lastSound or now - lastSound > 8 then
+			soundDebounce[name] = now
+			Spy:PlayEnemyDetectedSound()
+		end
 	end
 
 	Spy:RenderRows()
@@ -451,8 +418,7 @@ function Spy:SetUnitStealthState(name, isStealthed, spellName)
 	if isStealthed then
 		if opt and opt.StealthAlert and not e.wasStealthedAlerted then
 			e.wasStealthedAlerted = true
-			PlaySoundFile(SOUND_STEALTH_DETECTED, "Master")
-			Spy:ShowAlert(spellName or e.stealthSpell or "Stealth", name, e.classToken, e.guid)
+			Spy:NotifyStealth(name, spellName or e.stealthSpell, e.classToken, e.guid)
 		end
 	else
 		e.wasStealthedAlerted = false
@@ -465,6 +431,10 @@ end
 -- Clear History                                                              --
 -- -------------------------------------------------------------------------- --
 function Spy:ClearHistory()
+	table.wipe(hostileCache)
+	table.wipe(friendlyCache)
+	table.wipe(playerRaceCache)
+	table.wipe(soundDebounce)
 	table.wipe(nameToTrackIndex)
 	table.wipe(guidToName)
 	for i = 1, MAX_SPY_ENEMIES do
@@ -580,7 +550,7 @@ function Spy:CreateFrames()
 
 	local f = CreateFrame("Frame", "AutoBG_SpyFrame", UIParent)
 	BattlegroundTargets_SpyFrame = f -- Compatibility alias
-	f:SetWidth(185)
+	f:SetWidth(260)
 	f:SetHeight(40)
 	f:SetMovable(true)
 	f:EnableMouse(true)
@@ -593,7 +563,7 @@ function Spy:CreateFrames()
 		tile = true, tileSize = 12, edgeSize = 12,
 		insets = { left = 3, right = 3, top = 3, bottom = 3 }
 	})
-	f:SetBackdropColor(0.05, 0.05, 0.08, 0.85)
+	f:SetBackdropColor(0.12, 0.16, 0.22, 0.95)
 	f:SetBackdropBorderColor(0.3, 0.3, 0.4, 0.9)
 
 	f:RegisterForDrag("LeftButton")
@@ -621,9 +591,9 @@ function Spy:CreateFrames()
 	for i = 1, MAX_SPY_ROWS do
 		local btn = CreateFrame("Button", "AutoBG_SpyRow" .. i, f)
 		_G["BattlegroundTargets_SpyRow" .. i] = btn -- Compatibility alias
-		btn:SetWidth(175)
-		btn:SetHeight(20)
-		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 5, -20 - (i - 1) * 21)
+		btn:SetWidth(250)
+		btn:SetHeight(26)
+		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 5, -24 - (i - 1) * 27)
 
 		-- Row Background
 		local bg = btn:CreateTexture(nil, "BACKGROUND")
@@ -648,27 +618,27 @@ function Spy:CreateFrames()
 
 		-- Level Text
 		local lvl = btn:CreateFontString(nil, "OVERLAY")
-		lvl:SetFont(FONT, 9, "OUTLINE")
+		lvl:SetFont(FONT, 11, "OUTLINE")
 		lvl:SetPoint("LEFT", icon, "RIGHT", 3, 0)
 		lvl:SetTextColor(1, 0.82, 0)
 		btn.LevelText = lvl
 
 		-- Elapsed Time Text (anchored to row right border)
 		local timeText = btn:CreateFontString(nil, "OVERLAY")
-		timeText:SetFont(FONT, 8, "OUTLINE")
+		timeText:SetFont(FONT, 10, "OUTLINE")
 		timeText:SetPoint("RIGHT", btn, "RIGHT", -3, 0)
 		timeText:SetTextColor(0.8, 0.8, 0.8)
 		btn.TimeText = timeText
 
 		-- State Tag (e.g. STEALTH, 95% - chained to left of timeText)
 		local tag = btn:CreateFontString(nil, "OVERLAY")
-		tag:SetFont(FONT, 8, "OUTLINE")
+		tag:SetFont(FONT, 10, "OUTLINE")
 		tag:SetPoint("RIGHT", timeText, "LEFT", -3, 0)
 		btn.TagText = tag
 
 		-- Name Text (bounded between level and tag)
 		local nameText = btn:CreateFontString(nil, "OVERLAY")
-		nameText:SetFont(FONT, 10, "OUTLINE")
+		nameText:SetFont(FONT, 12, "OUTLINE")
 		nameText:SetPoint("LEFT", lvl, "RIGHT", 3, 0)
 		nameText:SetPoint("RIGHT", tag, "LEFT", -3, 0)
 		nameText:SetJustifyH("LEFT")
@@ -967,7 +937,7 @@ function Spy:RenderRows()
 		-- Icon & State Tag
 		if data.isStealthed then
 			local sName = data.stealthSpell or "Stealth"
-			local tex = (sName == "Prowl" and PROWL_TEXTURE) or "Interface\\Icons\\Ability_Stealth"
+			local _, _, tex = Targets.CheckIsStealthName(sName)
 			row.Icon:SetTexture(tex)
 			row.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 			row.Icon:Show()
@@ -1008,7 +978,7 @@ function Spy:RenderRows()
 		Spy.Frame.rows[i]:Hide()
 	end
 
-	Spy.Frame:SetHeight(24 + (visibleCount * 21) + 4)
+	Spy.Frame:SetHeight(28 + (visibleCount * 27) + 4)
 	Spy.Frame:Show()
 end
 
@@ -1139,6 +1109,8 @@ function Spy:ToggleTestMode()
 end
 
 function Spy:OnBattlegroundChanged(inBG)
+	if Spy.inBattleground == inBG then return end
+	Spy.inBattleground = inBG
 	if inBG then
 		if Spy.Frame and Spy.Frame:IsShown() then
 			Spy.Frame:Hide()
@@ -1156,6 +1128,7 @@ end
 -- -------------------------------------------------------------------------- --
 local eventFrame = CreateFrame("Frame", "AutoBG_SpyEventFrame", UIParent)
 eventFrame:RegisterEvent("PLAYER_LOGIN")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("UNIT_CASTEVENT")
 eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 eventFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
@@ -1170,6 +1143,10 @@ eventFrame:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
 eventFrame:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
 
 local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
+	if event == "PLAYER_ENTERING_WORLD" then
+		Spy:ClearHistory()
+		return
+	end
 	if event == "PLAYER_LOGIN" then
 		Spy:CreateFrames()
 		return
@@ -1190,7 +1167,7 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 		local rawName = UnitName(casterGUID) or guidToName[casterGUID]
 		if not IsHostilePlayer(casterGUID, rawName) then return end
 
-		local classToken = UnitClass(casterGUID)
+		local _, classToken = UnitClass(casterGUID)
 		local level = UnitLevel(casterGUID)
 		local isStealth = nil
 		local sName = nil
@@ -1221,7 +1198,7 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 
 		if rawName then
 			Spy:RecordEnemy(rawName, classToken, level, casterGUID, nil, isStealth, sName, detectedRace)
-			if eventType == "START" or eventType == "CHANNEL" or eventType == "MAINHAND" or eventType == "OFFHAND" then
+			if eventType == "MAINHAND" or eventType == "OFFHAND" then
 				Spy:SetUnitStealthState(rawName, false)
 			end
 		end
@@ -1272,7 +1249,7 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 
 	elseif event == "UNIT_AURA" then
 		local unit = arg1
-		if unit and (unit == "target" or unit == "mouseover" or unit == "focus") then
+		if unit then
 			if UnitExists(unit) and UnitIsPlayer(unit) and UnitCanAttack("player", unit) then
 				local name = UnitName(unit)
 				if name then
@@ -1322,7 +1299,10 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 		if arg1 then
 			local _, _, buffName, enemyName = string.find(arg1, "^(.-) fades from (.-)%.$")
 			if buffName and enemyName and Targets and Targets.CheckIsStealthName and Targets.CheckIsStealthName(buffName) then
-				Spy:SetUnitStealthState(enemyName, false)
+				local idx = nameToTrackIndex[enemyName]
+				if idx and trackedEnemies[idx].stealthSpell == buffName then
+					Spy:SetUnitStealthState(enemyName, false)
+				end
 			end
 		end
 
@@ -1332,7 +1312,6 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 			if enemyName then
 				hostileCache[enemyName] = true
 				Spy:RecordEnemy(enemyName)
-				Spy:SetUnitStealthState(enemyName, false)
 			end
 		end
 

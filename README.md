@@ -20,24 +20,24 @@ AutoBG is engineered around strict low-level system integration:
 
 | Engine Component | Minimum Version | Architectural Role & Implementation |
 | :--- | :--- | :--- |
-| **ClassicAPI** | `v1.15.14+` | C++ hardware timers (`C_Timer.After`), modern linear $O(n)$ slot-batching aura queries (`C_UnitAuras.GetAuraSlots` / `GetAuraDataBySlot`), native `hooksecurefunc`, and source-rewritten Lua 5.1 syntax. |
+| **ClassicAPI** | `v1.15.14+` | Timers (`C_Timer.After`), modern linear $O(n)$ slot-batching aura queries (`C_UnitAuras.GetAuraSlots` / `GetAuraDataBySlot`), native `hooksecurefunc`, and source-rewritten Lua 5.1 syntax. |
 | **SuperWoW** | `v2.2+` | Direct memory state access, exact-name targeting fallback (`TargetByName(name, true)`), direct GUID targeting (`TargetUnit(guid)`), and native hover state tracking (`SetMouseoverUnit`). |
 | **UnitXP** | `SP3` (Optional, but recommended) | High-precision raw 3D Euclidean distance calculations (`UnitXP("distance", unit)`), line-of-sight tracking, and OS taskbar alert notifications (`FlashClientIcon`). |
 
-### Elimination of 2006 Legacy Techniques
-- **Zero OnUpdate Polling**: Frame-based `OnUpdate` polling loops are eradicated; all periodic tasks run on C++ hardware tickers at optimal intervals (6.6 Hz for FC tracking, 10 Hz for objective timers).
-- **Zero-GC Pre-allocated Buffers**: Static unit arrays (`RAID_UNITS`, `PARTY_UNITS`) and pre-allocated queue lists recycle existing heap tables via native `table.wipe`, avoiding recurring garbage-collection freezes in large 40-man Alterac Valley battles.
-- **No Map Multiplier Fallbacks**: Eradicated legacy 2006 manual map approximations and magic multipliers (`(px - ux) * 515`) in favor of direct 3D Euclidean distances and native UnitXP measurements.
-- **Strict Mouse Passthrough (Rule C8)**: All child frames inside clickable unit cards disable mouse interception (`EnableMouse(false)`), guaranteeing that 100% of the card's visual surface triggers target locks and macro execution.
+### Update and rendering model
+- Objective and flag-carrier updates use ClassicAPI tickers; temporary stealth expiry uses a throttled OnUpdate watcher.
+- Roster and aura-slot scratch tables are reused. No measured allocation or frame-rate guarantee is claimed.
+- UnitXP supplies distance measurements when available; unknown distances display a question mark.
+- Health-bar children disable mouse interception so clicks reach the carrier card.
 
 ---
 
 ## ⚡ Key Features
 
 ### 1. Automation & Queue Engine
-- **Instant Match Exit**: Calls `LeaveBattlefield(0)` at frame 0 upon match conclusion.
+- **Instant Match Exit**: Calls LeaveBattlefield(0) when match completion is detected and Auto-Leave is enabled.
 - **Auto-Rejoin**: Requests the same battleground queue after leaving a completed match, once the previous active queue slot clears. Queue acceptance still depends on the server.
-- **1-Click Multi-Queue**: Automatically registers for all 3 battlegrounds (Warsong Gulch, Arathi Basin, and Alterac Valley) with sequential queuing.
+- **1-Click Multi-Queue**: Sends sequential requests for selected battlegrounds. Server queue status confirms registration; cancelling invalidates pending steps.
 - **Auto-Accept with Configurable Delay & AFK Guard**: Instant entry (0s) or configurable countdown slider (0–70s, up to 120s via command). Automatically pauses auto-enter and auto-queue operations whenever you are tagged as AFK to prevent deserted debuffs.
 - **Smart Spirit Release**: Auto-releases spirit upon death inside battlegrounds while safely preserving active Soulstones and Reincarnation (Ankh).
 - **Taskbar Window Flashing**: Direct OS-level notification flashing (`FlashClientIcon`) when queues pop while tabbed out.
@@ -58,7 +58,7 @@ AutoBG is engineered around strict low-level system integration:
 
 ### 4. Warsong Flag Carrier (FC) HUD & Domain Authority
 - **Sole Architectural Authority**: Serves as the authoritative provider of Warsong Gulch Flag Carrier state, 3D Euclidean distances, and aura stacks across the entire addon suite (eliminating redundant polling engines in FosterFrames and BattlegroundTargets).
-- **Public Query API**: Exports `AutoBG_GetCarrier(faction)` and `AutoBG_GetCarrierInfo(faction)` for zero-overhead query access by external frames and macros.
+- **Public Query API**: Exports `AutoBG_GetCarrier(faction)` and `AutoBG_GetCarrierInfo(faction)` for query access by external frames and macros.
 - Clickable unit cards for Alliance and Horde flag carriers with **SuperWoW Hybrid Targeting** (`TargetUnit(guid)` with `TargetByName(name, true)` fallback).
 - Native SuperWoW mouseover support (`SetMouseoverUnit`) allowing mouseover macros directly over FC cards.
 - Real-time uncapped carrier HP and percentage via **UnitXP SP3** with class-color resolution.
@@ -72,16 +72,26 @@ AutoBG is engineered around strict low-level system integration:
 ### 6. Enemy Target Frames (BattlegroundTargets)
 - **Compact PvP Roster Display**: Automatically displays live enemy target frames for 10v10 (WSG), 15v15 (AB / Thorn Gorge), and 40v40 (AV) with independent scaling, dimensions, and font sizes.
 - **Authoritative Flag Carrier Visuals**: Renders authentic 32x32 transparent flag icons directly on the enemy carrier row in Warsong Gulch, synchronized in real time with `AutoBG_FC`.
-- **Stealth & Invisibility Tracking**: Detects enemy Stealth, Prowl, Vanish, and Invisibility casts via SuperWoW `UNIT_CASTEVENT` and combat log packets.
-- **Zero-GC Roster Sorting**: Bounded insertion sort over active enemies with class color-coding and exact SuperWoW targeting (`TargetUnit(guid)`).
+- **Observed Stealth Tracking**: Tracks Stealth, Prowl, Vanish, Shadowmeld and supported invisibility effects through structured unit auras, SuperWoW cast events and exact-name English combat messages. A BG option controls the popup and sound; per-bracket icon/text options remain independent.
+- **Roster Sorting**: Bounded insertion sort over active enemies with class color-coding and exact SuperWoW targeting (`TargetUnit(guid)`).
 
 ### 7. Open-World Enemy Radar (Spy)
 - **Real-Time Hostile Tracking**: Detects nearby enemy players in the open world using SuperWoW `UNIT_CASTEVENT`, nameplate units, and combat log telemetry.
 - **Stable Nearby List**: New enemies appear at the top; ongoing casts and aura updates refresh their details without reordering existing rows. The display supports up to 20 rows, with 10 shown by default.
-- **Audio & Stealth Alerts**: Plays alert sounds on enemy detection and a dedicated Prowl sound when an enemy enters stealth nearby.
-- **Smart Battleground Suppression**: Automatically hides when zoning into a battleground to keep screen space dedicated to match frames.
+- **Audio & Stealth Alerts**: Separate nearby and stealth alerts, with the matching stealth/Meld icon. Repeated observations of the same active stealth state do not replay the alert.
+- **Battleground Display**: The nearby list hides in BGs. The shared stealth popup remains available through Enemy Frames > Stealth alerts in BGs.
 
 ---
+
+## Readability and PvP tracking update (unreleased)
+
+Enemy rows now default to 210px width, 12px names and 26px height (40-player lists use 11px / 20px). Objective panels and Spy use larger text; flag-carrier cards are wider. Old default enemy dimensions migrate once, preserving custom dimensions, scales and saved positions. Adjust each bracket under /abg targets; use /abg test to preview.
+
+Detected enemy PvP trinket uses start a **180-second estimate**, per the deployment requirement. Duplicate cast/chat observations do not restart it. Generic immunity names and unsubstantiated compatibility IDs no longer trigger it. An icon without a countdown means no active tracked cooldown, not proof of readiness.
+
+Only client-observed stealth can be reported. AutoBG cannot discover an unseen enemy merely because they are stealthed. An unavailable unit does not clear the last observed state; visible aura absence, matching fade messages, melee activity or known effect expiry can clear it.
+
+The code and mocked Lua regressions are checked; real BG event delivery, sound playback and rendering still require in-game validation. See [audit and test checklist](docs/AUTOBG_REVIEW_2026-09-26.md).
 
 ## ⌨️ Commands & Shortcuts
 
