@@ -116,3 +116,49 @@ bar so the fill cannot obscure them. The shared factory also updates WSG flag ro
 17 mocked Lua tests pass, including row containment and label/fill geometry.
 Real-client drag/clamping and rendered legibility still need a reload test.
 The user authorized committing and pushing this follow-up after the 17-test validation.
+
+## Proximity-only stealth warnings
+
+Scoped bug fix prompted by runtime feedback: remote stealth casts must update the
+row indicators without producing popup/sound spam. Notification eligibility is now
+separate from stealth state. Both BG and world paths require a directly observed
+GUID, a live hostile player, client visibility, a current stealth aura, confirmed
+distance <= 10 yards, and clear LOS. Missing evidence remains silent. The alert
+latch is set only after a notification actually plays, allowing a later nearby
+observation to qualify. Existing bounded timers retry pending observed enemies;
+there is no new ticker. Pool/history resets clear the transient observation/latch.
+The nameplate/target/mouseover/focus observation paths supply candidate identity;
+cast/chat-only records do not. Row indicator behavior remains unchanged.
+
+[SOURCE-VERIFIED] ClassicAPI v1.15.14 provides
+[UnitDistanceSquared](https://github.com/brues-code/ClassicAPI/blob/v1.15.14/src/unit/Range.cpp)
+with a checked-position return, and
+[UnitInLineOfSight](https://github.com/brues-code/ClassicAPI/blob/v1.15.14/src/unit/LineOfSight.cpp)
+with true/false/nil results using world collision. These do not require UnitXP.
+Native UnitIsVisible alone is not treated as proximity or LOS evidence. Ten yards
+is an addon alert policy, not a verified server stealth-detection formula or a
+camera/front-arc calculation.
+
+Validation: 21 Lua mock tests pass; linter has zero errors/warnings; diff check
+passes. Regression cases include remote casts retaining icons, far/blocked/unknown
+checks, later approach, identity mismatch, absent current aura and duplicate alerts.
+No TOC, DLL requirement or SavedVariables changes. The patch is included with the subsequent compact timer maintenance update.
+
+[UNVERIFIED - TEST FIRST] Reload and verify in a BG and the open world:
+- Distant Stealth/Prowl/Meld casts: row indicator, no popup or stealth sound.
+- Directly observed stealthed opponent within 10 yards and unobstructed: one alert.
+- Opponent behind a wall or out of range: silence; approaching/clearing LOS may
+  alert if the unit remains observed. Repeated updates must not replay the alert.
+- Row icons and labels must remain as before, regardless of notification eligibility.
+
+Retrospective: a state-change notification was too broad for the requested threat
+warning. Keep the independently tested presentation state and notification gate;
+do not promote this addon-specific radius into framework policy.
+
+
+## Compact AB/AV timer redesign
+User feedback supersedes the earlier tall objective-row design. AB/AV now use 260-pixel groups, 24-pixel rows, flat full-height fills, muted faction colors, unoutlined Arial Narrow labels with a light shadow, and a transparent 19-pixel heading. Objective names remain centered; countdowns stay right-aligned and become amber at ten seconds. The shared factory stores each group's geometry so dynamic height follows the chosen style. WSG retains its existing row dimensions.
+
+Validation: 21 mocked regression tests pass, including both objective layouts; Lua compilation and the linter pass. No manifest, dependency or SavedVariables changes. In-game visual verification remains pending: use Test All Frames, inspect long AV names and full/empty bars against bright terrain, drag the heading, and Ctrl-click a timer. The pending proximity-only stealth fix is included in this maintenance push.
+
+Retrospective: reduce row height and decorative chrome without shrinking objective names; no framework knowledge promotion is needed.

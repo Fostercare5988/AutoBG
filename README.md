@@ -85,9 +85,13 @@ AutoBG is engineered around strict low-level system integration:
 
 ## Readability and PvP tracking update (unreleased)
 
+AB and AV objective timers use compact 24-pixel rows with flat, muted faction fills, centered warm-white names and a separate countdown. The fill covers the row height; the final ten seconds use amber countdown text. Drag the battleground heading to reposition; Ctrl-click a row to announce its timer.
+
 Enemy rows now default to 210px width, 12px names and 26px height (40-player lists use 11px / 20px). Objective panels and Spy use larger text; flag-carrier cards are wider. Old default enemy dimensions migrate once, preserving custom dimensions, scales and saved positions. Adjust each bracket under /abg targets; use /abg test to preview.
 
 Detected enemy PvP trinket uses start a **180-second estimate**, per the deployment requirement. Duplicate cast/chat observations do not restart it. Generic immunity names and unsubstantiated compatibility IDs no longer trigger it. An icon without a countdown means no active tracked cooldown, not proof of readiness.
+
+Stealth popups and sounds require a directly observed hostile player, a current stealth aura, client visibility, a confirmed distance of at most 10 yards and clear line of sight. Cast/chat events alone only update the row state. The 10-yard radius is a conservative notification policy, not the server's stealth-detection formula. Unknown range/LOS stays silent. A pending directly observed enemy is rechecked by existing timers, so approaching can trigger one alert without another cast.
 
 Only client-observed stealth can be reported. AutoBG cannot discover an unseen enemy merely because they are stealthed. An unavailable unit does not clear the last observed state; visible aura absence, matching fade messages, melee activity or known effect expiry can clear it.
 

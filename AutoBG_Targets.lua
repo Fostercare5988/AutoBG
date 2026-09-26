@@ -492,6 +492,8 @@ local function ReleaseStealthEntry(entry)
 	entry.spellName = nil
 	entry.texture = nil
 	entry.expireTime = nil
+	entry.alerted = nil
+	entry.observedGUID = nil
 	table.insert(stealthEntryPool, entry)
 end
 
@@ -532,7 +534,7 @@ local function StealthWatcher_OnUpdate(arg1_param, arg2_param)
 end
 stealthWatcher:SetScript("OnUpdate", StealthWatcher_OnUpdate)
 
-SetUnitStealth = function(name, isStealthed, spellName, texture, duration)
+SetUnitStealth = function(name, isStealthed, spellName, texture, duration, observedUnit)
 	if not name then return end
 	if isStealthed then
 		local entry = stealthedState[name]
@@ -547,9 +549,11 @@ SetUnitStealth = function(name, isStealthed, spellName, texture, duration)
 		local exp = (duration and duration > 0) and (GetTime() + duration + 0.5) or nil
 		if firstObservation then
 			entry.expireTime = exp
-			if not Targets.isConfig and AutoBG_Spy then
-				AutoBG_Spy:NotifyStealth(name, entry.spellName, nil, nameToGUID[name], true)
-			end
+		end
+
+		if observedUnit then entry.observedGUID = UnitGUID(observedUnit) end
+		if not entry.alerted and not Targets.isConfig and AutoBG_Spy and entry.observedGUID then
+			entry.alerted = AutoBG_Spy:NotifyStealth(name, entry.spellName, nil, nameToGUID[name], true, entry.observedGUID) and true or false
 		end
 
 		if exp and stealthWatcher and not stealthWatcher:IsShown() then
@@ -615,13 +619,17 @@ local function UpdateRowTrinketVisual(index, name)
 	end
 end
 
-local function UpdateAllTrinketTimers()
+local function UpdateObservedTimers()
 	if not (activeBG or Targets.isConfig) then return end
 	if not Targets.TargetButton then return end
 	for i = 1, MAX_ENEMIES do
 		local btn = Targets.TargetButton[i]
 		if btn and btn:IsShown() and btn.targetName then
 			local name = btn.targetName
+			local stealth = stealthedState[name]
+			if not Targets.isConfig and stealth and not stealth.alerted and stealth.observedGUID and AutoBG_Spy then
+				stealth.alerted = AutoBG_Spy:NotifyStealth(name, stealth.spellName, btn.classToken, nameToGUID[name], true, stealth.observedGUID) and true or false
+			end
 			local exp = trinketCooldown[name]
 			if exp then
 				UpdateRowTrinketVisual(i, name)
@@ -1193,7 +1201,7 @@ local function ObserveUnit(unit, scanAuras)
 
 	if scanAuras ~= false then
 		local found, spell, texture, duration = Targets.CheckUnitStealth(unit)
-		if found ~= nil then SetUnitStealth(name, found, spell, texture, duration) end
+		if found ~= nil then SetUnitStealth(name, found, spell, texture, duration, unit) end
 	end
 
 	local dead = (UnitIsDeadOrGhost and UnitIsDeadOrGhost(unit)) or (UnitIsDead(unit) or UnitIsGhost(unit)) and true or false
@@ -1557,5 +1565,5 @@ end
 
 if C_Timer and C_Timer.NewTicker then
 	C_Timer.NewTicker(3.0, AutoScoreboardTicker)
-	C_Timer.NewTicker(0.5, UpdateAllTrinketTimers)
+	C_Timer.NewTicker(0.5, UpdateObservedTimers)
 end

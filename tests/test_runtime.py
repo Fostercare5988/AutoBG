@@ -24,7 +24,9 @@ function UnitName(u) if u=="player" then return "Me" else return "Enemy" end end
 function UnitFactionGroup() return "Alliance" end
 function UnitExists() return true end
 function UnitIsVisible() return visible~=false end
-function UnitGUID() return "0x00000001" end
+function UnitDistanceSquared() return distanceSquared or 25, rangeKnown~=false end
+function UnitInLineOfSight() return sight~=false and not sightUnknown end
+function UnitGUID(u) if u=="player" then return "0x00000000" end return "0x00000001" end
 function UnitClass() return "Rogue", "ROGUE" end
 function UnitLevel() return 60 end
 function UnitRace() return "Human", "Human" end
@@ -278,7 +280,8 @@ class RuntimeTests(unittest.TestCase):
         self.bg()
         self.runlua("""
             AutoBG_Settings.Spy.Enabled=false
-            fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"CAST",1784)
+            auras={{spellId=1784,name="Stealth"}}
+            fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
             assert(#sounds==1)
             fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"MAINHAND",0)
             AutoBG_Settings.Targets.StealthAlert=false
@@ -303,7 +306,8 @@ class RuntimeTests(unittest.TestCase):
         self.load_units()
         self.runlua("""
             AutoBG_Settings.Spy={SoundAlert=false}
-            AutoBG_Spy:RecordEnemy("New","ROGUE",60,nil,100,true,"Vanish")
+            auras={{spellId=1856,name="Vanish"}}
+            AutoBG_Spy:RecordEnemy("New","ROGUE",60,"0x00000001",100,true,"Vanish",nil,"nameplate1")
             assert(#sounds==1 and AutoBG_Settings.Spy.Enabled)
             assert(AutoBG_Settings.Spy.SoundAlert==false)
         """)
@@ -363,6 +367,77 @@ class RuntimeTests(unittest.TestCase):
             assert(row.labelFs.points.LEFT[4]==48)
             assert(row.labelFs.points.RIGHT[4]==-48)
             assert(row.labelFs.fontSize==13 and row.labelFs.justify=="CENTER")
+            local compact=CreateBarTimerFrame("TestCompact","AV",1,1,1,0,0,8,true)
+            assert(compact.rowHeight==24 and compact.headerHeight==19)
+            assert(compact.rows[1].compact and compact.rows[8].bar)
+            assert(compact.rows[1].labelFs.parent==compact.rows[1].bar)
+            assert(compact.rows[1].timeFs.fontSize==12)
+
+        """)
+
+    def test_remote_cast_keeps_icon_but_never_warns(self):
+        self.bg()
+        self.runlua("""
+            fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"CAST",1784)
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
+            assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+            auras={{spellId=1784,name="Stealth"}}
+            fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
+            assert(#sounds==1)
+        """)
+
+    def test_far_or_occluded_observation_warns_only_on_approach(self):
+        self.bg()
+        self.runlua("""
+            auras={{spellId=20580,name="Shadowmeld"}}
+            distanceSquared=400
+            fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
+            assert(#sounds==0 and AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+            distanceSquared=100; sight=false
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
+            sight=true; rangeKnown=false
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
+            rangeKnown=true; visible=false
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
+            visible=true
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==1)
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==1)
+        """)
+
+    def test_world_remote_cast_then_local_observation(self):
+        self.load_units()
+        self.runlua("""
+            fire(AutoBG_SpyEventFrame,"UNIT_CASTEVENT","0x00000001",nil,"CAST",5215)
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0 and AutoBG_Spy.Frame.rows[1].targetStealth)
+            auras={{spellId=5215,name="Prowl"}}
+            distanceSquared=121
+            fire(AutoBG_SpyEventFrame,"UNIT_AURA","nameplate1")
+            assert(#sounds==0)
+            distanceSquared=25
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==1)
+        """)
+
+    def test_pending_alert_rechecks_current_aura_and_identity(self):
+        self.bg()
+        self.runlua("""
+            auras={{spellId=1784,name="Stealth"}}
+            distanceSquared=400
+            fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
+            distanceSquared=25; auras={}
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
+            auras={{spellId=1784,name="Stealth"}}
+            UnitGUID=function() return "0x00000002" end
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
         """)
 
     def test_unknown_immunity_does_not_start_trinket(self):

@@ -663,7 +663,7 @@ btnTgtResetPos:SetScript("OnClick", function()
 	end
 end)
 
-local cbTgtStealthAlert = CreateCheckButton("AutoBG_Tgt_StealthAlert", panelTargets, "Stealth alerts in BGs", "Show a popup and play a sound on observed enemy Stealth, Prowl, Vanish or Shadowmeld.", function()
+local cbTgtStealthAlert = CreateCheckButton("AutoBG_Tgt_StealthAlert", panelTargets, "Stealth alerts in BGs", "Warn only for a directly observed stealthed enemy within 10 yards and clear line of sight. Row indicators still track distant stealth.", function()
 	Targets:EnsureOptions()
 	AutoBG_Settings.Targets.StealthAlert = this:GetChecked() and true or false
 end)
@@ -741,7 +741,7 @@ local cbSpySound = CreateCheckButton("AutoBG_Spy_SoundAlert", panelSpy, "Sound o
 end)
 cbSpySound:SetPoint("TOPLEFT", cbSpyEnable, "BOTTOMLEFT", 0, -6)
 
-local cbSpyStealth = CreateCheckButton("AutoBG_Spy_StealthAlert", panelSpy, "Stealth alerts outside BGs", "Show a popup and play a sound on observed stealth, including Shadowmeld. BG alerts have their own setting under Targets.", function()
+local cbSpyStealth = CreateCheckButton("AutoBG_Spy_StealthAlert", panelSpy, "Stealth alerts outside BGs", "Warn only for a directly observed stealthed enemy within 10 yards and clear line of sight. BG alerts have their own setting under Targets.", function()
 	if not AutoBG_Settings then AutoBG_Settings = {} end
 	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
 	AutoBG_Settings.Spy.StealthAlert = this:GetChecked() and true or false

@@ -49,16 +49,30 @@ local function GetSpySettings()
 	return AutoBG_Settings.Spy
 end
 
--- Called on a transition into observed stealth, not on each repeated event.
-function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground)
+-- Alert policy, not the server's stealth-detection formula.
+local STEALTH_ALERT_DISTANCE_SQUARED = 10 * 10
+-- A cast/chat record alone must never generate a proximity warning.
+-- observedUnit is supplied only by direct unit observations (or their saved GUID).
+
+function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground, observedUnit)
 	local opt = GetSpySettings()
 	if inBattleground then
 		if AutoBG_Settings.Targets and AutoBG_Settings.Targets.StealthAlert == false then return end
 	elseif not opt.Enabled or not opt.StealthAlert then
 		return
 	end
+	if not observedUnit or not guid or UnitGUID(observedUnit) ~= guid then return false end
+	if not UnitExists(observedUnit) or not UnitIsVisible(observedUnit)
+		or not UnitIsPlayer(observedUnit) or not UnitCanAttack("player", observedUnit) then return false end
+	if UnitIsDead(observedUnit) or UnitIsGhost(observedUnit) then return false end
+	local distanceSquared, checked = UnitDistanceSquared(observedUnit)
+	if not checked or not distanceSquared or distanceSquared > STEALTH_ALERT_DISTANCE_SQUARED then return false end
+	if UnitInLineOfSight(observedUnit) ~= true then return false end
+	local stealthed, currentSpell = Targets.CheckUnitStealth(observedUnit)
+	if not stealthed then return false end
 	Spy:PlayStealthDetectedSound()
-	Spy:ShowAlert(spell or "Stealth", name, classToken, guid)
+	Spy:ShowAlert(currentSpell or spell or "Stealth", name, classToken, guid)
+	return true
 end
 
 -- Pre-allocated memory tables (Rule D1 Zero GC Churn)
@@ -311,12 +325,13 @@ local function ResetEnemyEntry(e)
 	e.isStealthed = false
 	e.stealthSpell = nil
 	e.wasStealthedAlerted = false
+	e.observedGUID = nil
 end
 
 -- -------------------------------------------------------------------------- --
 -- Record / Update Hostile Player Entry                                       --
 -- -------------------------------------------------------------------------- --
-function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, stealthSpell, race)
+function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, stealthSpell, race, observedUnit)
 	if not name or name == "" then return end
 	if friendlyCache[name] then return end
 
@@ -384,6 +399,7 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	end
 	if healthPct then e.healthPct = healthPct end
 	e.lastSeen = now
+	if observedUnit and guid and UnitGUID(observedUnit) == guid then e.observedGUID = guid end
 
 	if isStealth ~= nil then
 		e.isStealthed = isStealth
@@ -393,8 +409,7 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 
 	-- Stealth takes precedence over the nearby sound, including immediately after login.
 	if opt.StealthAlert and e.isStealthed and not e.wasStealthedAlerted then
-		e.wasStealthedAlerted = true
-		Spy:NotifyStealth(e.name, e.stealthSpell, e.classToken, e.guid)
+		e.wasStealthedAlerted = Spy:NotifyStealth(e.name, e.stealthSpell, e.classToken, e.guid, false, e.observedGUID) and true or false
 	elseif opt.SoundAlert and isNew and (not e.isStealthed or not opt.StealthAlert) then
 		local lastSound = soundDebounce[name]
 		if not lastSound or now - lastSound > 8 then
@@ -417,8 +432,7 @@ function Spy:SetUnitStealthState(name, isStealthed, spellName)
 	local opt = GetSpySettings()
 	if isStealthed then
 		if opt and opt.StealthAlert and not e.wasStealthedAlerted then
-			e.wasStealthedAlerted = true
-			Spy:NotifyStealth(name, spellName or e.stealthSpell, e.classToken, e.guid)
+			e.wasStealthedAlerted = Spy:NotifyStealth(name, spellName or e.stealthSpell, e.classToken, e.guid, false, e.observedGUID) and true or false
 		end
 	else
 		e.wasStealthedAlerted = false
@@ -1042,6 +1056,9 @@ local function OnSpyTick()
 			activeEnemyCount = activeEnemyCount - 1
 			changed = true
 		else
+			if e.isStealthed and not e.wasStealthedAlerted and e.observedGUID then
+				e.wasStealthedAlerted = Spy:NotifyStealth(e.name, e.stealthSpell, e.classToken, e.guid, false, e.observedGUID) and true or false
+			end
 			i = i + 1
 		end
 	end
@@ -1224,7 +1241,7 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 		end
 
 		local isStealth, sName = Spy:CheckUnitStealth(unit)
-		Spy:RecordEnemy(name, classToken, level, guid, pct, isStealth, sName, rawRace)
+		Spy:RecordEnemy(name, classToken, level, guid, pct, isStealth, sName, rawRace, unit)
 
 	elseif event == "PLAYER_TARGET_CHANGED" or event == "UPDATE_MOUSEOVER_UNIT" or event == "PLAYER_FOCUS_CHANGED" then
 		local unit = event == "PLAYER_TARGET_CHANGED" and "target" or (event == "PLAYER_FOCUS_CHANGED" and "focus" or "mouseover")
@@ -1243,7 +1260,7 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 					pct = math.floor((hp / maxHp) * 100 + 0.5)
 				end
 				local isStealth, sName = Spy:CheckUnitStealth(unit)
-				Spy:RecordEnemy(name, classToken, level, guid, pct, isStealth, sName, rawRace)
+				Spy:RecordEnemy(name, classToken, level, guid, pct, isStealth, sName, rawRace, unit)
 			end
 		end
 
@@ -1265,7 +1282,7 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 						pct = math.floor((hp / maxHp) * 100 + 0.5)
 					end
 					local isStealth, sName = Spy:CheckUnitStealth(unit)
-					Spy:RecordEnemy(name, classToken, level, guid, pct, isStealth, sName, rawRace)
+					Spy:RecordEnemy(name, classToken, level, guid, pct, isStealth, sName, rawRace, unit)
 				end
 			end
 		end
