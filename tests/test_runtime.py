@@ -74,7 +74,8 @@ function methods:SetText(v) self.text=v end
 function methods:GetText() return self.text end
 function methods:SetTexture(v) self.texture=v end
 function methods:SetFont(path,size) self.fontSize=size end
-function methods:SetPoint(...) self.point={...} end
+function methods:SetJustifyH(v) self.justify=v end
+function methods:SetPoint(...) self.point={...}; self.points=self.points or {}; self.points[self.point[1]]=self.point end
 function methods:Show() self.shown=true end
 function methods:Hide() self.shown=false end
 function methods:IsShown() return self.shown end
@@ -82,10 +83,10 @@ function methods:SetShown(v) self.shown=v end
 function methods:GetStringWidth() return #(self.text or "")*7 end
 function methods:GetFrameLevel() return 1 end
 function methods:GetParent() return self.parent end
-function methods:CreateTexture() return CreateFrame("Texture") end
-function methods:CreateFontString() return CreateFrame("FontString") end
+function methods:CreateTexture() return CreateFrame("Texture",nil,self) end
+function methods:CreateFontString() return CreateFrame("FontString",nil,self) end
 local noops={"SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetTextColor",
- "SetVertexColor","SetAlpha","SetTexCoord","SetAllPoints","ClearAllPoints","SetJustifyH",
+ "SetVertexColor","SetAlpha","SetTexCoord","SetAllPoints","ClearAllPoints",
  "SetMovable","SetClampedToScreen","EnableMouse","RegisterForClicks","RegisterForDrag",
  "SetFrameStrata","SetFrameLevel","SetHighlightTexture","SetNormalTexture","SetPushedTexture",
  "SetDisabledTexture","SetStatusBarTexture","SetStatusBarColor","SetMinMaxValues","SetValue",
@@ -331,7 +332,11 @@ class RuntimeTests(unittest.TestCase):
                 AutoBG_Targets:EnableConfigMode(size)
                 assert(#sounds==0)
                 local height=AutoBG_Settings.Targets.ButtonHeight[size]
-                assert(AutoBG_Targets.MainFrame.height==size*height)
+                local main=AutoBG_Targets.MainFrame
+                assert(main.height==20+size*height)
+                assert(main.DragHeader.height==20 and main.DragHeader:IsShown())
+                local first=AutoBG_Targets.TargetButton[1].point
+                assert(first[2]==main and first[3]=="TOPLEFT" and first[5]==-20)
                 assert(AutoBG_Targets.TargetButton[size]:IsShown())
             end
         """)
@@ -346,6 +351,20 @@ class RuntimeTests(unittest.TestCase):
             assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
             assert(#sounds==1)
         """)
+    def test_objective_bars_fill_row_and_center_labels(self):
+        code=section("AutoBG_Timers.lua", 'local FONT ', "-- Respawn Frame")
+        self.runlua(code+"""
+            local f=CreateBarTimerFrame("TestObjective","AB",1,1,1,0,0,2)
+            local row=f.rows[1]
+            assert(row.bar.points.TOPLEFT[2]==row)
+            assert(row.bar.points.TOPLEFT[5]==-1)
+            assert(row.bar.points.BOTTOMRIGHT[5]==1)
+            assert(row.labelFs.parent==row.bar and row.timeFs.parent==row.bar)
+            assert(row.labelFs.points.LEFT[4]==48)
+            assert(row.labelFs.points.RIGHT[4]==-48)
+            assert(row.labelFs.fontSize==13 and row.labelFs.justify=="CENTER")
+        """)
+
     def test_unknown_immunity_does_not_start_trinket(self):
         self.bg()
         self.runlua("""

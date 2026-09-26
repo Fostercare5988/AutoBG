@@ -62,7 +62,7 @@ local BAR_TEXTURE      = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local ALLIANCE_FLAG_TEX = "Interface\\WorldStateFrame\\AllianceFlag"
 local HORDE_FLAG_TEX   = "Interface\\WorldStateFrame\\HordeFlag"
 
-local BAR_WIDTH    = 250
+local BAR_WIDTH    = 280
 local BAR_ROW_H    = 31
 local BAR_ROW_GAP  = 3
 local BAR_HEADER_H = 24
@@ -151,11 +151,10 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         hover:SetAllPoints(row)
         hover:SetTexture(0.30, 0.45, 0.56, 0.14)
 
-        -- A slim progress track preserves the countdown without tinting the labels.
+        -- Full-height progress fill; labels live on the bar above its fill texture.
         local bar = CreateFrame("StatusBar", name .. "Row" .. i .. "Bar", row)
-        bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 1, 2)
-        bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 2)
-        bar:SetHeight(3)
+        bar:SetPoint("TOPLEFT", row, "TOPLEFT", 1, -1)
+        bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 1)
         bar:SetStatusBarTexture(BAR_TEXTURE)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(1)
@@ -163,40 +162,40 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         bar:EnableMouse(false)
         row.bar = bar
 
-        local barBg = bar:CreateTexture(nil, "BACKGROUND")
+        local barBg = row:CreateTexture(nil, "BORDER")
         barBg:SetAllPoints(bar)
         barBg:SetTexture(BAR_TEXTURE)
         barBg:SetVertexColor(0.20, 0.24, 0.29, 0.85)
         row.barBg = barBg
 
         -- Faction icon and color rail remain visible as the progress track empties.
-        local factionRail = row:CreateTexture(nil, "ARTWORK")
+        local factionRail = bar:CreateTexture(nil, "OVERLAY")
         factionRail:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -3)
         factionRail:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 6)
         factionRail:SetWidth(3)
         factionRail:SetTexture(0.45, 0.50, 0.55)
         row.factionRail = factionRail
 
-        local flagIcon = row:CreateTexture(nil, "ARTWORK")
+        local flagIcon = bar:CreateTexture(nil, "OVERLAY")
         flagIcon:SetWidth(14)
         flagIcon:SetHeight(14)
-        flagIcon:SetPoint("LEFT", row, "LEFT", 8, 3)
+        flagIcon:SetPoint("LEFT", row, "LEFT", 8, 0)
         flagIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
         flagIcon:Hide()
         row.flagIcon = flagIcon
 
-        local timeFs = row:CreateFontString(nil, "OVERLAY")
+        local timeFs = bar:CreateFontString(nil, "OVERLAY")
         timeFs:SetFont(FONT, 15, "OUTLINE")
-        timeFs:SetPoint("RIGHT", row, "RIGHT", -8, 3)
+        timeFs:SetPoint("RIGHT", row, "RIGHT", -8, 0)
         timeFs:SetJustifyH("RIGHT")
         timeFs:SetTextColor(1, 1, 1, 1)
         row.timeFs = timeFs
 
-        local labelFs = row:CreateFontString(nil, "OVERLAY")
-        labelFs:SetFont(FONT, 12, "OUTLINE")
-        labelFs:SetPoint("LEFT", flagIcon, "RIGHT", 5, 3)
-        labelFs:SetPoint("RIGHT", timeFs, "LEFT", -3, 0)
-        labelFs:SetJustifyH("LEFT")
+        local labelFs = bar:CreateFontString(nil, "OVERLAY")
+        labelFs:SetFont(FONT, 13, "OUTLINE")
+        labelFs:SetPoint("LEFT", row, "LEFT", 48, 0)
+        labelFs:SetPoint("RIGHT", row, "RIGHT", -48, 0)
+        labelFs:SetJustifyH("CENTER")
         labelFs:SetTextColor(1, 1, 1, 1)
         row.labelFs = labelFs
         row.lastFaction = "unset"
@@ -545,14 +544,6 @@ local function TimeBarColor(remaining, maxTime)
     end
 end
 
-local function FactionLabelColor(faction, useColors)
-    if useColors then
-        if faction == "Horde"    then return 1.00, 0.25, 0.25 end
-        if faction == "Alliance" then return 0.25, 0.56, 1.00 end
-    end
-    return 1, 1, 1
-end
-
 -- =========================================================
 -- Time Utilities
 -- =========================================================
@@ -603,18 +594,14 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
         elseif name == "Horde Flag" then faction = "Horde" end
     end
     local barR, barG, barB
-    local lr, lg, lb
     if colorMode == "faction" then
         if faction == "Alliance" then
             barR, barG, barB = 0.20, 0.50, 1.00
-            lr, lg, lb       = 0.40, 0.75, 1.00
         else
             barR, barG, barB = 1.00, 0.15, 0.15
-            lr, lg, lb       = 1.00, 0.40, 0.40
         end
     else
         barR, barG, barB = TimeBarColor(remaining, maxTime)
-        lr, lg, lb       = FactionLabelColor(faction, useColors)
     end
 
     if row.lastFaction ~= faction then
@@ -622,20 +609,11 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
         if faction == "Alliance" then
             row.flagIcon:SetTexture(ALLIANCE_FLAG_TEX)
             row.flagIcon:Show()
-            row.labelFs:ClearAllPoints()
-            row.labelFs:SetPoint("LEFT", row.flagIcon, "RIGHT", 5, 3)
-            row.labelFs:SetPoint("RIGHT", row.timeFs, "LEFT", -3, 0)
         elseif faction == "Horde" then
             row.flagIcon:SetTexture(HORDE_FLAG_TEX)
             row.flagIcon:Show()
-            row.labelFs:ClearAllPoints()
-            row.labelFs:SetPoint("LEFT", row.flagIcon, "RIGHT", 5, 3)
-            row.labelFs:SetPoint("RIGHT", row.timeFs, "LEFT", -3, 0)
         else
             row.flagIcon:Hide()
-            row.labelFs:ClearAllPoints()
-            row.labelFs:SetPoint("LEFT", row, "LEFT", 8, 3)
-            row.labelFs:SetPoint("RIGHT", row.timeFs, "LEFT", -3, 0)
         end
     end
 
@@ -648,7 +626,7 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
     end
 
     row.labelFs:SetText(name)
-    row.labelFs:SetTextColor(lr, lg, lb)
+    row.labelFs:SetTextColor(1, 1, 1)
 
     local timeStr = FormatTime(remaining)
     row.timeFs:SetText(timeStr)
@@ -660,7 +638,7 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
 
     row.bar:SetMinMaxValues(0, maxTime)
     row.bar:SetValue(remaining)
-    row.bar:SetStatusBarColor(barR, barG, barB)
+    row.bar:SetStatusBarColor(barR * 0.60, barG * 0.60, barB * 0.60)
 
     local facText = faction and (" (" .. faction .. ")") or ""
     row.announceText = name .. facText .. ": " .. timeStr

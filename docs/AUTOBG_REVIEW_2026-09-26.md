@@ -101,3 +101,18 @@ late-fade test caught an unapplied edit before completion. Future work should
 start with this harness and deployed event observations rather than repeating
 framework discovery. These are addon-specific repairs; no new framework pattern
 is proposed.
+
+## Screenshot follow-up: dragging and timer presentation
+
+The user screenshots exposed a bounds regression: enemy rows were below a newly
+expanded container, leaving an invisible list-sized area above them. Rows now
+start inside the container under a 20px preview-only drag header. Only that header
+accepts movement input. Saved position data is retained; users may reposition the
+corrected frame once.
+
+Objective rows now have full-height progress fills, white outlined centered names,
+right-aligned countdowns and a wider panel. Text/icons are parented to the status
+bar so the fill cannot obscure them. The shared factory also updates WSG flag rows.
+17 mocked Lua tests pass, including row containment and label/fill geometry.
+Real-client drag/clamping and rendered legibility still need a reload test.
+The user authorized committing and pushing this follow-up after the 17-test validation.

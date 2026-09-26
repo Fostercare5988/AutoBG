@@ -14,6 +14,7 @@ end
 
 local MAX_ENEMIES = 40
 local BRACKETS = { 10, 15, 40 }
+local DRAG_HEADER_HEIGHT = 20
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
@@ -696,14 +697,14 @@ local function UpdateAllSelectionVisuals()
 end
 
 local function MainFrame_OnMouseDown(self)
-	local f = self or this or (Targets and Targets.MainFrame)
+	local f = Targets.MainFrame
 	if Targets.isConfig and f and f.StartMoving then
 		f:StartMoving()
 	end
 end
 
 local function MainFrame_OnMouseUp(self)
-	local f = self or this or (Targets and Targets.MainFrame)
+	local f = Targets.MainFrame
 	if f and f.StopMovingOrSizing then
 		f:StopMovingOrSizing()
 	end
@@ -756,16 +757,25 @@ function Targets:CreateFrames()
 	main:SetHeight(20)
 	main:SetMovable(true)
 	main:SetClampedToScreen(true)
-	main:EnableMouse(Targets.isConfig and true or false)
+	main:EnableMouse(false)
 	main:Hide()
 
-	main:SetScript("OnMouseDown", MainFrame_OnMouseDown)
-	main:SetScript("OnMouseUp", MainFrame_OnMouseUp)
-
-	main.MoveText = main:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	main.MoveText:SetPoint("CENTER", main, "CENTER", 0, 0)
-	main.MoveText:SetText("AutoBG Targets: drag to move")
-	main.MoveText:SetTextColor(0.8, 0.8, 0.8, 1)
+	local header = CreateFrame("Frame", nil, main)
+	main.DragHeader = header
+	header:SetPoint("TOPLEFT", main, "TOPLEFT", 0, 0)
+	header:SetPoint("TOPRIGHT", main, "TOPRIGHT", 0, 0)
+	header:SetHeight(DRAG_HEADER_HEIGHT)
+	header:EnableMouse(true)
+	header:SetScript("OnMouseDown", MainFrame_OnMouseDown)
+	header:SetScript("OnMouseUp", MainFrame_OnMouseUp)
+	local background = header:CreateTexture(nil, "BACKGROUND")
+	background:SetAllPoints(header)
+	background:SetTexture(0.12, 0.16, 0.22, 0.95)
+	main.MoveText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	main.MoveText:SetPoint("CENTER", header, "CENTER", 0, 0)
+	main.MoveText:SetText("Drag to move")
+	main.MoveText:SetTextColor(1, 1, 1, 1)
+	header:Hide()
 
 	Targets.TargetButton = {}
 	for i = 1, MAX_ENEMIES do
@@ -777,7 +787,7 @@ function Targets:CreateFrames()
 		btn:Hide()
 
 		if i == 1 then
-			btn:SetPoint("TOPLEFT", main, "BOTTOMLEFT", 0, 0)
+			btn:SetPoint("TOPLEFT", main, "TOPLEFT", 0, -DRAG_HEADER_HEIGHT)
 		else
 			btn:SetPoint("TOPLEFT", Targets.TargetButton[i - 1], "BOTTOMLEFT", 0, 0)
 		end
@@ -937,9 +947,9 @@ function Targets:SetupButtonLayout(size)
 	local scale = (o and o.ButtonScale and o.ButtonScale[size]) or 1.0
 
 	Targets.MainFrame:SetWidth(width)
-	Targets.MainFrame:SetHeight(math.max(1, math.min(enemyCount, size)) * height)
+	Targets.MainFrame:SetHeight(DRAG_HEADER_HEIGHT + math.max(1, math.min(enemyCount, size)) * height)
 	Targets.MainFrame:SetScale(scale)
-	Targets.MainFrame:EnableMouse(Targets.isConfig and true or false)
+	Targets.MainFrame:EnableMouse(false)
 
 	for i = 1, MAX_ENEMIES do
 		local btn = Targets.TargetButton[i]
@@ -1039,7 +1049,7 @@ local function RenderRoster()
 
 	local displayCount = math.min(enemyCount, currentSize)
 	local height = (o and o.ButtonHeight[currentSize]) or 20
-	Targets.MainFrame:SetHeight(math.max(1, displayCount) * height)
+	Targets.MainFrame:SetHeight(DRAG_HEADER_HEIGHT + math.max(1, displayCount) * height)
 	for i = 1, displayCount do
 		local fullName = roster[i].name
 		local shortName = StripRealm(fullName)
@@ -1082,8 +1092,8 @@ local function RenderRoster()
 	end
 
 	Targets.MainFrame:Show()
-	Targets.MainFrame:EnableMouse(Targets.isConfig and true or false)
-	Targets.MainFrame.MoveText:SetShown(Targets.isConfig and true or false)
+	Targets.MainFrame:EnableMouse(false)
+	Targets.MainFrame.DragHeader:SetShown(Targets.isConfig and true or false)
 end
 Targets.RenderRoster = RenderRoster
 
