@@ -1,9 +1,9 @@
 -- AutoBG Timers & Objective Countdown Engine (Zero-Bloat Consolidated Architecture)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI v1.15.8+, SuperWoW 2.2+, UnitXP SP3
+-- Built natively for ClassicAPI v1.15.14+, SuperWoW 2.2+, UnitXP SP3
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.8+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11508
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.14+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11514
 
 if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) or
    (type(CLASSIC_API_VERSION) == "number" and CLASSIC_API_VERSION < MIN_CLASSIC_API) then

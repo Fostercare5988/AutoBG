@@ -2,12 +2,12 @@
 
 [![Interface: 1.12.1](https://img.shields.io/badge/Interface-1.12.1%20(5875)-orange.svg)](https://github.com/Fostercare5988/AutoBG)
 [![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
-[![ClassicAPI: v1.15.8+](https://img.shields.io/badge/ClassicAPI-v1.15.8+-green.svg)](https://github.com/brues-code/ClassicAPI)
+[![ClassicAPI: v1.15.14+](https://img.shields.io/badge/ClassicAPI-v1.15.14+-green.svg)](https://github.com/brues-code/ClassicAPI)
 [![SuperWoW: v2.2+](https://img.shields.io/badge/SuperWoW-v2.2+-brightgreen.svg)](https://github.com/balakethelock/SuperWoW)
 [![UnitXP: SP3](https://img.shields.io/badge/UnitXP-SP3-teal.svg)](https://codeberg.org/konaka/UnitXP_SP3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AutoBG v2.0.0** is an enterprise-grade, zero-latency PvP automation and battleground intelligence engine engineered natively for **World of Warcraft 1.12.1 (Build 5875)**. Built directly atop the modern **Enhanced Client Extension Stack** (**ClassicAPI v1.15.8+**, **SuperWoW v2.2+**, and optional **UnitXP SP3**), AutoBG eliminates 2006-era polling loops, garbage-collection hitches, and imprecise coordinates to deliver instant, hardware-level PvP responsiveness.
+**AutoBG v2.0.0** provides PvP automation and battleground information for **World of Warcraft 1.12.1 (Build 5875)**. It uses **ClassicAPI v1.15.14+**, **SuperWoW v2.2+**, and optional **UnitXP SP3** for timers, unit identity, and distance measurements.
 
 
 Created and actively maintained by **[Fostercare5988](https://github.com/Fostercare5988)**.
@@ -20,7 +20,7 @@ AutoBG is engineered around strict low-level system integration:
 
 | Engine Component | Minimum Version | Architectural Role & Implementation |
 | :--- | :--- | :--- |
-| **ClassicAPI** | `v1.15.8+` | C++ hardware timers (`C_Timer.After`), modern linear $O(n)$ slot-batching aura queries (`C_UnitAuras.GetAuraSlots` / `GetAuraDataBySlot`), native `hooksecurefunc`, and source-rewritten Lua 5.1 syntax. |
+| **ClassicAPI** | `v1.15.14+` | C++ hardware timers (`C_Timer.After`), modern linear $O(n)$ slot-batching aura queries (`C_UnitAuras.GetAuraSlots` / `GetAuraDataBySlot`), native `hooksecurefunc`, and source-rewritten Lua 5.1 syntax. |
 | **SuperWoW** | `v2.2+` | Direct memory state access, exact-name targeting fallback (`TargetByName(name, true)`), direct GUID targeting (`TargetUnit(guid)`), and native hover state tracking (`SetMouseoverUnit`). |
 | **UnitXP** | `SP3` (Optional, but recommended) | High-precision raw 3D Euclidean distance calculations (`UnitXP("distance", unit)`), line-of-sight tracking, and OS taskbar alert notifications (`FlashClientIcon`). |
 
@@ -36,7 +36,7 @@ AutoBG is engineered around strict low-level system integration:
 
 ### 1. Automation & Queue Engine
 - **Instant Match Exit**: Calls `LeaveBattlefield(0)` at frame 0 upon match conclusion.
-- **Zero-Latency Auto-Rejoin**: Automatically re-queues into the same battleground (WSG, AB, AV) upon zoning out via Battleground Finder.
+- **Auto-Rejoin**: Requests the same battleground queue after leaving a completed match, once the previous active queue slot clears. Queue acceptance still depends on the server.
 - **1-Click Multi-Queue**: Automatically registers for all 3 battlegrounds (Warsong Gulch, Arathi Basin, and Alterac Valley) with sequential queuing.
 - **Auto-Accept with Configurable Delay & AFK Guard**: Instant entry (0s) or configurable countdown slider (0–70s, up to 120s via command). Automatically pauses auto-enter and auto-queue operations whenever you are tagged as AFK to prevent deserted debuffs.
 - **Smart Spirit Release**: Auto-releases spirit upon death inside battlegrounds while safely preserving active Soulstones and Reincarnation (Ankh).
@@ -77,6 +77,7 @@ AutoBG is engineered around strict low-level system integration:
 
 ### 7. Open-World Enemy Radar (Spy)
 - **Real-Time Hostile Tracking**: Detects nearby enemy players in the open world using SuperWoW `UNIT_CASTEVENT`, nameplate units, and combat log telemetry.
+- **Stable Nearby List**: New enemies appear at the top; ongoing casts and aura updates refresh their details without reordering existing rows. The display supports up to 20 rows, with 10 shown by default.
 - **Audio & Stealth Alerts**: Plays alert sounds on enemy detection and a dedicated Prowl sound when an enemy enters stealth nearby.
 - **Smart Battleground Suppression**: Automatically hides when zoning into a battleground to keep screen space dedicated to match frames.
 
@@ -119,7 +120,7 @@ AutoBG is engineered around strict low-level system integration:
 
 ### Prerequisites
 1. **World of Warcraft 1.12.1** (Build 5875).
-2. [**ClassicAPI v1.15.8+**](https://github.com/brues-code/ClassicAPI) (`ClassicAPI.dll`).
+2. [**ClassicAPI v1.15.14+**](https://github.com/brues-code/ClassicAPI) (`ClassicAPI.dll`).
 3. [**SuperWoW v2.2+**](https://github.com/balakethelock/SuperWoW) (`SuperWoW.dll`).
 4. [**UnitXP SP3**](https://codeberg.org/konaka/UnitXP_SP3) (Optional, `UnitXP_SP3.dll`).
 
@@ -162,7 +163,7 @@ AutoBG is engineered around strict low-level system integration:
   - Removed cross-module position state corruption (Spy writing into Targets).
   - Preserved independent bracket positioning (`10`, `15`, `40`) with clean resets that never resurrect legacy keys.
 - **Engine Baseline Reconciliation & Polish (Phase 4)**:
-  - Enforced uniform `MIN_CLASSIC_API = 11508` (`ClassicAPI v1.15.8+`) and `SUPERWOW_VERSION` startup guards across all 6 modules.
+  - Enforced uniform `MIN_CLASSIC_API = 11508` (`ClassicAPI v1.15.14+`) and `SUPERWOW_VERSION` startup guards across all 6 modules.
   - Aligned runtime requirements with actual API consumption, cleanly designating UnitXP SP3 as optional and eliminating unconsumed legacy claims.
   - Replaced technical developer stack startup output with clean, player-friendly notification text (`v2.0.0 loaded`).
   - Passed complete static linter audit with 0 errors and 0 warnings.
@@ -205,7 +206,7 @@ AutoBG is engineered around strict low-level system integration:
 - **Eradicated Legacy Map Approximations**: Removed 2006 manual map coordinate trigonometry and magic multipliers (`(px - fx) * 515`) in favor of direct 3D Euclidean distances and native `UnitXP("distance", unit)`.
 - **Zero-GC Pre-allocated Queue Buffers**: Pre-allocated static arrays and `table.wipe` recycling in `AutoBG_QueueAllBGs`, eliminating heap churn during multi-queue operations.
 - **Modern Hook Architecture**: Replaced manual function hooks with `hooksecurefunc` for clean compatibility with other stance-modifying addons.
-- **Universal Engine Guard**: Enforced strict dependency checks across all 4 module files for ClassicAPI v1.15.8+ and SuperWoW v2.2+.
+- **Universal Engine Guard**: Enforced strict dependency checks across all 4 module files for ClassicAPI v1.15.14+ and SuperWoW v2.2+.
 
 ### v1.2.0
 - **Zero-GC Scan Loop Optimizations**: Pre-allocated static `RAID_UNITS` arrays across all modules and eliminated anonymous closure allocations in recurring scan tickers.

@@ -1,14 +1,14 @@
 -- AutoBG for World of Warcraft 1.12.1 (Vanilla Enhanced)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI v1.15.8+, SuperWoW 2.2+, UnitXP SP3
+-- Built natively for ClassicAPI v1.15.14+, SuperWoW 2.2+, UnitXP SP3
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.8+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11508
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.14+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11514
 
 if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) or 
    (type(CLASSIC_API_VERSION) == "number" and CLASSIC_API_VERSION < MIN_CLASSIC_API) then
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI (v1.15.8+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI (v1.15.14+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
     end
     return
 end
@@ -293,6 +293,9 @@ local notifiedQueues = {}
 local hasHandledEnd = false
 local lastPlayedBG = nil
 local pendingAutoRejoin = nil
+local rejoinRequested = false
+local rejoinFallbackScheduled = false
+local rejoinWorldReady = false
 local needsQueueAfterResurrect = false
 
 local function IsPlayerDeadOrGhost()
@@ -380,13 +383,14 @@ function AutoBG_PlayNotificationSound()
 end
 
 local function GetBGButtonIndex(bgName)
-    if not bgName then return 4, "Warsong Gulch" end
+    if not bgName then return 4, "Warsong Gulch", "Warsong" end
     local lower = string.lower(bgName)
-    if string.find(lower, "arathi") or string.find(lower, "ab") then return 5, "Arathi Basin"
-    elseif string.find(lower, "alterac") or string.find(lower, "av") then return 7, "Alterac Valley"
-    elseif string.find(lower, "thorn") or string.find(lower, "gorge") or string.find(lower, "tg") then return 6, "Thorn Gorge"
+    if string.find(lower, "arathi") or string.find(lower, "ab") then return 5, "Arathi Basin", "Arathi"
+    elseif string.find(lower, "alterac") or string.find(lower, "av") then return 7, "Alterac Valley", "Alterac"
+    elseif string.find(lower, "thorn") or string.find(lower, "gorge") or string.find(lower, "tg") then return 6, "Thorn Gorge", "ThornGorge"
     elseif string.find(lower, "arena") then return 3, "Arena"
-    else return 4, "Warsong Gulch" end
+    elseif string.find(lower, "warsong") or lower == "wsg" then return 4, "Warsong Gulch", "Warsong"
+    else return 0, bgName end
 end
 
 local function ClickFrame(f)
@@ -408,10 +412,19 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
         return
     end
 
-    local btnIdx, cleanName = GetBGButtonIndex(bgName)
+    local btnIdx, cleanName, queueName = GetBGButtonIndex(bgName)
     pendingAutoRejoin = cleanName
-    suppressBattlefieldFrameUntil = GetTime() + 4.0
+    suppressBattlefieldFrameUntil = 0
     if CloseDropDownMenus then CloseDropDownMenus() end
+
+    if queueName and JoinBattlegroundQueue then
+        local ok, err = pcall(JoinBattlegroundQueue, queueName)
+        if not ok then
+            pendingAutoRejoin = nil
+            AutoBG_Print("Could not open queue for |cFFFFFF00" .. cleanName .. "|r: " .. tostring(err), true)
+        end
+        return
+    end
 
     local mmBtn = _G["TWMiniMapBattlefieldFrame"] or _G["MiniMapBattlefieldFrame"]
     if mmBtn then ClickFrame(mmBtn) end
@@ -543,6 +556,9 @@ end)
 local function HandleMatchEnd()
     if hasHandledEnd then return end
     hasHandledEnd = true
+    rejoinRequested = false
+    rejoinFallbackScheduled = false
+    rejoinWorldReady = false
 
     UpdateZoneCache()
     if currentZoneText ~= "" then
@@ -562,6 +578,23 @@ local function HandleMatchEnd()
         LeaveBattlefield(0)
         AutoBG_Print("Instantly left |cFFFFFF00" .. (lastPlayedBG or "battleground") .. "|r.")
     end
+end
+
+local function TryAutoRejoin()
+    if currentZonePVP or not rejoinWorldReady or rejoinRequested or not hasHandledEnd or not pendingAutoRejoin or
+       not (AutoBG_Settings and AutoBG_Settings.AutoRejoin) then return end
+    local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
+    for i = 1, maxQueues do
+        if GetBattlefieldStatus(i) == "active" then return end
+    end
+    if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+        AutoBG_Print("Auto-Rejoin paused: You are tagged as |cFFFF5555AFK|r.")
+        hasHandledEnd = false
+        pendingAutoRejoin = nil
+        return
+    end
+    rejoinRequested = true
+    AutoBG_TriggerBattlegroundFinder(pendingAutoRejoin)
 end
 
 -- Auto-Accept Popup Dismissal Hook (Rule B10)
@@ -686,9 +719,13 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 StealthAlert = true,
                 AutoHide = false,
                 Timeout = 30,
-                MaxRows = 5,
+                MaxRows = 10,
                 Scale = 1.0,
             }
+        end
+        if not AutoBG_Settings.Spy.StableRowsMigration then
+            if AutoBG_Settings.Spy.MaxRows == 5 then AutoBG_Settings.Spy.MaxRows = 10 end
+            AutoBG_Settings.Spy.StableRowsMigration = true
         end
 
         AutoBG_MigratePositions()
@@ -706,6 +743,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         end
 
     elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
+        local wasInBattleground = currentZonePVP
         UpdateZoneCache()
         if UnitIsAFK and UnitIsAFK("player") then playerIsAFK = true else playerIsAFK = false end
 
@@ -714,9 +752,15 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 lastPlayedBG = currentZoneText
                 if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = currentZoneText end
             end
-            hasHandledEnd = false
-            pendingAutoRejoin = nil
+            if not wasInBattleground then
+                hasHandledEnd = false
+                pendingAutoRejoin = nil
+                rejoinRequested = false
+                rejoinFallbackScheduled = false
+                rejoinWorldReady = false
+            end
         else
+            if ev == "PLAYER_ENTERING_WORLD" then rejoinWorldReady = true end
             local hasDes, rem = AutoBG_HasDeserter()
             if hasDes then
                 pendingAutoRejoin = nil
@@ -726,15 +770,16 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                     AutoBG_Print("Auto-Rejoin / Auto-Queue halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
                 end
             else
-                local targetRejoin = lastPlayedBG or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG)
-                if hasHandledEnd and targetRejoin and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
-                    if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
-                        AutoBG_Print("Auto-Rejoin paused: You are tagged as |cFFFF5555AFK|r.")
-                        hasHandledEnd = false
-                    else
-                        AutoBG_TimerAfter(1.2, function() if pendingAutoRejoin then AutoBG_TriggerBattlegroundFinder(targetRejoin) end end)
+                if hasHandledEnd and pendingAutoRejoin and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
+                    TryAutoRejoin()
+                    if rejoinWorldReady and not rejoinRequested and not rejoinFallbackScheduled then
+                        rejoinFallbackScheduled = true
+                        AutoBG_TimerAfter(1.2, function()
+                            rejoinFallbackScheduled = false
+                            TryAutoRejoin()
+                        end)
                     end
-                else
+                elseif not pendingAutoRejoin then
                     hasHandledEnd = false
                 end
 
@@ -784,7 +829,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             AutoBG_TimerAfter(0.35, AutoBG_HideBattlefieldWindow)
             AutoBG_TimerAfter(0.8, AutoBG_HideBattlefieldWindow)
 
-            AutoBG_Print("Successfully queued for |cFFFFFF00" .. bgTitle .. "|r (First Available)!")
+            AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (First Available).")
             pendingAutoRejoin = nil; hasHandledEnd = false
         elseif suppressBattlefieldFrameUntil and GetTime() < suppressBattlefieldFrameUntil then
             AutoBG_HideBattlefieldWindow()
@@ -806,6 +851,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         if not AutoBG_Settings then return end
         local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
         for i = 1, maxQueues do ProcessBattlefieldQueue(i) end
+        TryAutoRejoin()
 
     elseif ev == "PLAYER_DEAD" then
         if AutoBG_Settings and AutoBG_Settings.AutoRelease and currentZonePVP then

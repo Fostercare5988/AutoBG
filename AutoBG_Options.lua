@@ -4,8 +4,8 @@
 -- ClassicAPI v1.15.8+, SuperWoW v2.2+, UnitXP SP3                            --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.8+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11508
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.14+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11514
 
 if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) or 
    (type(CLASSIC_API_VERSION) == "number" and CLASSIC_API_VERSION < MIN_CLASSIC_API) then
@@ -246,7 +246,7 @@ local cbAutoLeave = CreateCheckButton("AutoBG_Opt_AutoLeave", panelGeneral, "Aut
 end)
 cbAutoLeave:SetPoint("TOPLEFT", sliderAcceptDelay, "BOTTOMLEFT", -4, -14)
 
-local cbAutoRejoin = CreateCheckButton("AutoBG_Opt_AutoRejoin", panelGeneral, "Auto-Rejoin BG on Exit", "Automatically queue for the same Battleground after match exit via Battleground Finder.", function()
+local cbAutoRejoin = CreateCheckButton("AutoBG_Opt_AutoRejoin", panelGeneral, "Auto-Rejoin BG on Exit", "Request the same battleground queue after leaving a completed match.", function()
 	if AutoBG_Settings then AutoBG_Settings.AutoRejoin = this:GetChecked() and true or false end
 end)
 cbAutoRejoin:SetPoint("TOPLEFT", cbAutoLeave, "BOTTOMLEFT", 0, -4)
@@ -756,7 +756,7 @@ local sliderSpyTimeout = CreateSlider("AutoBG_Spy_Timeout", panelSpy, "Inactivit
 end)
 sliderSpyTimeout:SetPoint("TOPLEFT", cbSpyAutoHide, "BOTTOMLEFT", 4, -18)
 
-local sliderSpyMaxRows = CreateSlider("AutoBG_Spy_MaxRows", panelSpy, "Max Enemies Displayed", 3, 10, 1, false, function(val)
+local sliderSpyMaxRows = CreateSlider("AutoBG_Spy_MaxRows", panelSpy, "Max Enemies Displayed", 3, 20, 1, false, function(val)
 	if not AutoBG_Settings then AutoBG_Settings = {} end
 	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
 	AutoBG_Settings.Spy.MaxRows = val
@@ -847,7 +847,7 @@ local function UpdateSpyWidgets()
 	sliderSpyTimeout:SetValue(timeout)
 	sliderSpyTimeout.ValueText:SetText(tostring(timeout))
 
-	local maxRows = opt.MaxRows or 5
+	local maxRows = opt.MaxRows or 10
 	sliderSpyMaxRows:SetValue(maxRows)
 	sliderSpyMaxRows.ValueText:SetText(tostring(maxRows))
 

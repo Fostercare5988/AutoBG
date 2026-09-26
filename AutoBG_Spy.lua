@@ -4,8 +4,8 @@
 -- Leveraging SuperWoW v2.2+, ClassicAPI v1.15.8+, UnitXP SP3                 --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.8+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11508
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.15.14+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11514
 
 if not (CLASSIC_API_VERSION and SUPERWOW_VERSION) or 
    (type(CLASSIC_API_VERSION) == "number" and CLASSIC_API_VERSION < MIN_CLASSIC_API) then
@@ -21,7 +21,7 @@ if not BattlegroundTargets then BattlegroundTargets = AutoBG_Targets or {} end
 BattlegroundTargets.Spy = AutoBG_Spy
 
 local MAX_SPY_ENEMIES = 20
-local MAX_SPY_ROWS = 10
+local MAX_SPY_ROWS = 20
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
@@ -45,7 +45,7 @@ local function GetSpySettings()
 			StealthAlert = true,
 			AutoHide = false,
 			Timeout = 30,
-			MaxRows = 5,
+			MaxRows = 10,
 			Scale = 1.0,
 		}
 	end
@@ -323,19 +323,20 @@ local function IsHostilePlayer(guid, name)
 end
 
 -- -------------------------------------------------------------------------- --
--- Allocation-Free Insertion Sort by lastSeen (Descending)                    --
+-- Keep rows in detection order; activity updates must not move a player.     --
 -- -------------------------------------------------------------------------- --
-local function SortTrackedEnemies()
-	for i = 2, activeEnemyCount do
-		local j = i
-		while j > 1 and (trackedEnemies[j].lastSeen > trackedEnemies[j - 1].lastSeen) do
-			trackedEnemies[j], trackedEnemies[j - 1] = trackedEnemies[j - 1], trackedEnemies[j]
-			j = j - 1
-		end
-	end
-	for i = 1, activeEnemyCount do
-		nameToTrackIndex[trackedEnemies[i].name] = i
-	end
+local function ResetEnemyEntry(e)
+	e.name = nil
+	e.shortName = nil
+	e.classToken = nil
+	e.race = nil
+	e.level = nil
+	e.healthPct = 100
+	e.lastSeen = 0
+	e.guid = nil
+	e.isStealthed = false
+	e.stealthSpell = nil
+	e.wasStealthedAlerted = false
 end
 
 -- -------------------------------------------------------------------------- --
@@ -353,21 +354,27 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	local idx = nameToTrackIndex[name]
 	local isNew = false
 
+	local e
 	if not idx then
 		if activeEnemyCount < MAX_SPY_ENEMIES then
 			activeEnemyCount = activeEnemyCount + 1
-			idx = activeEnemyCount
-		else
-			idx = activeEnemyCount
-			if trackedEnemies[idx].name then
-				nameToTrackIndex[trackedEnemies[idx].name] = nil
-			end
 		end
+		e = trackedEnemies[activeEnemyCount]
+		if e.name then nameToTrackIndex[e.name] = nil end
+		if e.guid then guidToName[e.guid] = nil end
+		for i = activeEnemyCount, 2, -1 do
+			trackedEnemies[i] = trackedEnemies[i - 1]
+			nameToTrackIndex[trackedEnemies[i].name] = i
+		end
+		trackedEnemies[1] = e
+		ResetEnemyEntry(e)
+		idx = 1
 		nameToTrackIndex[name] = idx
 		isNew = true
+	else
+		e = trackedEnemies[idx]
 	end
 
-	local e = trackedEnemies[idx]
 	e.name = name
 	e.shortName = StripRealm(name)
 	if classToken then
@@ -429,7 +436,6 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 		Spy:ShowAlert(e.stealthSpell or "Stealth", e.name, e.classToken, e.guid)
 	end
 
-	SortTrackedEnemies()
 	Spy:RenderRows()
 end
 
@@ -452,7 +458,6 @@ function Spy:SetUnitStealthState(name, isStealthed, spellName)
 		e.wasStealthedAlerted = false
 	end
 
-	SortTrackedEnemies()
 	Spy:RenderRows()
 end
 
@@ -461,19 +466,9 @@ end
 -- -------------------------------------------------------------------------- --
 function Spy:ClearHistory()
 	table.wipe(nameToTrackIndex)
+	table.wipe(guidToName)
 	for i = 1, MAX_SPY_ENEMIES do
-		local e = trackedEnemies[i]
-		e.name = nil
-		e.shortName = nil
-		e.classToken = nil
-		e.race = nil
-		e.level = nil
-		e.healthPct = 100
-		e.lastSeen = 0
-		e.guid = nil
-		e.isStealthed = false
-		e.stealthSpell = nil
-		e.wasStealthedAlerted = false
+		ResetEnemyEntry(trackedEnemies[i])
 	end
 	activeEnemyCount = 0
 	Spy:RenderRows()
@@ -921,7 +916,7 @@ function Spy:RenderRows()
 	end
 
 	local now = GetTime()
-	local maxRows = math.min(MAX_SPY_ROWS, opt.MaxRows or 5)
+	local maxRows = math.min(MAX_SPY_ROWS, opt.MaxRows or 10)
 	local count = Spy.isTestMode and 3 or activeEnemyCount
 
 	if count == 0 then
@@ -1027,7 +1022,7 @@ function Spy:UpdateTimeText()
 	end
 
 	local now = GetTime()
-	local maxRows = math.min(MAX_SPY_ROWS, opt.MaxRows or 5)
+	local maxRows = math.min(MAX_SPY_ROWS, opt.MaxRows or 10)
 	local count = Spy.isTestMode and 3 or activeEnemyCount
 	local visibleCount = math.min(count, maxRows)
 
@@ -1069,20 +1064,11 @@ local function OnSpyTick()
 		local e = trackedEnemies[i]
 		if (now - e.lastSeen) > timeout then
 			nameToTrackIndex[e.name] = nil
+			if e.guid then guidToName[e.guid] = nil end
 			for k = i, activeEnemyCount - 1 do
 				trackedEnemies[k], trackedEnemies[k + 1] = trackedEnemies[k + 1], trackedEnemies[k]
 			end
-			trackedEnemies[activeEnemyCount].name = nil
-			trackedEnemies[activeEnemyCount].shortName = nil
-			trackedEnemies[activeEnemyCount].classToken = nil
-			trackedEnemies[activeEnemyCount].race = nil
-			trackedEnemies[activeEnemyCount].level = nil
-			trackedEnemies[activeEnemyCount].healthPct = 100
-			trackedEnemies[activeEnemyCount].lastSeen = 0
-			trackedEnemies[activeEnemyCount].guid = nil
-			trackedEnemies[activeEnemyCount].isStealthed = false
-			trackedEnemies[activeEnemyCount].stealthSpell = nil
-			trackedEnemies[activeEnemyCount].wasStealthedAlerted = false
+			ResetEnemyEntry(trackedEnemies[activeEnemyCount])
 			activeEnemyCount = activeEnemyCount - 1
 			changed = true
 		else
@@ -1206,7 +1192,7 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 
 		local classToken = UnitClass(casterGUID)
 		local level = UnitLevel(casterGUID)
-		local isStealth = false
+		local isStealth = nil
 		local sName = nil
 		local detectedRace = nil
 
@@ -1317,7 +1303,7 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 				hostileCache[enemyName] = true
 				local isStealth = Targets and Targets.CheckIsStealthName and Targets.CheckIsStealthName(spellName)
 				local detectedRace = RACIAL_SPELL_NAMES[spellName]
-				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or false, spellName, detectedRace)
+				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or nil, spellName, detectedRace)
 			end
 		end
 
@@ -1328,7 +1314,7 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 				hostileCache[enemyName] = true
 				local isStealth = Targets and Targets.CheckIsStealthName and Targets.CheckIsStealthName(buffName)
 				local detectedRace = RACIAL_SPELL_NAMES[buffName]
-				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or false, buffName, detectedRace)
+				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or nil, buffName, detectedRace)
 			end
 		end
 
