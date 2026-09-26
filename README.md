@@ -87,6 +87,8 @@ AutoBG is engineered around strict low-level system integration:
 
 AB and AV objective timers use compact 24-pixel rows with flat, muted faction fills, centered warm-white names and a separate countdown. The fill covers the row height; the final ten seconds use amber countdown text. Drag the battleground heading to reposition; Ctrl-click a row to announce its timer.
 
+Enemy-frame health bars, flag-carrier icons and stealth icons/text are always enabled. Each 10v10, 15v15 and 40v40 bracket always saves its own position; existing shared positions migrate once. The enable checkbox names the selected bracket. Separate flag-carrier panels use compact 220x42 dimensions.
+
 Enemy rows now default to 210px width, 12px names and 26px height (40-player lists use 11px / 20px). Objective panels and Spy use larger text; flag-carrier cards are wider. Old default enemy dimensions migrate once, preserving custom dimensions, scales and saved positions. Adjust each bracket under /abg targets; use /abg test to preview.
 
 Detected enemy PvP trinket uses start a **180-second estimate**, per the deployment requirement. Duplicate cast/chat observations do not restart it. Generic immunity names and unsubstantiated compatibility IDs no longer trigger it. An icon without a countdown means no active tracked cooldown, not proof of readiness.
@@ -239,3 +241,5 @@ The code and mocked Lua regressions are checked; real BG event delivery, sound p
 - **Author & Maintainer**: **[Fostercare5988](https://github.com/Fostercare5988)**
 - **GitHub Repository**: [https://github.com/Fostercare5988/AutoBG](https://github.com/Fostercare5988/AutoBG)
 - **License**: MIT License - See [LICENSE](LICENSE) for details.
+
+Enemy frames can always be moved using the visible Drag to move header. Objective timers can be dragged by their rows or heading; the AB forecast also moves with ordinary left-drag. No preview or Shift key is required. Compact objective text uses the established Friz font and bundled bar texture; in-client rendering must be verified after reload.

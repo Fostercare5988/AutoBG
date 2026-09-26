@@ -71,7 +71,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     local width = compact and 260 or BAR_WIDTH
     local rowHeight = compact and 24 or BAR_ROW_H
     local headerHeight = compact and 19 or BAR_HEADER_H
-    local rowFont = compact and "Fonts\\ARIALN.TTF" or FONT
+    local rowFont = FONT
     local fontFlags = compact and "" or "OUTLINE"
     local frame = CreateFrame("Frame", name, UIParent)
     frame:SetWidth(width)
@@ -82,6 +82,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     frame:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
     frame:SetBackdropColor(0.10, 0.14, 0.19, compact and 0 or 0.96)
     frame:EnableMouse(true)
+    frame:SetClampedToScreen(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function() this:StartMoving() end)
@@ -103,7 +104,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     headerRule:SetHeight(1)
     headerRule:SetTexture(titleR, titleG, titleB, compact and 0 or 0.70)
 
-    local titleFs = frame:CreateFontString(nil, "OVERLAY")
+    local titleFs = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     titleFs:SetFont(rowFont, compact and 11 or 13, fontFlags)
     titleFs:SetShadowColor(0, 0, 0, 0.85)
     titleFs:SetShadowOffset(1, -1)
@@ -112,7 +113,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
     titleFs:SetTextColor(0.78, 0.77, 0.72)
     frame.titleFs = titleFs
 
-    local dragHint = frame:CreateFontString(nil, "OVERLAY")
+    local dragHint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     dragHint:SetFont(FONT, 8, "OUTLINE")
     dragHint:SetPoint("RIGHT", frame, "TOPRIGHT", -9, -12)
     dragHint:SetText(compact and "" or "DRAG")
@@ -131,6 +132,15 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         end
         row:EnableMouse(true)
         row:RegisterForClicks("LeftButtonUp")
+        row:RegisterForDrag("LeftButton")
+        row:SetScript("OnDragStart", function()
+            GameTooltip:Hide()
+            frame:StartMoving()
+        end)
+        row:SetScript("OnDragStop", function()
+            frame:StopMovingOrSizing()
+            if AutoBG_SavePosition then AutoBG_SavePosition(frame, name) end
+        end)
         row:SetScript("OnClick", function()
             if IsControlKeyDown() and this.announceText then SendTimerAnnouncement(this.announceText) end
         end)
@@ -166,7 +176,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         local bar = CreateFrame("StatusBar", name .. "Row" .. i .. "Bar", row)
         bar:SetPoint("TOPLEFT", row, "TOPLEFT", 1, -1)
         bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 1)
-        bar:SetStatusBarTexture(compact and "Interface\\Buttons\\WHITE8X8" or BAR_TEXTURE)
+        bar:SetStatusBarTexture(BAR_TEXTURE)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(1)
         bar:SetStatusBarColor(0.1, 0.85, 0.1)
@@ -175,7 +185,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
 
         local barBg = row:CreateTexture(nil, "BORDER")
         barBg:SetAllPoints(bar)
-        barBg:SetTexture(compact and "Interface\\Buttons\\WHITE8X8" or BAR_TEXTURE)
+        barBg:SetTexture(BAR_TEXTURE)
         barBg:SetVertexColor(0.20, 0.24, 0.29, 0.85)
         if compact then barBg:SetVertexColor(0.12, 0.13, 0.14, 0.92) end
         row.barBg = barBg
@@ -196,7 +206,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         flagIcon:Hide()
         row.flagIcon = flagIcon
 
-        local timeFs = bar:CreateFontString(nil, "OVERLAY")
+        local timeFs = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         timeFs:SetFont(rowFont, compact and 12 or 15, fontFlags)
         timeFs:SetShadowColor(0, 0, 0, 0.8)
         timeFs:SetShadowOffset(1, -1)
@@ -205,7 +215,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         timeFs:SetTextColor(1, 1, 1, 1)
         row.timeFs = timeFs
 
-        local labelFs = bar:CreateFontString(nil, "OVERLAY")
+        local labelFs = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         labelFs:SetFont(rowFont, 13, fontFlags)
         labelFs:SetShadowColor(0, 0, 0, 0.8)
         labelFs:SetShadowOffset(1, -1)
@@ -240,6 +250,7 @@ local function CreateRespawnFrame(name, xOffset, yOffset)
     frame:SetBackdropColor(0, 0, 0, 0.80)
     frame:SetBackdropBorderColor(0.35, 0.10, 0.10, 0.90)
     frame:EnableMouse(true)
+    frame:SetClampedToScreen(true)
     frame:SetMovable(true)
     frame:RegisterForClicks("LeftButtonUp")
     frame:RegisterForDrag("LeftButton")
@@ -309,6 +320,7 @@ local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minW
     frame:SetBackdropColor(0, 0, 0, 0.75)
     frame:SetBackdropBorderColor(0.35, 0.10, 0.10, 0.90)
     frame:EnableMouse(true)
+    frame:SetClampedToScreen(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function() this:StartMoving() end)
@@ -422,8 +434,8 @@ local function CreateABProjectionFrame(name)
     frame:SetHeight(AB_PROJ_HEIGHT)
     frame:SetFrameStrata("HIGH")
     frame:EnableMouse(true)
-    frame:SetMovable(true)
     frame:SetClampedToScreen(true)
+    frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
 
     frame:SetBackdrop({
@@ -436,9 +448,7 @@ local function CreateABProjectionFrame(name)
     frame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
 
     frame:SetScript("OnDragStart", function()
-        if IsShiftKeyDown() or (AutoBG_Settings and AutoBG_Settings.TestAllTimers) then
-            this:StartMoving()
-        end
+        this:StartMoving()
     end)
     frame:SetScript("OnDragStop", function()
         this:StopMovingOrSizing()
@@ -450,7 +460,7 @@ local function CreateABProjectionFrame(name)
         GameTooltip:AddLine("Live score forecast based on base capture rates and impending flips.", 0.9, 0.9, 0.9, 1)
         GameTooltip:AddLine("Row 1: Projected Alliance Score & Win/Loss ETA", 0.4, 0.7, 1.0)
         GameTooltip:AddLine("Row 2: Projected Horde Score & Bases Needed to Win", 1.0, 0.4, 0.4)
-        GameTooltip:AddLine("|cFF00FF00Shift+LeftClick Drag:|r Reposition HUD overlay", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("|cFF00FF00Left-drag:|r Reposition HUD overlay", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     frame:SetScript("OnLeave", function() GameTooltip:Hide() end)

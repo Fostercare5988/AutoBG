@@ -49,11 +49,7 @@ local function GetSpySettings()
 	return AutoBG_Settings.Spy
 end
 
--- Alert policy, not the server's stealth-detection formula.
 local STEALTH_ALERT_DISTANCE_SQUARED = 10 * 10
--- A cast/chat record alone must never generate a proximity warning.
--- observedUnit is supplied only by direct unit observations (or their saved GUID).
-
 function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground, observedUnit)
 	local opt = GetSpySettings()
 	if inBattleground then
@@ -96,6 +92,7 @@ local activeEnemyCount = 0
 
 local nameToTrackIndex = {}
 local guidToName = {}
+local nameToGUID = {}
 local hostileCache = {}
 local friendlyCache = {}
 local soundDebounce = {}
@@ -351,6 +348,7 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 		e = trackedEnemies[activeEnemyCount]
 		if e.name then nameToTrackIndex[e.name] = nil end
 		if e.guid then guidToName[e.guid] = nil end
+		if e.name then nameToGUID[e.name] = nil end
 		for i = activeEnemyCount, 2, -1 do
 			trackedEnemies[i] = trackedEnemies[i - 1]
 			nameToTrackIndex[trackedEnemies[i].name] = i
@@ -396,6 +394,7 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	if guid then
 		e.guid = guid
 		guidToName[guid] = name
+		nameToGUID[name] = guid
 	end
 	if healthPct then e.healthPct = healthPct end
 	e.lastSeen = now
@@ -451,6 +450,7 @@ function Spy:ClearHistory()
 	table.wipe(soundDebounce)
 	table.wipe(nameToTrackIndex)
 	table.wipe(guidToName)
+	table.wipe(nameToGUID)
 	for i = 1, MAX_SPY_ENEMIES do
 		ResetEnemyEntry(trackedEnemies[i])
 	end
@@ -494,20 +494,21 @@ local function SpyRow_OnClick(self, button)
 	local btn = button or arg1
 	local tName = b.targetName
 	if not tName then return end
-	local tGUID = b.targetGUID or guidToName[tName]
+	local tGUID = b.targetGUID or nameToGUID[tName]
+	local cleanName = StripRealm(tName)
 
 	if btn == "LeftButton" then
 		if tGUID then
 			TargetUnit(tGUID)
 		else
-			TargetByName(tName, true)
+			TargetByName(cleanName, true)
 		end
 	elseif btn == "RightButton" then
 		if tGUID then
 			FocusUnit(tGUID)
 		else
-			TargetByName(tName, true)
-			if UnitExists("target") and UnitName("target") == tName then
+			TargetByName(cleanName, true)
+			if UnitExists("target") and (UnitName("target") == tName or UnitName("target") == cleanName) then
 				FocusUnit("target")
 			end
 		end
@@ -718,7 +719,7 @@ function Spy:CreateAlertWindow()
 		if tGUID then
 			TargetUnit(tGUID)
 		elseif tName then
-			TargetByName(tName, true)
+			TargetByName(StripRealm(tName), true)
 		end
 	end)
 
@@ -1049,6 +1050,7 @@ local function OnSpyTick()
 		if (now - e.lastSeen) > timeout then
 			nameToTrackIndex[e.name] = nil
 			if e.guid then guidToName[e.guid] = nil end
+				if e.name then nameToGUID[e.name] = nil end
 			for k = i, activeEnemyCount - 1 do
 				trackedEnemies[k], trackedEnemies[k + 1] = trackedEnemies[k + 1], trackedEnemies[k]
 			end

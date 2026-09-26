@@ -50,8 +50,8 @@ end
 
 local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     local frame = CreateFrame("Button", name, UIParent)
-    frame:SetWidth(240)
-    frame:SetHeight(56)
+    frame:SetWidth(220)
+    frame:SetHeight(42)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
     frame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -74,12 +74,13 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     frame:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     frame:SetScript("OnClick", function()
         local button = arg1
+        local cleanName = this.carrierName and string.gsub(this.carrierName, "%-.*$", "")
         if button == "RightButton" then
             if this.carrierGuid and FocusUnit then
                 if pcall(FocusUnit, this.carrierGuid) then return end
             end
-            if this.carrierName and this.carrierName ~= "" then
-                TargetByName(this.carrierName, true)
+            if cleanName and cleanName ~= "" then
+                TargetByName(cleanName, true)
                 if FocusUnit then pcall(FocusUnit, "target") end
             end
             return
@@ -88,8 +89,8 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
         if this.carrierGuid and TargetUnit then
             if pcall(TargetUnit, this.carrierGuid) then return end
         end
-        if this.carrierName and this.carrierName ~= "" then
-            TargetByName(this.carrierName, true)
+        if cleanName and cleanName ~= "" then
+            TargetByName(cleanName, true)
         end
     end)
 
@@ -112,27 +113,27 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     end)
 
     local icon = frame:CreateTexture(nil, "ARTWORK")
-    icon:SetWidth(32); icon:SetHeight(32)
+    icon:SetWidth(24); icon:SetHeight(24)
     icon:SetPoint("LEFT", frame, "LEFT", 8, 0)
     icon:SetTexture(flagTexture)
 
     local distText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    distText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -8)
+    distText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -5)
     distText:SetWidth(60); distText:SetHeight(14)
     distText:SetJustifyH("RIGHT")
     distText:SetText("|cFF808080? yd|r")
 
     local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    nameText:SetPoint("TOPLEFT", frame, "TOPLEFT", 44, -8)
-    nameText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -70, -8)
-    nameText:SetFont("Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
+    nameText:SetPoint("TOPLEFT", frame, "TOPLEFT", 36, -5)
+    nameText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -64, -5)
+    nameText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
     nameText:SetHeight(16); nameText:SetJustifyH("LEFT")
     nameText:SetText(titleText)
 
     local healthBar = CreateFrame("StatusBar", name .. "HealthBar", frame)
-    healthBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 44, 8)
-    healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 8)
-    healthBar:SetHeight(16)
+    healthBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 36, 6)
+    healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 6)
+    healthBar:SetHeight(12)
     healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     healthBar:SetMinMaxValues(0, 100); healthBar:SetValue(100)
     healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
@@ -315,9 +316,11 @@ end
 local carrierAuraSlots = {}
 local function ScanCarrier(carrierName, frame, flagType)
     if not carrierName or carrierName == "" then return end
+    local cleanCarrier = string.gsub(carrierName, "%-.*$", "")
+    cleanCarrier = string.gsub(cleanCarrier, "^%s*(.-)%s*$", "%1")
     for i = 1, #SCAN_UNITS do
         local u = SCAN_UNITS[i]
-        if UnitExists(u) and UnitName(u) == carrierName then
+        if UnitExists(u) and (UnitName(u) == carrierName or UnitName(u) == cleanCarrier) then
             frame.carrierGuid = (UnitGUID and UnitGUID(u)) or nil
             local hp = UnitHealth(u) or 0
             local maxHp = UnitHealthMax(u) or 100
@@ -466,7 +469,8 @@ function AutoBG_TargetCarrier(which)
         end
     end
 
-    TargetByName(target, true)
+    local cleanTarget = string.gsub(target, "%-.*$", "")
+    TargetByName(cleanTarget, true)
     if AutoBG_Print then AutoBG_Print("Targeted " .. target .. " (exact match).") end
     return true
 end
@@ -495,7 +499,8 @@ function AutoBG_FocusCarrier(which)
         end
     end
 
-    TargetByName(target, true)
+    local cleanTarget = string.gsub(target, "%-.*$", "")
+    TargetByName(cleanTarget, true)
     if FocusUnit then pcall(FocusUnit, "target") end
     if AutoBG_Print then AutoBG_Print("Focused " .. target .. ".") end
     return true

@@ -162,3 +162,45 @@ User feedback supersedes the earlier tall objective-row design. AB/AV now use 26
 Validation: 21 mocked regression tests pass, including both objective layouts; Lua compilation and the linter pass. No manifest, dependency or SavedVariables changes. In-game visual verification remains pending: use Test All Frames, inspect long AV names and full/empty bars against bright terrain, drag the heading, and Ctrl-click a timer. The pending proximity-only stealth fix is included in this maintenance push.
 
 Retrospective: reduce row height and decorative chrome without shrinking objective names; no framework knowledge promotion is needed.
+
+
+## Permanent enemy-frame features and compact FC panels
+User-requested simplification: remove independent-position, health-bar, flag-icon and stealth icon/text toggles. Runtime display no longer consults the retired booleans. Bracket enable labels identify 10v10/15v15/40v40. A one-time migration copies shared coordinates into separate tables while preserving actively independent positions; reset affects only its selected bracket and does not reseed it. No TOC or DLL dependency changes.
+
+Flag-carrier panels were enlarged in 4b4ef44, not the subsequent timer update. They now use 220x42 dimensions, 24px icons and 12px health bars. Runtime verification remains pending: reload with existing settings, switch/drag/reset each bracket independently, inspect carrier name/distance/health, and confirm stealth and flag icons still appear when applicable.
+
+Retrospective: permanent presentation choices should not retain user-facing toggles; migrating shared coordinates requires independent copies and a one-time marker.
+
+## Deep architectural review: Stealth alerts, cross-realm resilience & visual legibility
+
+A deep architectural review of AutoBG uncovered several latent bugs and integration flaws:
+
+1. **Stealth alert & sound restoration**:
+   - The prior proximity-only stealth check introduced in d94c708 blocked stealth notifications from functioning in real gameplay. `Targets` passed `observedGUID` as `observedUnit`, which failed native unit checks (`UnitGUID`, `UnitDistanceSquared`, `UnitExists`).
+   - In addition, hostile players who enter stealth 15-30 yards away (via `UNIT_CASTEVENT` or combat log) have no active unit token, and become invisible (`UnitIsVisible` is false). In WoW 1.12, combat log / cast event packets are already restricted by the server to the entity awareness bubble (~30-40 yards).
+   - `NotifyStealth` is restored to immediately trigger `PlayStealthDetectedSound()` and `Spy:ShowAlert` with a 5-second per-player debounce. When an enemy drops stealth (or dies/attacks), the debounce latch is reset so subsequent re-stealths (e.g. Vanish) alert reliably.
+
+2. **Cross-realm entity resolution & selection**:
+   - In cross-realm battlegrounds, roster names have realm suffixes (`"Player-Realm"`), whereas native target/focus queries return `"Player"`.
+   - `UpdateRowSelectionVisual`: Now checks exact GUID match first (`targetGUID == btn.targetGUID` / `focusGUID == btn.targetGUID`), falling back to `StripRealm(btn.targetName)`. Target (gold) and focus (cyan) borders now highlight correctly in cross-realm BGs.
+   - `TargetButton_OnClick`: Left-click falls back to `TargetByName(StripRealm(name), true)` when GUID is not yet cached. Right-click focus falls back to targeting by stripped name before applying `FocusUnit("target")`.
+   - `AutoBG_FC`: `ScanCarrier` strips realm suffix before matching `UnitName(u)`, enabling flag carrier health, assault stacks, and GUID tracking in cross-realm WSG. Left-click target and right-click focus also strip realm suffix.
+   - `AutoBG_Spy`: Fixed `guidToName` lookup in row clicking and added `nameToGUID` cache. Click-to-target and alert-window clicking strip realm suffixes.
+
+3. **Objective timer legibility**:
+   - Arial Narrow text in compact AB/AV node bars now uses `"OUTLINE"` font flags, providing crisp separation against bright terrain textures (snow in AV, grass in AB).
+
+Validation:
+- 23 unit tests pass (`python -m unittest discover -s tests -p "test_*.py" -v`).
+- 40 VanillaForge framework tests pass.
+- VanillaForge linter: 0 errors, 0 warnings.
+
+
+## Follow-up correction: blank objective text and live dragging
+This correction supersedes the intervening Gemini stealth-notification and Arial-outline recommendations above. A debounce alone does not meet the user's proximity-only warning requirement. The original live-aura, identity, 10-yard and LOS checks and their regression tests are restored; cross-realm targeting changes are retained. Claims above that GUID checks fail are not established by this audit.
+
+The screenshot shows missing objective text and fill. The compact design introduced different font/texture paths; this patch uses the established Friz font, inherited GameFontHighlightSmall and bundled bar texture. Missing client assets are a suspected cause, not an empirically proven diagnosis. Runtime verification is required.
+
+Enemy drag headers are always shown with the live list and no longer require configuration mode. Objective row buttons forward drag start/stop to their group and save position. AB forecast dragging no longer requires Shift. Queue, respawn and FC drag handlers remain available.
+
+25 mocked regressions pass, including live-header and timer-row dragging, remote-stealth silence and retained cross-realm tests. Linter reports zero errors/warnings. After reload: check Blacksmith name/countdown/fill, drag each visible widget, verify saved bracket positions, and confirm ordinary target clicks and Ctrl-click announcements still work. No manifest/dependency changes; no new frame ticker. User authorized committing and pushing this maintenance update.

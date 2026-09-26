@@ -322,21 +322,35 @@ function Targets:EnsureOptions()
 	end
 
 	local o = AutoBG_Settings.Targets
+	-- Seed independent positions once, preserving the placement used by each bracket.
+	if not o.IndependentPositionsVersion then
+		if AutoBG_MigratePositions then AutoBG_MigratePositions() end
+		AutoBG_Settings.Positions = AutoBG_Settings.Positions or {}
+		local positions = AutoBG_Settings.Positions
+		local shared = positions.AutoBG_TargetsMainFrame
+		for _, size in ipairs(BRACKETS) do
+			local key = "AutoBG_TargetsMainFrame" .. size
+			if shared and (not positions[key] or not (o.IndependentPositioning and o.IndependentPositioning[size])) then
+				positions[key] = {point=shared.point, relPoint=shared.relPoint, x=shared.x, y=shared.y}
+			end
+		end
+		o.IndependentPositionsVersion = 1
+	end
 	o.pos = o.pos or {}
 	o.EnableBracket = o.EnableBracket or {}
-	o.IndependentPositioning = o.IndependentPositioning or {}
+	o.IndependentPositioning = nil -- Permanent behavior; retire the saved toggle.
 	o.ButtonFontSize = o.ButtonFontSize or {}
 	o.ButtonScale = o.ButtonScale or {}
 	o.ButtonWidth = o.ButtonWidth or {}
 	o.ButtonHeight = o.ButtonHeight or {}
-	o.ButtonShowHealthBar = o.ButtonShowHealthBar or {}
+	o.ButtonShowHealthBar = nil -- Permanent behavior; retire the saved toggle.
 	o.ButtonShowHealthText = o.ButtonShowHealthText or {}
 	o.ButtonHideRealm = o.ButtonHideRealm or {}
 	o.ButtonSortBy = o.ButtonSortBy or {}
-	o.ShowStealthIcon = o.ShowStealthIcon or {}
+	o.ShowStealthIcon = nil -- Permanent behavior; retire the saved toggle.
 	o.DimStealthed = o.DimStealthed or {}
-	o.ShowStealthText = o.ShowStealthText or {}
-	o.ShowFlagCarrier = o.ShowFlagCarrier or {}
+	o.ShowStealthText = nil -- Permanent behavior; retire the saved toggle.
+	o.ShowFlagCarrier = nil -- Permanent behavior; retire the saved toggle.
 	o.ShowTrinket = o.ShowTrinket or {}
 	if o.StealthAlert == nil then o.StealthAlert = true end
 	if o.TrinketPos == nil then o.TrinketPos = "RIGHT" end
@@ -354,19 +368,14 @@ function Targets:EnsureOptions()
 	end
 	for _, size in ipairs(BRACKETS) do
 		if o.EnableBracket[size] == nil then o.EnableBracket[size] = true end
-		if o.IndependentPositioning[size] == nil then o.IndependentPositioning[size] = false end
 		if o.ButtonFontSize[size] == nil then o.ButtonFontSize[size] = (size == 40 and 11) or 12 end
 		if o.ButtonScale[size] == nil then o.ButtonScale[size] = (size == 10 and 1.10) or (size == 15 and 1.00) or 0.90 end
 		if o.ButtonWidth[size] == nil then o.ButtonWidth[size] = 210 end
 		if o.ButtonHeight[size] == nil then o.ButtonHeight[size] = (size == 40 and 20) or 26 end
-		if o.ButtonShowHealthBar[size] == nil then o.ButtonShowHealthBar[size] = true end
 		if o.ButtonShowHealthText[size] == nil then o.ButtonShowHealthText[size] = true end
 		if o.ButtonHideRealm[size] == nil then o.ButtonHideRealm[size] = false end
 		if o.ButtonSortBy[size] == nil then o.ButtonSortBy[size] = 1 end
-		if o.ShowStealthIcon[size] == nil then o.ShowStealthIcon[size] = true end
 		if o.DimStealthed[size] == nil then o.DimStealthed[size] = false end
-		if o.ShowStealthText[size] == nil then o.ShowStealthText[size] = true end
-		if o.ShowFlagCarrier[size] == nil then o.ShowFlagCarrier[size] = true end
 		if o.ShowTrinket[size] == nil then o.ShowTrinket[size] = true end
 	end
 end
@@ -402,7 +411,7 @@ local function UpdateRowFlagVisual(index, name)
 	local enemyCarrier = GetEnemyFlagCarrier()
 	local isCarrier = enemyCarrier and (StripRealm(name) == StripRealm(enemyCarrier))
 
-	if isCarrier and (o and o.ShowFlagCarrier and o.ShowFlagCarrier[size] ~= false) then
+	if isCarrier then
 		btn.FlagIcon:SetTexture(GetEnemyFlagTexture())
 		btn.FlagIcon:Show()
 		btn.HealthText:ClearAllPoints()
@@ -434,7 +443,7 @@ local function UpdateRowStealthVisual(index, name)
 	local dead = deadState[name]
 	local height = (o and o.ButtonHeight and o.ButtonHeight[size]) or 20
 
-	if stealth and not dead and (not o or o.ShowStealthIcon[size] ~= false) then
+	if stealth and not dead then
 		local sName = stealth.spellName or "Stealth"
 		local tex = stealth.texture
 		if sName == "Prowl" or string.find(tex or "", "prowl") or string.find(tex or "", "SupriseAttack") or string.find(tex or "", "Pet_Cat") or string.find(tex or "", "Ambush") or string.find(tex or "", "CatForm") then
@@ -463,7 +472,7 @@ local function UpdateRowStealthVisual(index, name)
 		btn:SetAlpha(1.0)
 	end
 
-	if stealth and not dead and (not o or o.ShowStealthText[size] ~= false) then
+	if stealth and not dead then
 		local sName = stealth.spellName or "Stealth"
 		local tag = (sName == "Prowl" and "|cffd2c2ffPROWL|r")
 			or (sName == "Vanish" and "|cffd2c2ffVANISH|r")
@@ -551,9 +560,10 @@ SetUnitStealth = function(name, isStealthed, spellName, texture, duration, obser
 			entry.expireTime = exp
 		end
 
-		if observedUnit then entry.observedGUID = UnitGUID(observedUnit) end
-		if not entry.alerted and not Targets.isConfig and AutoBG_Spy and entry.observedGUID then
-			entry.alerted = AutoBG_Spy:NotifyStealth(name, entry.spellName, nil, nameToGUID[name], true, entry.observedGUID) and true or false
+		if observedUnit and UnitGUID then entry.observedGUID = UnitGUID(observedUnit) end
+		if not entry.alerted and not Targets.isConfig and AutoBG_Spy then
+			local guid = nameToGUID[name] or entry.observedGUID
+			entry.alerted = AutoBG_Spy:NotifyStealth(name, entry.spellName, nil, guid, true, entry.observedGUID) and true or false
 		end
 
 		if exp and stealthWatcher and not stealthWatcher:IsShown() then
@@ -627,8 +637,9 @@ local function UpdateObservedTimers()
 		if btn and btn:IsShown() and btn.targetName then
 			local name = btn.targetName
 			local stealth = stealthedState[name]
-			if not Targets.isConfig and stealth and not stealth.alerted and stealth.observedGUID and AutoBG_Spy then
-				stealth.alerted = AutoBG_Spy:NotifyStealth(name, stealth.spellName, btn.classToken, nameToGUID[name], true, stealth.observedGUID) and true or false
+			if not Targets.isConfig and stealth and not stealth.alerted and AutoBG_Spy then
+				local guid = nameToGUID[name] or stealth.observedGUID or btn.targetGUID
+				stealth.alerted = AutoBG_Spy:NotifyStealth(name, stealth.spellName, btn.classToken, guid, true, stealth.observedGUID) and true or false
 			end
 			local exp = trinketCooldown[name]
 			if exp then
@@ -680,12 +691,19 @@ local function UpdateRowSelectionVisual(btn)
 	if not btn.targetName then return end
 
 	local targetName = UnitExists("target") and UnitName("target") or nil
+	local targetGUID = UnitExists("target") and UnitGUID and UnitGUID("target") or nil
 	local focusName = UnitExists("focus") and UnitName("focus") or nil
+	local focusGUID = UnitExists("focus") and UnitGUID and UnitGUID("focus") or nil
 
-	if targetName == btn.targetName then
+	local isTarget = (targetGUID and btn.targetGUID and targetGUID == btn.targetGUID)
+		or (targetName and (targetName == btn.targetName or targetName == StripRealm(btn.targetName)))
+	local isFocus = (focusGUID and btn.targetGUID and focusGUID == btn.targetGUID)
+		or (focusName and (focusName == btn.targetName or focusName == StripRealm(btn.targetName)))
+
+	if isTarget then
 		SetBorderColor(btn, 1.0, 0.82, 0.20, 1.0)
 		btn.Selection:Show()
-	elseif focusName == btn.targetName then
+	elseif isFocus then
 		SetBorderColor(btn, 0.35, 0.75, 1.0, 1.0)
 		btn.Selection:Show()
 	else
@@ -706,7 +724,7 @@ end
 
 local function MainFrame_OnMouseDown(self)
 	local f = Targets.MainFrame
-	if Targets.isConfig and f and f.StartMoving then
+	if f and f.StartMoving then
 		f:StartMoving()
 	end
 end
@@ -726,17 +744,25 @@ local function TargetButton_OnClick(self, button)
 	if not name then return end
 
 	local guid = b.targetGUID or nameToGUID[name]
+	local cleanName = StripRealm(name)
 	if btn == "LeftButton" then
 		if guid then
 			TargetUnit(guid)
 		else
-			TargetByName(name, true)
+			TargetByName(cleanName, true)
 		end
 	elseif btn == "RightButton" then
 		if guid and FocusUnit then
 			FocusUnit(guid)
-		elseif FocusUnit and UnitExists("target") and UnitName("target") == name then
-			FocusUnit("target")
+		elseif FocusUnit then
+			if UnitExists("target") and (UnitName("target") == name or UnitName("target") == cleanName) then
+				FocusUnit("target")
+			else
+				TargetByName(cleanName, true)
+				if UnitExists("target") and (UnitName("target") == name or UnitName("target") == cleanName) then
+					FocusUnit("target")
+				end
+			end
 		end
 	end
 end
@@ -774,8 +800,9 @@ function Targets:CreateFrames()
 	header:SetPoint("TOPRIGHT", main, "TOPRIGHT", 0, 0)
 	header:SetHeight(DRAG_HEADER_HEIGHT)
 	header:EnableMouse(true)
-	header:SetScript("OnMouseDown", MainFrame_OnMouseDown)
-	header:SetScript("OnMouseUp", MainFrame_OnMouseUp)
+	header:RegisterForDrag("LeftButton")
+	header:SetScript("OnDragStart", MainFrame_OnMouseDown)
+	header:SetScript("OnDragStop", MainFrame_OnMouseUp)
 	local background = header:CreateTexture(nil, "BACKGROUND")
 	background:SetAllPoints(header)
 	background:SetTexture(0.12, 0.16, 0.22, 0.95)
@@ -783,7 +810,7 @@ function Targets:CreateFrames()
 	main.MoveText:SetPoint("CENTER", header, "CENTER", 0, 0)
 	main.MoveText:SetText("Drag to move")
 	main.MoveText:SetTextColor(1, 1, 1, 1)
-	header:Hide()
+	header:Show()
 
 	Targets.TargetButton = {}
 	for i = 1, MAX_ENEMIES do
@@ -912,7 +939,7 @@ function Targets:Frame_SetupPosition(frameName)
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	local size = currentSize
 	local keyPrefix = frameName
-	if frameName == "AutoBG_TargetsMainFrame" and o and o.IndependentPositioning and o.IndependentPositioning[size] then
+	if frameName == "AutoBG_TargetsMainFrame" then
 		keyPrefix = frameName .. size
 	end
 
@@ -930,7 +957,7 @@ function Targets:Frame_SavePosition(frameName)
 
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	local keyPrefix = frameName
-	if frameName == "AutoBG_TargetsMainFrame" and o and o.IndependentPositioning and o.IndependentPositioning[currentSize] then
+	if frameName == "AutoBG_TargetsMainFrame" then
 		keyPrefix = frameName .. currentSize
 	end
 
@@ -1028,12 +1055,8 @@ local function RenderHealthForRow(index, name)
 	local width = (o and o.ButtonWidth and o.ButtonWidth[currentSize]) or 150
 	local maxWidth = width - 2
 
-	if not o or o.ButtonShowHealthBar[currentSize] then
-		btn.HealthBar:SetWidth(math.max(0.01, maxWidth * pct / 100))
-		btn.HealthBar:Show()
-	else
-		btn.HealthBar:Hide()
-	end
+	btn.HealthBar:SetWidth(math.max(0.01, maxWidth * pct / 100))
+	btn.HealthBar:Show()
 
 	if dead and stealthedState[name] then
 		local entry = stealthedState[name]
@@ -1101,7 +1124,7 @@ local function RenderRoster()
 
 	Targets.MainFrame:Show()
 	Targets.MainFrame:EnableMouse(false)
-	Targets.MainFrame.DragHeader:SetShown(Targets.isConfig and true or false)
+	Targets.MainFrame.DragHeader:Show()
 end
 Targets.RenderRoster = RenderRoster
 
@@ -1328,13 +1351,7 @@ function Targets:ResetPosition(bracket)
 			o.pos[key .. "_posX"] = nil
 			o.pos[key .. "_posY"] = nil
 		end
-		if not (o and o.IndependentPositioning and o.IndependentPositioning[bracket]) then
-			if positions then positions[frameName] = nil end
-			if o and o.pos then
-				o.pos[frameName .. "_posX"] = nil
-				o.pos[frameName .. "_posY"] = nil
-			end
-		end
+
 	else
 		if positions then
 			positions[frameName] = nil
@@ -1361,16 +1378,11 @@ function Targets:CopySettings(sourceSize, destinationSize)
 	o.ButtonScale[destinationSize] = o.ButtonScale[sourceSize]
 	o.ButtonWidth[destinationSize] = o.ButtonWidth[sourceSize]
 	o.ButtonHeight[destinationSize] = o.ButtonHeight[sourceSize]
-	o.ButtonShowHealthBar[destinationSize] = o.ButtonShowHealthBar[sourceSize]
 	o.ButtonShowHealthText[destinationSize] = o.ButtonShowHealthText[sourceSize]
 	o.ButtonHideRealm[destinationSize] = o.ButtonHideRealm[sourceSize]
 	o.ButtonSortBy[destinationSize] = o.ButtonSortBy[sourceSize]
-	o.ShowStealthIcon[destinationSize] = o.ShowStealthIcon[sourceSize]
 	o.DimStealthed[destinationSize] = o.DimStealthed[sourceSize]
-	o.ShowStealthText[destinationSize] = o.ShowStealthText[sourceSize]
-	o.ShowFlagCarrier[destinationSize] = o.ShowFlagCarrier[sourceSize]
 	o.ShowTrinket[destinationSize] = o.ShowTrinket[sourceSize]
-	o.IndependentPositioning[destinationSize] = o.IndependentPositioning[sourceSize]
 end
 
 Targets:RegisterEvent("PLAYER_LOGIN")

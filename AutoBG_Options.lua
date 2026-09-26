@@ -496,7 +496,7 @@ for i, sz in ipairs(BRACKETS) do
 end
 
 -- Targets Checkboxes (Column 1)
-local cbTgtEnable = CreateCheckButton("AutoBG_Tgt_Enable", panelTargets, "Enable Bracket", "Show enemy target frames for this battleground size.", function()
+local cbTgtEnable = CreateCheckButton("AutoBG_Tgt_Enable", panelTargets, "Enable 10v10", "Show enemy target frames for this battleground size.", function()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	if o and o.EnableBracket then
 		o.EnableBracket[selectedBracket] = this:GetChecked() and true or false
@@ -505,15 +505,6 @@ local cbTgtEnable = CreateCheckButton("AutoBG_Tgt_Enable", panelTargets, "Enable
 end)
 cbTgtEnable:SetPoint("TOPLEFT", panelTargets, "TOPLEFT", 10, -58)
 
-local cbTgtIndependentPos = CreateCheckButton("AutoBG_Tgt_IndependentPos", panelTargets, "Independent Positioning", "Store separate frame screen coordinates for this bracket.", function()
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	if o and o.IndependentPositioning then
-		o.IndependentPositioning[selectedBracket] = this:GetChecked() and true or false
-		if Targets and Targets.Frame_SetupPosition then Targets:Frame_SetupPosition("AutoBG_TargetsMainFrame") end
-	end
-end)
-cbTgtIndependentPos:SetPoint("TOPLEFT", cbTgtEnable, "BOTTOMLEFT", 0, -6)
-
 local cbTgtHideRealm = CreateCheckButton("AutoBG_Tgt_HideRealm", panelTargets, "Hide Realm Name", "Strip realm suffix from enemy player names.", function()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	if o and o.ButtonHideRealm then
@@ -521,25 +512,7 @@ local cbTgtHideRealm = CreateCheckButton("AutoBG_Tgt_HideRealm", panelTargets, "
 		if Targets and Targets.isConfig and Targets.RenderRoster then Targets:RenderRoster() end
 	end
 end)
-cbTgtHideRealm:SetPoint("TOPLEFT", cbTgtIndependentPos, "BOTTOMLEFT", 0, -6)
-
-local cbTgtFC = CreateCheckButton("AutoBG_Tgt_ShowFC", panelTargets, "Flag Carrier Icon", "Show flag icon on enemy flag carrier row in Warsong Gulch.", function()
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	if o and o.ShowFlagCarrier then
-		o.ShowFlagCarrier[selectedBracket] = this:GetChecked() and true or false
-		if Targets and Targets.isConfig and Targets.RenderRoster then Targets:RenderRoster() end
-	end
-end)
-cbTgtFC:SetPoint("TOPLEFT", cbTgtHideRealm, "BOTTOMLEFT", 0, -6)
-
-local cbTgtHealthBar = CreateCheckButton("AutoBG_Tgt_HealthBar", panelTargets, "Show Health Bar", "Display class-colored health bar.", function()
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	if o and o.ButtonShowHealthBar then
-		o.ButtonShowHealthBar[selectedBracket] = this:GetChecked() and true or false
-		if Targets and Targets.isConfig and Targets.RenderRoster then Targets:RenderRoster() end
-	end
-end)
-cbTgtHealthBar:SetPoint("TOPLEFT", cbTgtFC, "BOTTOMLEFT", 0, -6)
+cbTgtHideRealm:SetPoint("TOPLEFT", cbTgtEnable, "BOTTOMLEFT", 0, -6)
 
 local cbTgtHealthText = CreateCheckButton("AutoBG_Tgt_HealthText", panelTargets, "Show Health Percent", "Display health percentage number on rows.", function()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
@@ -548,25 +521,7 @@ local cbTgtHealthText = CreateCheckButton("AutoBG_Tgt_HealthText", panelTargets,
 		if Targets and Targets.isConfig and Targets.RenderRoster then Targets:RenderRoster() end
 	end
 end)
-cbTgtHealthText:SetPoint("TOPLEFT", cbTgtHealthBar, "BOTTOMLEFT", 0, -6)
-
-local cbTgtStealthIcon = CreateCheckButton("AutoBG_Tgt_StealthIcon", panelTargets, "Show Stealth Icon", "Show icon for Prowl, Stealth, Vanish, and Invisibility.", function()
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	if o and o.ShowStealthIcon then
-		o.ShowStealthIcon[selectedBracket] = this:GetChecked() and true or false
-		if Targets and Targets.isConfig and Targets.RenderRoster then Targets:RenderRoster() end
-	end
-end)
-cbTgtStealthIcon:SetPoint("TOPLEFT", cbTgtHealthText, "BOTTOMLEFT", 0, -6)
-
-local cbTgtStealthText = CreateCheckButton("AutoBG_Tgt_StealthText", panelTargets, "Show Stealth Text", "Display STEALTH / PROWL tag text.", function()
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	if o and o.ShowStealthText then
-		o.ShowStealthText[selectedBracket] = this:GetChecked() and true or false
-		if Targets and Targets.isConfig and Targets.RenderRoster then Targets:RenderRoster() end
-	end
-end)
-cbTgtStealthText:SetPoint("TOPLEFT", cbTgtStealthIcon, "BOTTOMLEFT", 0, -6)
+cbTgtHealthText:SetPoint("TOPLEFT", cbTgtHideRealm, "BOTTOMLEFT", 0, -6)
 
 local cbTgtDim = CreateCheckButton("AutoBG_Tgt_DimStealth", panelTargets, "Dim Stealthed Rows", "Dim the alpha of stealthed enemy rows.", function()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
@@ -575,7 +530,7 @@ local cbTgtDim = CreateCheckButton("AutoBG_Tgt_DimStealth", panelTargets, "Dim S
 		if Targets and Targets.isConfig and Targets.RenderRoster then Targets:RenderRoster() end
 	end
 end)
-cbTgtDim:SetPoint("TOPLEFT", cbTgtStealthText, "BOTTOMLEFT", 0, -6)
+cbTgtDim:SetPoint("TOPLEFT", cbTgtHealthText, "BOTTOMLEFT", 0, -6)
 
 local cbTgtTrinket = CreateCheckButton("AutoBG_Tgt_Trinket", panelTargets, "Show PvP Trinket CD", "Track and display enemy PvP trinket 3-minute cooldown timer.", function()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
@@ -674,25 +629,11 @@ UpdateTargetsWidgets = function(sz)
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	if not o then return end
 
+	cbTgtEnable.Label:SetText("Enable " .. sz .. "v" .. sz)
 	cbTgtEnable:SetChecked(o.EnableBracket and o.EnableBracket[sz] and 1 or nil)
-	cbTgtIndependentPos:SetChecked(o.IndependentPositioning and o.IndependentPositioning[sz] and 1 or nil)
 	cbTgtHideRealm:SetChecked(o.ButtonHideRealm and o.ButtonHideRealm[sz] and 1 or nil)
 
-	if sz == 10 then
-		cbTgtFC:Show()
-		cbTgtFC:SetChecked(o.ShowFlagCarrier and o.ShowFlagCarrier[sz] and 1 or nil)
-		cbTgtHealthBar:ClearAllPoints()
-		cbTgtHealthBar:SetPoint("TOPLEFT", cbTgtFC, "BOTTOMLEFT", 0, -6)
-	else
-		cbTgtFC:Hide()
-		cbTgtHealthBar:ClearAllPoints()
-		cbTgtHealthBar:SetPoint("TOPLEFT", cbTgtHideRealm, "BOTTOMLEFT", 0, -6)
-	end
-
-	cbTgtHealthBar:SetChecked(o.ButtonShowHealthBar and o.ButtonShowHealthBar[sz] and 1 or nil)
 	cbTgtHealthText:SetChecked(o.ButtonShowHealthText and o.ButtonShowHealthText[sz] and 1 or nil)
-	cbTgtStealthIcon:SetChecked(o.ShowStealthIcon and o.ShowStealthIcon[sz] and 1 or nil)
-	cbTgtStealthText:SetChecked(o.ShowStealthText and o.ShowStealthText[sz] and 1 or nil)
 	cbTgtDim:SetChecked(o.DimStealthed and o.DimStealthed[sz] and 1 or nil)
 	cbTgtTrinket:SetChecked(o.ShowTrinket and o.ShowTrinket[sz] and 1 or nil)
 	cbTgtTrinketLeft:SetChecked(o.TrinketPos == "LEFT" and 1 or nil)

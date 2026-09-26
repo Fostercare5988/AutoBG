@@ -67,6 +67,8 @@ local methods={}
 function methods:SetScript(k,v) self.scripts[k]=v end
 function methods:RegisterEvent(e) self.events[e]=true end
 function methods:SetWidth(v) self.width=v end
+function methods:StartMoving() self.moving=true end
+function methods:StopMovingOrSizing() self.moving=false end
 function methods:GetWidth() return self.width or 200 end
 function methods:SetHeight(v) self.height=v end
 function methods:GetHeight() return self.height or 20 end
@@ -238,6 +240,32 @@ class RuntimeTests(unittest.TestCase):
             AutoBG_Targets:EnsureOptions()
             assert(o.ButtonFontSize[10]==10)
         """)
+    def test_independent_positions_migrate_and_reset_one_bracket(self):
+        self.load_core()
+        self.load_units()
+        self.runlua("""
+            AutoBG_Settings.Positions={
+                AutoBG_TargetsMainFrame={point="CENTER",relPoint="CENTER",x=80,y=90},
+                AutoBG_TargetsMainFrame15={point="CENTER",relPoint="CENTER",x=160,y=170}}
+            AutoBG_Settings.Targets={IndependentPositioning={[10]=false,[15]=true},
+                ShowStealthIcon={[10]=false},ShowStealthText={[10]=false},
+                ShowFlagCarrier={[10]=false},ButtonShowHealthBar={[10]=false}}
+            AutoBG_Targets:EnsureOptions()
+            local p=AutoBG_Settings.Positions
+            assert(p.AutoBG_TargetsMainFrame10.x==80)
+            assert(p.AutoBG_TargetsMainFrame15.x==160)
+            p.AutoBG_TargetsMainFrame10.x=99
+            assert(p.AutoBG_TargetsMainFrame40.x==80)
+            assert(p.AutoBG_TargetsMainFrame.x==80)
+            AutoBG_Targets:ResetPosition(10)
+            AutoBG_Targets:EnsureOptions()
+            assert(p.AutoBG_TargetsMainFrame10==nil)
+            assert(p.AutoBG_TargetsMainFrame15.x==160)
+            AutoBG_Targets:EnableConfigMode(10)
+            assert(AutoBG_Targets.TargetButton[1].HealthBar:IsShown())
+            assert(AutoBG_Targets.TargetButton[3].StealthIcon:IsShown())
+        """)
+
     def test_named_aura_duration_and_unknown_visibility(self):
         self.load_units()
         self.runlua("""
@@ -355,6 +383,28 @@ class RuntimeTests(unittest.TestCase):
             assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
             assert(#sounds==1)
         """)
+    def test_live_enemy_header_and_timer_rows_drag(self):
+        self.bg()
+        self.runlua("""
+            local f=AutoBG_Targets.MainFrame
+            assert(not AutoBG_Targets.isConfig and f.DragHeader:IsShown())
+            f.DragHeader.scripts.OnDragStart()
+            assert(f.moving)
+            f.DragHeader.scripts.OnDragStop()
+            assert(not f.moving)
+        """)
+        code=section("AutoBG_Timers.lua", 'local FONT ', "-- Respawn Frame")
+        self.runlua(code+"""
+            GameTooltip={Hide=function() end}
+            local saved
+            AutoBG_SavePosition=function(f,key) saved=key end
+            local f=CreateBarTimerFrame("DragObjective","AB",1,1,1,0,0,5,true)
+            f.rows[1].scripts.OnDragStart()
+            assert(f.moving)
+            f.rows[1].scripts.OnDragStop()
+            assert(not f.moving and saved=="DragObjective")
+        """)
+
     def test_objective_bars_fill_row_and_center_labels(self):
         code=section("AutoBG_Timers.lua", 'local FONT ', "-- Respawn Frame")
         self.runlua(code+"""
@@ -438,6 +488,37 @@ class RuntimeTests(unittest.TestCase):
             UnitGUID=function() return "0x00000002" end
             for _,f in ipairs(tickers) do f() end
             assert(#sounds==0)
+        """)
+
+    def test_cross_realm_target_and_focus_selection(self):
+        self.bg()
+        self.runlua("""
+            AutoBG_Targets.TargetButton[1].targetName = "Enemy-Warsong"
+            AutoBG_Targets.TargetButton[1].targetGUID = "0x00000001"
+            UnitName = function(u) if u=="target" then return "Enemy" else return "Me" end end
+            UnitExists = function(u) return true end
+            AutoBG_Targets:RenderRoster()
+            local btn = AutoBG_Targets.TargetButton[1]
+            assert(btn.Selection:IsShown())
+        """)
+
+    def test_cross_realm_fc_scanning_and_targeting(self):
+        self.runlua("""
+            function GetDistance() return nil end
+            frame=CreateFrame("Frame")
+            frame.healthBar=CreateFrame("Frame")
+            frame.hpText=CreateFrame("FontString")
+            frame.debuffText=CreateFrame("FontString")
+            frame.distText=CreateFrame("FontString")
+            function GetDistanceColor() return "" end
+        """)
+        code = "local SCAN_UNITS={'target'}\n" + section("AutoBG_FC.lua",
+            "local carrierAuraSlots = {}", "-- 6.6 Hz Native Hardware Ticker")
+        self.runlua(code + r"""
+            UnitName = function(u) return "Carrier" end
+            ScanCarrier("Carrier-Warsong", frame, "Horde")
+            assert(frame.carrierGuid == "0x00000001")
+            assert(frame.hpText.text == "100%")
         """)
 
     def test_unknown_immunity_does_not_start_trinket(self):
