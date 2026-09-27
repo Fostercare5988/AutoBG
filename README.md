@@ -79,6 +79,7 @@ AutoBG is engineered around strict low-level system integration:
 
 ### 7. Open-World Enemy Radar (Spy)
 - **Real-Time Hostile Tracking**: Detects nearby enemy players in the open world using ClassicAPI `UNIT_SPELLCAST_SUCCEEDED`, SuperWoW `UNIT_CASTEVENT`, nameplate units, and combat log telemetry.
+- **Class and Stealth Icons**: Normal Spy rows show their class icon. An observed stealth/invisibility effect replaces it with the matching spell icon and state label; ending that effect restores the class icon.
 - **Stable Nearby List**: New enemies appear at the top; ongoing casts and aura updates refresh their details without reordering existing rows. The display supports up to 20 rows, with 10 shown by default.
 - **Audio & Stealth Alerts**: Separate nearby and stealth alerts, with the matching stealth/Meld icon. Repeated observations of the same active stealth state do not replay the alert.
 - **Compact Empty Header**: With no enemies, the list collapses to 96x24 pixels at 100% scale. Populated rows retain their readable width. The existing Spy Scale and Auto-Hide settings remain available.

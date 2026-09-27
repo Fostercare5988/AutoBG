@@ -80,3 +80,44 @@ regressions without guessing the exact unseen match sequence. A late state revie
 found stale death flags were another suppressor; a resurrection/Vanish test now
 covers it. Framework evidence/ownership rules already cover the general lessons;
 no VanillaForge or other addon changes are required.
+
+## Spy class-icon follow-up — 2026-09-27
+
+Scoped bug fix from f1c7cf0. The maintainer reported stealth-looking icons on
+ordinary classes; the screenshot's affected rows still show health percentages
+rather than stealth state labels. That suggests an icon-rendering defect; it
+does not establish an actual false stealth event in the running game.
+
+[SOURCE-VERIFIED] The normal icon branch used an undefined external
+CLASS_ICON_TCOORDS global with Interface/WorldStateFrame/Icons-Classes. Without
+that table, every class received the same broad crop. AutoBG does not define
+that table. Its source-level rendering defect is reproducible independently of
+stealth classification. The replacement uses a local nine-class mapping for
+the character-create class atlas, with insets matching the existing local
+LunaUnitFrames-TurtleWoW class-portrait implementation (LunaUnitFrames.lua
+constants and modules/portrait.lua). No Luna dependency or new asset is added.
+
+Normal rows restore their class texture and crop on every render, including
+after reusing a stealth row. Unknown classes hide the icon. No change to aura/
+cast classification, popup/sound distance/LOS gates or BG row state. A class
+restriction would be incorrect for effects such as racial Meld and items.
+Settings, positions, TOC and DLL requirements are unchanged.
+
+Validation: both new class-rendering regressions fail against the old source;
+all 38 Lua 5.1 regressions pass with the fix. Tests now record SetTexCoord
+instead of silently accepting it. Cover all nine distinct crops without an
+external global, isolation from a conflicting global, recycled rows, unknown
+class icons and warrior Meld-to-normal transitions. Existing stealth/proximity
+and BG regressions remain intact. Strict linter: 0 errors, 0 advisories.
+
+[UNVERIFIED - TEST FIRST] Sync and reload. Normal Spy entries should show distinct
+class icons and health text. A real Stealth/Prowl/Vanish/Meld/Invisibility
+observation should show its effect icon/label, then restore the class icon on
+an observed fade. Verify the atlas appearance in the actual game folder. If a
+normal enemy still shows a STEALTH label or triggers a stealth warning, retain
+the name/class/effect and event trace: that is a separate state observation.
+
+Retrospective: earlier mocks validated texture paths and state but ignored
+texture coordinates, leaving the class atlas branch uncovered. Record those
+coordinates for visual-state transitions. The general faithful-UI-mock lesson
+is already covered by the framework; no VanillaForge change is needed.

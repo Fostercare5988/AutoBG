@@ -25,6 +25,19 @@ local MAX_SPY_ROWS = 20
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
+-- Character-create atlas cells, inset to keep neighboring icons out of the crop.
+local CLASS_ICON_TEXTURE = [[Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes]]
+local CLASS_ICON_COORDS = {
+    WARRIOR = {0.0234375, 0.2265625, 0.0234375, 0.2265625},
+    MAGE    = {0.2734375, 0.4765625, 0.0234375, 0.2265625},
+    ROGUE   = {0.5234375, 0.7265625, 0.0234375, 0.2265625},
+    DRUID   = {0.7734375, 0.97265625, 0.0234375, 0.2265625},
+    HUNTER  = {0.0234375, 0.2265625, 0.2734375, 0.4765625},
+    SHAMAN  = {0.2734375, 0.4765625, 0.2734375, 0.4765625},
+    PRIEST  = {0.5234375, 0.7265625, 0.2734375, 0.4765625},
+    WARLOCK = {0.7734375, 0.97265625, 0.2734375, 0.4765625},
+    PALADIN = {0.0234375, 0.2265625, 0.5234375, 0.7265625},
+}
 local SOUND_ENEMY_DETECTED = [[Interface\AddOns\AutoBG\Sounds\detected-nearby.mp3]]
 local SOUND_STEALTH_DETECTED = [[Interface\AddOns\AutoBG\Sounds\detected-stealth.mp3]]
 
@@ -946,14 +959,10 @@ function Spy:RenderRows()
 				or "STEALTH"
 			row.TagText:SetText("|cff00ffff" .. tag .. "|r")
 		else
-			if data.classToken then
-				row.Icon:SetTexture("Interface\\WorldStateFrame\\Icons-Classes")
-				local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[data.classToken]
-				if coords then
-					row.Icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
-				else
-					row.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-				end
+			local coords = data.classToken and CLASS_ICON_COORDS[data.classToken]
+			if coords then
+				row.Icon:SetTexture(CLASS_ICON_TEXTURE)
+				row.Icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
 				row.Icon:Show()
 			else
 				row.Icon:Hide()

@@ -77,6 +77,7 @@ function methods:GetScale() return self.scale or 1 end
 function methods:SetText(v) self.text=v end
 function methods:GetText() return self.text end
 function methods:SetTexture(v) self.texture=v end
+function methods:SetTexCoord(...) self.texcoords={...} end
 function methods:SetFont(path,size) self.fontSize=size end
 function methods:SetJustifyH(v) self.justify=v end
 function methods:SetPoint(...) self.point={...}; self.points=self.points or {}; self.points[self.point[1]]=self.point end
@@ -90,7 +91,7 @@ function methods:GetParent() return self.parent end
 function methods:CreateTexture() return CreateFrame("Texture",nil,self) end
 function methods:CreateFontString() return CreateFrame("FontString",nil,self) end
 local noops={"SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetTextColor",
- "SetVertexColor","SetAlpha","SetTexCoord","SetAllPoints","ClearAllPoints",
+ "SetVertexColor","SetAlpha","SetAllPoints","ClearAllPoints",
  "SetMovable","SetClampedToScreen","EnableMouse","RegisterForClicks","RegisterForDrag",
  "SetFrameStrata","SetFrameLevel","SetHighlightTexture","SetNormalTexture","SetPushedTexture",
  "SetDisabledTexture","SetStatusBarTexture","SetStatusBarColor","SetMinMaxValues","SetValue",
@@ -695,6 +696,51 @@ class RuntimeTests(unittest.TestCase):
             assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
             visible=true; fire(AutoBG_Targets,"UNIT_HEALTH","nameplate1")
             assert(not AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+        """)
+
+    def test_spy_normal_class_icons_do_not_depend_on_another_addons_global(self):
+        self.load_units()
+        self.runlua(r"""
+            AutoBG_Settings.Spy.SoundAlert=false
+            local seen={}
+            for _,class in ipairs({"WARRIOR","MAGE","ROGUE","DRUID","HUNTER","SHAMAN","PRIEST","WARLOCK","PALADIN"}) do
+                -- Neither absent nor unrelated addon globals may dictate AutoBG's UVs.
+                CLASS_ICON_TCOORDS=nil
+                AutoBG_Spy:RecordEnemy(class,class,60,nil,75,false)
+                local row=AutoBG_Spy.Frame.rows[1]; local uv=row.Icon.texcoords
+                assert(not row.targetStealth and row.TagText:GetText()=="75%")
+                assert(row.Icon.texture==[[Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes]])
+                assert(uv[2]-uv[1]<.25 and uv[4]-uv[3]<.25)
+                local key=table.concat(uv,","); assert(not seen[key]); seen[key]=true
+                CLASS_ICON_TCOORDS={[class]={0,1,0,1}}
+                AutoBG_Spy:RenderRows()
+                assert(table.concat(row.Icon.texcoords,",")==key)
+            end
+            assert(#sounds==0 and not AutoBG_Spy.AlertWindow:IsShown())
+        """)
+
+    def test_spy_reused_rows_restore_class_crop_and_keep_valid_nonrogue_meld(self):
+        self.load_units()
+        self.runlua(r"""
+            AutoBG_Settings.Spy.SoundAlert=false
+            AutoBG_Spy:RecordEnemy("Rogue","ROGUE",60,nil,100,true,"Vanish")
+            local row=AutoBG_Spy.Frame.rows[1]
+            assert(row.targetStealth and string.find(row.Icon.texture,"Ability_Stealth"))
+            assert(string.find(row.TagText:GetText(),"VANISH"))
+            AutoBG_Spy:RecordEnemy("Warrior","WARRIOR",60,nil,90,false)
+            assert(AutoBG_Spy.Frame.rows[1]==row and not row.targetStealth)
+            assert(row.Icon.texture==[[Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes]])
+            assert(row.Icon.texcoords[2]<.25 and row.TagText:GetText()=="90%")
+            -- A new unknown-class entry must not retain either prior icon.
+            AutoBG_Spy:RecordEnemy("Unknown",nil,60,nil,100,false)
+            assert(not row.Icon:IsShown() and not row.targetStealth)
+            AutoBG_Spy:RecordEnemy("Warrior","WARRIOR",60,nil,90,true,"Shadowmeld")
+            local warrior=AutoBG_Spy.Frame.rows[2]
+            assert(warrior.targetStealth and string.find(warrior.Icon.texture,"ShadowMeld"))
+            assert(warrior.Icon.texcoords[1]==.07 and warrior.Icon.texcoords[2]==.93)
+            AutoBG_Spy:SetUnitStealthState("Warrior",false)
+            assert(not warrior.targetStealth and warrior.Icon.texcoords[2]<.25)
+            assert(#sounds==0 and not AutoBG_Spy.AlertWindow:IsShown())
         """)
 
 if __name__=="__main__":
