@@ -323,6 +323,7 @@ local function ResetEnemyEntry(e)
 	e.stealthSpell = nil
 	e.wasStealthedAlerted = false
 	e.observedGUID = nil
+	e.pendingUntil = nil
 end
 
 -- -------------------------------------------------------------------------- --
@@ -400,7 +401,10 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	e.lastSeen = now
 	if observedUnit and guid and UnitGUID(observedUnit) == guid then e.observedGUID = guid end
 
+	if isStealth == false and observedUnit and e.pendingUntil and now < e.pendingUntil then isStealth = nil end
 	if isStealth ~= nil then
+		if isStealth and not observedUnit then e.pendingUntil = now + 0.5
+		else e.pendingUntil = nil end
 		e.isStealthed = isStealth
 		if stealthSpell then e.stealthSpell = stealthSpell end
 		if not isStealth then e.wasStealthedAlerted = false end
@@ -425,6 +429,7 @@ function Spy:SetUnitStealthState(name, isStealthed, spellName)
 	local idx = nameToTrackIndex[name]
 	local e = trackedEnemies[idx]
 	e.isStealthed = isStealthed
+	e.pendingUntil = nil
 	if spellName then e.stealthSpell = spellName end
 	e.lastSeen = GetTime()
 
@@ -491,28 +496,7 @@ end
 
 local function SpyRow_OnClick(self, button)
 	local b = self or this
-	local btn = button or arg1
-	local tName = b.targetName
-	if not tName then return end
-	local tGUID = b.targetGUID or nameToGUID[tName]
-	local cleanName = StripRealm(tName)
-
-	if btn == "LeftButton" then
-		if tGUID then
-			TargetUnit(tGUID)
-		else
-			TargetByName(cleanName, true)
-		end
-	elseif btn == "RightButton" then
-		if tGUID then
-			FocusUnit(tGUID)
-		else
-			TargetByName(cleanName, true)
-			if UnitExists("target") and (UnitName("target") == tName or UnitName("target") == cleanName) then
-				FocusUnit("target")
-			end
-		end
-	end
+	Targets.SelectEnemy(b.targetName, b.targetGUID or nameToGUID[b.targetName], button or arg1)
 end
 
 local function SpyRow_OnEnter(self)
@@ -716,11 +700,7 @@ function Spy:CreateAlertWindow()
 		if frame and frame.isMoving then return end
 		local tGUID = frame and frame.targetGUID
 		local tName = frame and frame.targetName
-		if tGUID then
-			TargetUnit(tGUID)
-		elseif tName then
-			TargetByName(StripRealm(tName), true)
-		end
+		Targets.SelectEnemy(tName, tGUID, "LeftButton")
 	end)
 
 	-- Icon
@@ -912,12 +892,14 @@ function Spy:RenderRows()
 			for i = 1, MAX_SPY_ROWS do
 				Spy.Frame.rows[i]:Hide()
 			end
-			Spy.Frame:SetHeight(26)
+			Spy.Frame:SetWidth(96)
+			Spy.Frame:SetHeight(24)
 			Spy.Frame:Show()
 		end
 		return
 	end
 
+	Spy.Frame:SetWidth(260)
 	Spy.Frame.Title:SetText("Spy (" .. count .. ")")
 	local visibleCount = math.min(count, maxRows)
 
@@ -1058,6 +1040,15 @@ local function OnSpyTick()
 			activeEnemyCount = activeEnemyCount - 1
 			changed = true
 		else
+			if e.pendingUntil and now >= e.pendingUntil then
+				e.pendingUntil = nil
+				local found, spell = Spy:CheckUnitStealth(e.guid)
+				if found ~= nil then
+					e.isStealthed, e.stealthSpell = found, spell
+					if not found then e.wasStealthedAlerted = false end
+					changed = true
+				end
+			end
 			if e.isStealthed and not e.wasStealthedAlerted and e.observedGUID then
 				e.wasStealthedAlerted = Spy:NotifyStealth(e.name, e.stealthSpell, e.classToken, e.guid, false, e.observedGUID) and true or false
 			end
@@ -1149,6 +1140,7 @@ local eventFrame = CreateFrame("Frame", "AutoBG_SpyEventFrame", UIParent)
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("UNIT_CASTEVENT")
+eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 eventFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 eventFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
@@ -1161,7 +1153,16 @@ eventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
 eventFrame:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
 eventFrame:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
 
-local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
+local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
+	-- Accept frame/event arguments, event-first arguments and native 1.12 globals.
+	local event, arg1, arg2, arg3, arg4, arg5
+	if type(p1) == "table" or type(p1) == "userdata" then
+		event, arg1, arg2, arg3, arg4, arg5 = p2, p3, p4, p5, p6, p7
+	elseif type(p1) == "string" then
+		event, arg1, arg2, arg3, arg4, arg5 = p1, p2, p3, p4, p5, p6
+	else
+		event, arg1, arg2, arg3, arg4, arg5 = _G.event, _G.arg1, _G.arg2, _G.arg3, _G.arg4, _G.arg5
+	end
 	if event == "PLAYER_ENTERING_WORLD" then
 		Spy:ClearHistory()
 		return
@@ -1175,12 +1176,12 @@ local function Spy_OnEvent(self, event, arg1, arg2, arg3, arg4, arg5)
 	local opt = GetSpySettings()
 	if not opt or not opt.Enabled then return end
 
-	if event == "UNIT_CASTEVENT" then
+	if event == "UNIT_CASTEVENT" or event == "UNIT_SPELLCAST_SUCCEEDED" then
+		local modern = event == "UNIT_SPELLCAST_SUCCEEDED"
 		local casterGUID = arg1
-		local targetGUID = arg2
-		local eventType = arg3
-		local spellId = arg4
-		local castDuration = arg5
+		if modern then casterGUID = UnitGUID(arg1) end
+		local eventType = modern and "CAST" or arg3
+		local spellId = modern and arg3 or arg4
 		if not casterGUID then return end
 
 		local rawName = UnitName(casterGUID) or guidToName[casterGUID]

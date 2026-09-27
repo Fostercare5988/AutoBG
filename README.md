@@ -74,13 +74,14 @@ AutoBG is engineered around strict low-level system integration:
 ### 6. Enemy Target Frames (BattlegroundTargets)
 - **Compact PvP Roster Display**: Automatically displays live enemy target frames for 10v10 (WSG), 15v15 (AB / Thorn Gorge), and 40v40 (AV) with independent scaling, dimensions, and font sizes.
 - **Authoritative Flag Carrier Visuals**: Renders authentic 32x32 transparent flag icons directly on the enemy carrier row in Warsong Gulch, synchronized in real time with `AutoBG_FC`.
-- **Observed Stealth Tracking**: Tracks Stealth, Prowl, Vanish, Shadowmeld and supported invisibility effects through structured unit auras, SuperWoW cast events and exact-name English combat messages. A BG option controls the popup and sound; per-bracket icon/text options remain independent.
+- **Observed Stealth Tracking**: Tracks Stealth, Prowl, Vanish, Shadowmeld and supported invisibility effects through structured unit auras, ClassicAPI successful-cast events, SuperWoW raw-GUID cast events and exact-name English combat messages. A BG option controls the popup and sound; row stealth icons/text remain always enabled.
 - **Roster Sorting**: Bounded insertion sort over active enemies with class color-coding and exact SuperWoW targeting (`TargetUnit(guid)`).
 
 ### 7. Open-World Enemy Radar (Spy)
-- **Real-Time Hostile Tracking**: Detects nearby enemy players in the open world using SuperWoW `UNIT_CASTEVENT`, nameplate units, and combat log telemetry.
+- **Real-Time Hostile Tracking**: Detects nearby enemy players in the open world using ClassicAPI `UNIT_SPELLCAST_SUCCEEDED`, SuperWoW `UNIT_CASTEVENT`, nameplate units, and combat log telemetry.
 - **Stable Nearby List**: New enemies appear at the top; ongoing casts and aura updates refresh their details without reordering existing rows. The display supports up to 20 rows, with 10 shown by default.
 - **Audio & Stealth Alerts**: Separate nearby and stealth alerts, with the matching stealth/Meld icon. Repeated observations of the same active stealth state do not replay the alert.
+- **Compact Empty Header**: With no enemies, the list collapses to 96x24 pixels at 100% scale. Populated rows retain their readable width. The existing Spy Scale and Auto-Hide settings remain available.
 - **Battleground Display**: The nearby list hides in BGs. The shared stealth popup remains available through Enemy Frames > Stealth alerts in BGs.
 
 ---
@@ -97,9 +98,11 @@ Detected enemy PvP trinket uses start a **180-second estimate**, per the deploym
 
 Stealth popups and sounds require a directly observed hostile player, a current stealth aura, client visibility, a confirmed distance of at most 10 yards and clear line of sight. Cast/chat events alone only update the row state. The 10-yard radius is a conservative notification policy, not the server's stealth-detection formula. Unknown range/LOS stays silent. A pending directly observed enemy is rechecked by existing timers, so approaching can trigger one alert without another cast.
 
+Successful Stealth/Vanish casts also update through ClassicAPI's instant-cast event path. A short 0.5-second settling window protects a new cast from an early empty aura snapshot; existing tickers recheck it once. A fresh cast supersedes an old death flag, while unavailable aura/health data does not erase the indicator. Explicit fades, melee activity and visible death remain authoritative. Row/alert clicks validate a cached GUID before using it, with an exact-name lookup when it is absent or mismatched.
+
 Only client-observed stealth can be reported. AutoBG cannot discover an unseen enemy merely because they are stealthed. An unavailable unit does not clear the last observed state; visible aura absence, matching fade messages, melee activity or known effect expiry can clear it.
 
-The code and mocked Lua regressions are checked; real BG event delivery, sound playback and rendering still require in-game validation. See [audit and test checklist](docs/AUTOBG_REVIEW_2026-09-26.md).
+The code and mocked Lua regressions are checked; real BG event delivery, sound playback and rendering still require in-game validation. See [audit and test checklist](docs/AUTOBG_REVIEW_2026-09-26.md) and the [stealth/Spy regression review](docs/STEALTH_SPY_REVIEW_2026-09-27.md).
 
 ## ⌨️ Commands & Shortcuts
 

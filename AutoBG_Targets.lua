@@ -230,7 +230,7 @@ function Targets.CheckUnitStealth(unit)
 	local _, count = C_UnitAuras.GetAuraSlots(unit, "HELPFUL", nil, nil, stealthAuraSlots)
 	for i = 1, count do
 		local aura = C_UnitAuras.GetAuraDataBySlot(unit, stealthAuraSlots[i])
-		if not aura then break end
+		if not aura then return nil end -- Snapshot unavailable; do not erase known stealth.
 		local found, name, texture, duration = CheckIsStealthSpell(aura.spellId)
 		if not found then found, name, texture, duration = CheckIsStealthName(aura.name) end
 		if found then return true, name, texture, duration end
@@ -503,6 +503,7 @@ local function ReleaseStealthEntry(entry)
 	entry.expireTime = nil
 	entry.alerted = nil
 	entry.observedGUID = nil
+	entry.pendingUntil = nil
 	table.insert(stealthEntryPool, entry)
 end
 
@@ -543,7 +544,7 @@ local function StealthWatcher_OnUpdate(arg1_param, arg2_param)
 end
 stealthWatcher:SetScript("OnUpdate", StealthWatcher_OnUpdate)
 
-SetUnitStealth = function(name, isStealthed, spellName, texture, duration, observedUnit)
+SetUnitStealth = function(name, isStealthed, spellName, texture, duration, observedUnit, fromRecheck)
 	if not name then return end
 	if isStealthed then
 		local entry = stealthedState[name]
@@ -553,6 +554,16 @@ SetUnitStealth = function(name, isStealthed, spellName, texture, duration, obser
 			stealthedState[name] = entry
 		end
 		entry.isStealthed = true
+		-- SPELL_GO can precede the aura descriptor update. Give that update one
+		-- short settling window; explicit fades, attacks and death still clear now.
+		if not fromRecheck then
+			if observedUnit then entry.pendingUntil = nil
+			else
+				entry.pendingUntil = GetTime() + 0.5
+				-- A new successful stealth cast/gain supersedes an old death flag.
+				deadState[name] = false
+			end
+		end
 		entry.spellName = spellName or "Stealth"
 		entry.texture = texture or "Interface\\Icons\\Ability_Stealth"
 		local exp = (duration and duration > 0) and (GetTime() + duration + 0.5) or nil
@@ -571,6 +582,7 @@ SetUnitStealth = function(name, isStealthed, spellName, texture, duration, obser
 		end
 	else
 		local entry = stealthedState[name]
+		if observedUnit and entry and entry.pendingUntil and GetTime() < entry.pendingUntil then return end
 		if entry then
 			stealthedState[name] = nil
 			ReleaseStealthEntry(entry)
@@ -637,6 +649,15 @@ local function UpdateObservedTimers()
 		if btn and btn:IsShown() and btn.targetName then
 			local name = btn.targetName
 			local stealth = stealthedState[name]
+			if not Targets.isConfig and stealth and stealth.pendingUntil and GetTime() >= stealth.pendingUntil then
+				stealth.pendingUntil = nil
+				local guid = nameToGUID[name] or btn.targetGUID
+				local found, spell, texture, duration = Targets.CheckUnitStealth(guid)
+				-- Reconcile the cast label without promoting a remote cast into a
+				-- directly observed popup candidate or starting another settling loop.
+				if found ~= nil then SetUnitStealth(name, found, spell, texture, duration, nil, true) end
+				stealth = stealthedState[name]
+			end
 			if not Targets.isConfig and stealth and not stealth.alerted and AutoBG_Spy then
 				local guid = nameToGUID[name] or stealth.observedGUID or btn.targetGUID
 				stealth.alerted = AutoBG_Spy:NotifyStealth(name, stealth.spellName, btn.classToken, guid, true, stealth.observedGUID) and true or false
@@ -737,34 +758,31 @@ local function MainFrame_OnMouseUp(self)
 	Targets:Frame_SavePosition("AutoBG_TargetsMainFrame")
 end
 
-local function TargetButton_OnClick(self, button)
-	local b = self or this
-	local btn = button or arg1
-	local name = b.targetName
+-- Validate cached identity before selecting it. A departed object must not
+-- prevent a fresh exact-name lookup, and an unrelated object must never be used.
+function Targets.SelectEnemy(name, guid, button)
 	if not name then return end
-
-	local guid = b.targetGUID or nameToGUID[name]
 	local cleanName = StripRealm(name)
-	if btn == "LeftButton" then
-		if guid then
-			TargetUnit(guid)
+	local loadedName = guid and UnitExists(guid) and UnitName(guid)
+	local validGUID = loadedName and StripRealm(loadedName) == cleanName
+	if validGUID and string.find(name, "-", 1, true) and string.find(loadedName, "-", 1, true) then
+		validGUID = loadedName == name
+	end
+	if button == "RightButton" then
+		if validGUID then FocusUnit(guid)
 		else
 			TargetByName(cleanName, true)
+			local selected = UnitName("target")
+			if UnitExists("target") and selected and StripRealm(selected) == cleanName then FocusUnit("target") end
 		end
-	elseif btn == "RightButton" then
-		if guid and FocusUnit then
-			FocusUnit(guid)
-		elseif FocusUnit then
-			if UnitExists("target") and (UnitName("target") == name or UnitName("target") == cleanName) then
-				FocusUnit("target")
-			else
-				TargetByName(cleanName, true)
-				if UnitExists("target") and (UnitName("target") == name or UnitName("target") == cleanName) then
-					FocusUnit("target")
-				end
-			end
-		end
+	else
+		if validGUID then TargetUnit(guid) else TargetByName(cleanName, true) end
 	end
+end
+
+local function TargetButton_OnClick(self, button)
+	local b = self or this
+	Targets.SelectEnemy(b.targetName, b.targetGUID or nameToGUID[b.targetName], button or arg1)
 end
 
 local function TargetButton_OnEnter(self)
@@ -1227,6 +1245,9 @@ local function ObserveUnit(unit, scanAuras)
 		if found ~= nil then SetUnitStealth(name, found, spell, texture, duration, unit) end
 	end
 
+	-- Keep last observed health/death when the object is no longer visible.
+	-- Cached/empty descriptors must not erase a newer stealth cast.
+	if not UnitIsVisible(unit) then return end
 	local dead = (UnitIsDeadOrGhost and UnitIsDeadOrGhost(unit)) or (UnitIsDead(unit) or UnitIsGhost(unit)) and true or false
 
 	local curHp, maxHp = nil, nil
@@ -1400,6 +1421,7 @@ Targets:RegisterEvent("PLAYER_FOCUS_CHANGED")
 Targets:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 Targets:RegisterEvent("UNIT_NAME_UPDATE")
 Targets:RegisterEvent("UNIT_CASTEVENT")
+Targets:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 Targets:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS")
 Targets:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF")
 Targets:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
@@ -1460,10 +1482,12 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 	elseif ev == "NAME_PLATE_UNIT_ADDED" or ev == "UNIT_NAME_UPDATE" then
 		ObserveUnit(a1)
 
-	elseif ev == "UNIT_CASTEVENT" then
+	elseif ev == "UNIT_CASTEVENT" or ev == "UNIT_SPELLCAST_SUCCEEDED" then
+		local modern = ev == "UNIT_SPELLCAST_SUCCEEDED"
 		local casterGUID = a1
-		local eventType = a3
-		local spellId = a4
+		if modern then casterGUID = UnitGUID(a1) end
+		local eventType = modern and "CAST" or a3
+		local spellId = modern and a3 or a4
 		if not casterGUID then return end
 
 		local rawName = UnitName(casterGUID) or guidToName[casterGUID]

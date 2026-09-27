@@ -560,5 +560,142 @@ class RuntimeTests(unittest.TestCase):
             assert(AutoBG_Targets.TargetButton[1].Trinket.Text.text=="")
         """)
 
+
+    def test_modern_instant_vanish_event_and_duplicate_raw_event(self):
+        self.bg()
+        self.runlua("""
+            fire(AutoBG_Targets,"UNIT_SPELLCAST_SUCCEEDED","nameplate1","Cast-1",1856)
+            local b=AutoBG_Targets.TargetButton[1]
+            assert(b.StealthIcon:IsShown() and string.find(b.HealthText:GetText(),"VANISH"))
+            fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"CAST",1856)
+            assert(#sounds==0)
+            auras={{spellId=1856,name="Vanish"}}
+            fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
+            fire(AutoBG_Targets,"UNIT_SPELLCAST_SUCCEEDED","target","Cast-1",1856)
+            assert(#sounds==1)
+        """)
+
+    def test_cast_before_aura_update_keeps_indicator_until_settled(self):
+        self.bg()
+        self.runlua("""
+            fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"CAST",1856)
+            auras={}; fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
+            assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+            now=1.6; auras={{spellId=1784,name="Stealth"}}
+            for _,f in ipairs(tickers) do f() end
+            assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+            assert(string.find(AutoBG_Targets.TargetButton[1].HealthText:GetText(),"STEALTH"))
+            assert(#sounds==0) -- A cast-only recheck does not authorize the popup.
+            fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
+            assert(#sounds==1)
+        """)
+
+    def test_empty_settled_snapshot_clears_but_unloaded_unit_remains_unknown(self):
+        self.bg()
+        self.runlua("""
+            fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"CAST",1784)
+            now=1.6; visible=false; auras={}
+            for _,f in ipairs(tickers) do f() end
+            assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown() and #sounds==0)
+            visible=true; fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
+            assert(not AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+        """)
+
+    def test_explicit_fade_and_attack_clear_inside_settling_window(self):
+        self.bg()
+        self.runlua("""
+            fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"CAST",1784)
+            fire(AutoBG_Targets,"CHAT_MSG_SPELL_AURA_GONE_OTHER","Stealth fades from Enemy.")
+            assert(not AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+            fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"CAST",1856)
+            fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"MAINHAND",0)
+            assert(not AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+        """)
+
+    def test_missing_slot_is_unknown_not_a_negative_aura_snapshot(self):
+        self.bg()
+        self.runlua("""
+            auras={{spellId=1784,name="Stealth"}}
+            fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
+            C_UnitAuras.GetAuraDataBySlot=function() return nil end
+            assert(AutoBG_Targets.CheckUnitStealth("target")==nil)
+            fire(AutoBG_Targets,"UNIT_AURA","target")
+            assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+        """)
+
+    def test_spy_legacy_and_event_first_dispatch_preserve_nil_payloads(self):
+        self.load_units()
+        self.runlua("""
+            event="UNIT_CASTEVENT"; arg1="0x00000001"; arg2=nil; arg3="CAST"; arg4=1856
+            AutoBG_SpyEventFrame.scripts.OnEvent()
+            local b=AutoBG_Spy.Frame.rows[1]
+            assert(b.targetStealth and b.targetStealthSpell=="Vanish" and #sounds==0)
+            AutoBG_SpyEventFrame.scripts.OnEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER","Vanish fades from Enemy.")
+            assert(not b.targetStealth)
+        """)
+
+    def test_spy_modern_cast_then_early_aura_and_later_authoritative_update(self):
+        self.load_units()
+        self.runlua("""
+            fire(AutoBG_SpyEventFrame,"UNIT_SPELLCAST_SUCCEEDED","target","Cast-1",1857)
+            auras={}; fire(AutoBG_SpyEventFrame,"UNIT_AURA","target")
+            assert(AutoBG_Spy.Frame.rows[1].targetStealth and #sounds==0)
+            now=1.6; auras={{spellId=1784,name="Stealth"}}
+            for _,f in ipairs(tickers) do f() end
+            assert(AutoBG_Spy.Frame.rows[1].targetStealth and #sounds==1)
+            auras={}; fire(AutoBG_SpyEventFrame,"UNIT_AURA","target")
+            assert(not AutoBG_Spy.Frame.rows[1].targetStealth)
+        """)
+
+    def test_spy_empty_header_collapses_and_rows_restore_readable_width(self):
+        self.load_units()
+        self.runlua("""
+            AutoBG_Settings.Spy.Scale=1.25; AutoBG_Spy:ApplyScale(); AutoBG_Spy:RenderRows()
+            assert(AutoBG_Spy.Frame:GetWidth()==96 and AutoBG_Spy.Frame:GetHeight()==24)
+            assert(AutoBG_Spy.Frame:GetScale()==1.25)
+            AutoBG_Spy:RecordEnemy("Enemy","ROGUE",60,"0x00000001")
+            assert(AutoBG_Spy.Frame:GetWidth()==260 and AutoBG_Spy.Frame.rows[1]:IsShown())
+            AutoBG_Spy:ClearHistory(); assert(AutoBG_Spy.Frame:GetWidth()==96)
+            AutoBG_Settings.Spy.AutoHide=true; AutoBG_Spy:RenderRows()
+            assert(not AutoBG_Spy.Frame:IsShown())
+        """)
+
+    def test_row_click_recovers_departed_or_mismatched_guid_and_keeps_valid_guid(self):
+        self.bg()
+        self.runlua("""
+            TargetByName=function(n,exact) selectedName=n; assert(exact) end
+            TargetUnit=function(g) selectedGuid=g end
+            FocusUnit=function(g) focused=g end
+            local b=AutoBG_Targets.TargetButton[1]; b.targetGUID="old"
+            UnitExists=function(u) return u~="old" end
+            b.scripts.OnClick(b,"LeftButton")
+            assert(selectedName=="Enemy" and selectedGuid==nil)
+            b.targetGUID="new"; b.scripts.OnClick(b,"LeftButton")
+            assert(selectedGuid=="new")
+            b.scripts.OnClick(b,"RightButton"); assert(focused=="new")
+            selectedGuid=nil; UnitName=function() return "SomeoneElse" end
+            b.scripts.OnClick(b,"LeftButton"); assert(selectedGuid==nil)
+            AutoBG_Targets.SelectEnemy("Enemy-RealmA","new","LeftButton")
+            UnitName=function() return "Enemy-RealmB" end
+            AutoBG_Targets.SelectEnemy("Enemy-RealmA","new","LeftButton")
+            assert(selectedGuid==nil)
+        """)
+
+
+    def test_new_vanish_supersedes_old_death_and_hidden_health_cannot_erase_it(self):
+        self.bg()
+        self.runlua("""
+            UnitIsDead=function() return true end
+            fire(AutoBG_Targets,"UNIT_HEALTH","target")
+            assert(string.find(AutoBG_Targets.TargetButton[1].HealthText:GetText(),"DEAD"))
+            fire(AutoBG_Targets,"UNIT_SPELLCAST_SUCCEEDED","nameplate1","Cast-1",1856)
+            assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+            assert(string.find(AutoBG_Targets.TargetButton[1].HealthText:GetText(),"VANISH"))
+            visible=false; fire(AutoBG_Targets,"UNIT_HEALTH","nameplate1")
+            assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+            visible=true; fire(AutoBG_Targets,"UNIT_HEALTH","nameplate1")
+            assert(not AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+        """)
+
 if __name__=="__main__":
     unittest.main(verbosity=2)
