@@ -1,6 +1,7 @@
 ## Interface: 11200
+## X-ClassicAPI-Min-Version: 1.15.15
 ## Title: AutoBG
-## Notes: High-performance PvP & Battleground automation engineered natively for World of Warcraft 1.12.1 (ClassicAPI v1.15.14+, SuperWoW 2.2+, UnitXP SP3).
+## Notes: High-performance PvP & Battleground automation engineered natively for World of Warcraft 1.12.1 (ClassicAPI v1.15.15+, SuperWoW 2.2+, UnitXP SP3).
 ## Author: Fostercare5988
 ## Version: 2.0.0
 ## SavedVariables: AutoBG_Settings

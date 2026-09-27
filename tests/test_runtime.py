@@ -17,7 +17,7 @@ def section(file, start, end):
 
 MOCKS = r"""
 now=1; sounds={}; alerts={}; tickers={}; delayed={}
-CLASSIC_API_VERSION=11514; SUPERWOW_VERSION="2.2"
+CLASSIC_API_VERSION=11515; SUPERWOW_VERSION="2.2"
 AutoBG_Settings={}
 function GetTime() return now end
 function UnitName(u) if u=="player" then return "Me" else return "Enemy" end end
