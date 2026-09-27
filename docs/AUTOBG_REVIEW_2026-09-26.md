@@ -204,3 +204,11 @@ The screenshot shows missing objective text and fill. The compact design introdu
 Enemy drag headers are always shown with the live list and no longer require configuration mode. Objective row buttons forward drag start/stop to their group and save position. AB forecast dragging no longer requires Shift. Queue, respawn and FC drag handlers remain available.
 
 25 mocked regressions pass, including live-header and timer-row dragging, remote-stealth silence and retained cross-realm tests. Linter reports zero errors/warnings. After reload: check Blacksmith name/countdown/fill, drag each visible widget, verify saved bracket positions, and confirm ordinary target clicks and Ctrl-click announcements still work. No manifest/dependency changes; no new frame ticker. User authorized committing and pushing this maintenance update.
+
+
+## 2026-09-27: smooth countdown presentation and appearance controls
+Scoped UI work: rounding remaining time before SetValue caused whole-second fill jumps despite the 10Hz controller. Keep fractional remaining time and let a shown-group OnUpdate render fill from the authoritative expiry. No roster sorting, aura scanning or text formatting runs in that render handler. Hidden/unused rows clear interpolation state; preview samples stay static. Countdown labels update only when their formatted string changes.
+
+Add character-saved ObjectiveWidth, ObjectiveHeight, ObjectiveScale and ObjectiveOpacity settings under Timers & FC. Clamp ranges at application, cache effective appearance, and preserve stored anchors. Defaults are 260px width, 22px height, 100% scale and 95% opacity. Settings affect AB/AV/WSG countdown groups. Muted faction fills are slightly brighter; existing bundled texture and working Friz font remain.
+
+Regression coverage verifies fractional fill between controller ticks, active final fractions of a second, expiry cleanup, static preview and effective dimensions/scale/opacity. No TOC or DLL dependency changes. In-game validation remains pending: reload, watch a live AB timer run, drag it, adjust all four sliders, compare preview and live AV/WSG rows, and check persistence after reload. No framework promotion required; OnUpdate is used only for render interpolation.

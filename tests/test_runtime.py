@@ -383,6 +383,36 @@ class RuntimeTests(unittest.TestCase):
             assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
             assert(#sounds==1)
         """)
+    def test_objective_fill_moves_between_ticks_and_settings_apply(self):
+        code=section("AutoBG_Timers.lua", 'local FONT ', "-- Respawn Frame")
+        code="local activeSortBuffer = {}\n"+code
+        code+=section("AutoBG_Timers.lua", "local function TimeBarColor", "local AB_MAX_RESOURCES")
+        self.runlua(code+"""
+            local f=CreateBarTimerFrame("SmoothObjective","AB",1,1,1,0,0,5,true)
+            AutoBG_Settings={ObjectiveWidth=310,ObjectiveHeight=20,
+                ObjectiveScale=0.8,ObjectiveOpacity=0.6}
+            local row=f.rows[1]
+            row.bar.SetValue=function(self,v) self.value=v end
+            now=1
+            local data={Blacksmith={expire=10.75,faction="Horde"}}
+            RenderCountdownBars(f,data,true,true,60,nil,"time")
+            assert(row.bar.value==9.75 and row.labelFs.text=="Blacksmith")
+            assert(f:GetWidth()==310 and row:GetHeight()==20 and f:GetScale()==0.8)
+            assert(f.appearanceOpacity==0.6)
+            now=1.25; this=f; f.scripts.OnUpdate()
+            assert(row.bar.value==9.5 and row.timeFs.text=="0:09")
+            now=10.7
+            RenderCountdownBars(f,data,true,true,60,nil,"time")
+            assert(row:IsShown() and row.bar.value>0)
+            now=10.8; f.scripts.OnUpdate()
+            assert(row.bar.value==0)
+            RenderCountdownBars(f,data,true,true,60,nil,"time")
+            assert(not f:IsShown() and row.fillExpiry==nil)
+            AutoBG_Settings.TestAllTimers=true
+            RenderCountdownBars(f,{},true,false,60,{{name="Preview",remaining=31}},"time")
+            assert(row.bar.value==31 and row.fillExpiry==nil)
+        """)
+
     def test_live_enemy_header_and_timer_rows_drag(self):
         self.bg()
         self.runlua("""
@@ -418,7 +448,7 @@ class RuntimeTests(unittest.TestCase):
             assert(row.labelFs.points.RIGHT[4]==-48)
             assert(row.labelFs.fontSize==13 and row.labelFs.justify=="CENTER")
             local compact=CreateBarTimerFrame("TestCompact","AV",1,1,1,0,0,8,true)
-            assert(compact.rowHeight==24 and compact.headerHeight==19)
+            assert(compact.rowHeight==22 and compact.headerHeight==19)
             assert(compact.rows[1].compact and compact.rows[8].bar)
             assert(compact.rows[1].labelFs.parent==compact.rows[1].bar)
             assert(compact.rows[1].timeFs.fontSize==12)

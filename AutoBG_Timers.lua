@@ -67,9 +67,42 @@ local BAR_ROW_H    = 31
 local BAR_ROW_GAP  = 3
 local BAR_HEADER_H = 24
 
+-- Presentation settings affect objective groups only; stored anchors remain unchanged.
+local function ApplyObjectiveAppearance(frame)
+    local settings = AutoBG_Settings or {}
+    local width = math.max(180, math.min(420, tonumber(settings.ObjectiveWidth) or 260))
+    local height = math.max(18, math.min(32, tonumber(settings.ObjectiveHeight) or 22))
+    local scale = math.max(0.60, math.min(1.50, tonumber(settings.ObjectiveScale) or 1))
+    local opacity = math.max(0.20, math.min(1, tonumber(settings.ObjectiveOpacity) or 0.95))
+    if frame.appearanceWidth ~= width or frame.rowHeight ~= height then
+        frame:SetWidth(width)
+        frame.rowHeight = height
+        frame.appearanceWidth = width
+        for i = 1, #frame.rows do
+            frame.rows[i]:SetWidth(width - 10)
+            frame.rows[i]:SetHeight(height)
+        end
+    end
+    if frame.appearanceScale ~= scale then frame:SetScale(scale); frame.appearanceScale = scale end
+    if frame.appearanceOpacity ~= opacity then frame:SetAlpha(opacity); frame.appearanceOpacity = opacity end
+end
+
+-- This render-only handler runs only while its group is shown.
+-- Event/timer logic still owns expiry, sorting, labels and announcements.
+local function AnimateObjectiveFill()
+    local frame = this
+    local now = GetTime()
+    for i = 1, #frame.rows do
+        local row = frame.rows[i]
+        if row:IsShown() and row.fillExpiry then
+            row.bar:SetValue(math.max(0, row.fillExpiry - now))
+        end
+    end
+end
+
 local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOffset, yOffset, maxRows, compact)
     local width = compact and 260 or BAR_WIDTH
-    local rowHeight = compact and 24 or BAR_ROW_H
+    local rowHeight = compact and 22 or BAR_ROW_H
     local headerHeight = compact and 19 or BAR_HEADER_H
     local rowFont = FONT
     local fontFlags = compact and "" or "OUTLINE"
@@ -230,6 +263,7 @@ local function CreateBarTimerFrame(name, titleText, titleR, titleG, titleB, xOff
         frame.rows[i] = row
     end
 
+    frame:SetScript("OnUpdate", AnimateObjectiveFill)
     return frame
 end
 
@@ -651,27 +685,37 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
         else row.factionRail:SetTexture(0.45, 0.50, 0.55) end
     end
 
-    row.labelFs:SetText(name)
+    if row.displayName ~= name then
+        row.labelFs:SetText(name)
+        row.displayName = name
+    end
     row.labelFs:SetTextColor(0.94, 0.93, 0.88)
 
     local timeStr = FormatTime(remaining)
-    row.timeFs:SetText(timeStr)
+    if row.displayTime ~= timeStr then
+        row.timeFs:SetText(timeStr)
+        row.displayTime = timeStr
+    end
     if remaining <= 10 then
         row.timeFs:SetTextColor(1, 0.78, 0.44)
     else
         row.timeFs:SetTextColor(1, 1, 1)
     end
 
-    row.bar:SetMinMaxValues(0, maxTime)
+    row.fillExpiry = (not (AutoBG_Settings and AutoBG_Settings.TestAllTimers)) and (GetTime() + remaining) or nil
+    if row.fillDuration ~= maxTime then
+        row.bar:SetMinMaxValues(0, maxTime)
+        row.fillDuration = maxTime
+    end
     row.bar:SetValue(remaining)
     if row.compact then
         -- Stable, muted fills: urgency is conveyed by the countdown, not a red/green sweep.
         if useColors and faction == "Alliance" then
-            row.bar:SetStatusBarColor(0.22, 0.34, 0.41)
+            row.bar:SetStatusBarColor(0.28, 0.43, 0.55)
         elseif useColors and faction == "Horde" then
-            row.bar:SetStatusBarColor(0.39, 0.25, 0.24)
+            row.bar:SetStatusBarColor(0.48, 0.30, 0.28)
         else
-            row.bar:SetStatusBarColor(0.30, 0.32, 0.30)
+            row.bar:SetStatusBarColor(0.43, 0.42, 0.32)
         end
     else
         row.bar:SetStatusBarColor(barR * 0.60, barG * 0.60, barB * 0.60)
@@ -684,6 +728,7 @@ end
 
 local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime, testData, colorMode)
     if not frame or not frame.rows then return end
+    ApplyObjectiveAppearance(frame)
     local now       = GetTime()
     local isTestAll = AutoBG_Settings and AutoBG_Settings.TestAllTimers
     local useColors = AutoBG_Settings and AutoBG_Settings.NodeColors
@@ -730,11 +775,12 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
             local limit = math.min(sortCount, maxRows)
             for i = 1, limit do
                 local item      = activeSortBuffer[i]
-                local remaining = math.floor(item.expire - now)
+                local remaining = item.expire - now
                 if remaining > 0 then
                     displayCount = displayCount + 1
                     local row = frame.rows[displayCount]
                     ApplyTimerRowData(row, item.name, item.faction, remaining, maxTime, colorMode, useColors)
+                    row.fillExpiry = item.expire
                 end
             end
             activeCount = displayCount
@@ -743,7 +789,10 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
         if not isTestAll then table.wipe(timerTable) end
     end
 
-    for i = activeCount + 1, maxRows do frame.rows[i]:Hide() end
+    for i = activeCount + 1, maxRows do
+        frame.rows[i].fillExpiry = nil
+        frame.rows[i]:Hide()
+    end
     if activeCount > 0 then
         frame:SetHeight(frame.headerHeight + activeCount * (frame.rowHeight + BAR_ROW_GAP) + 5)
         frame:Show()

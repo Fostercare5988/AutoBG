@@ -1,5 +1,7 @@
 # AutoBG
 
+Recommended ClassicAPI version: **v1.15.15+**. The existing enforced addon minimum remains unchanged because this update introduces no required new API calls. Native equipment-set action buttons require v1.15.15; after updating the DLL, fully restart the game client.
+
 [![Interface: 1.12.1](https://img.shields.io/badge/Interface-1.12.1%20(5875)-orange.svg)](https://github.com/Fostercare5988/AutoBG)
 [![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
 [![ClassicAPI: v1.15.14+](https://img.shields.io/badge/ClassicAPI-v1.15.14+-green.svg)](https://github.com/brues-code/ClassicAPI)
@@ -85,7 +87,7 @@ AutoBG is engineered around strict low-level system integration:
 
 ## Readability and PvP tracking update (unreleased)
 
-AB and AV objective timers use compact 24-pixel rows with flat, muted faction fills, centered warm-white names and a separate countdown. The fill covers the row height; the final ten seconds use amber countdown text. Drag the battleground heading to reposition; Ctrl-click a row to announce its timer.
+AB and AV objective timers use compact 22-pixel rows with flat, muted faction fills, centered warm-white names and a separate countdown. The fill covers the row height; the final ten seconds use amber countdown text. Drag the battleground heading to reposition; Ctrl-click a row to announce its timer.
 
 Enemy-frame health bars, flag-carrier icons and stealth icons/text are always enabled. Each 10v10, 15v15 and 40v40 bracket always saves its own position; existing shared positions migrate once. The enable checkbox names the selected bracket. Separate flag-carrier panels use compact 220x42 dimensions.
 
@@ -243,3 +245,5 @@ The code and mocked Lua regressions are checked; real BG event delivery, sound p
 - **License**: MIT License - See [LICENSE](LICENSE) for details.
 
 Enemy frames can always be moved using the visible Drag to move header. Objective timers can be dragged by their rows or heading; the AB forecast also moves with ordinary left-drag. No preview or Shift key is required. Compact objective text uses the established Friz font and bundled bar texture; in-client rendering must be verified after reload.
+
+Objective progress fills animate smoothly between timer updates. Under Timers & FC, Countdown Appearance controls AB/AV/WSG bar width (180-420), height (18-32), scale (60-150%) and opacity (20-100%). These settings save per character and apply to active groups and the timer preview. Text stays on whole seconds; preview samples remain static. Queue, resurrection and flag-carrier panels keep their separate presentation.

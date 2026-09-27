@@ -446,6 +446,25 @@ btnResetTimersPos:SetScript("OnClick", function()
 	end
 end)
 
+-- Objective appearance: shared by AB, AV and WSG countdown groups.
+CreateSectionHeader(panelTimers, "Countdown Appearance", 10, -244)
+local sliderObjectiveWidth = CreateSlider("AutoBG_Opt_ObjectiveWidth", panelTimers, "Bar Width", 180, 420, 5, false, function(val)
+    if AutoBG_Settings then AutoBG_Settings.ObjectiveWidth = val end
+end)
+sliderObjectiveWidth:SetPoint("TOPLEFT", panelTimers, "TOPLEFT", 20, -282)
+local sliderObjectiveHeight = CreateSlider("AutoBG_Opt_ObjectiveHeight", panelTimers, "Bar Height", 18, 32, 1, false, function(val)
+    if AutoBG_Settings then AutoBG_Settings.ObjectiveHeight = val end
+end)
+sliderObjectiveHeight:SetPoint("TOPLEFT", panelTimers, "TOPLEFT", 20, -330)
+local sliderObjectiveScale = CreateSlider("AutoBG_Opt_ObjectiveScale", panelTimers, "Countdown Scale", 60, 150, 5, true, function(val)
+    if AutoBG_Settings then AutoBG_Settings.ObjectiveScale = val / 100 end
+end)
+sliderObjectiveScale:SetPoint("TOPLEFT", panelTimers, "TOPLEFT", 250, -282)
+local sliderObjectiveOpacity = CreateSlider("AutoBG_Opt_ObjectiveOpacity", panelTimers, "Countdown Opacity", 20, 100, 5, true, function(val)
+    if AutoBG_Settings then AutoBG_Settings.ObjectiveOpacity = val / 100 end
+end)
+sliderObjectiveOpacity:SetPoint("TOPLEFT", panelTimers, "TOPLEFT", 250, -330)
+
 -- -------------------------------------------------------------------------- --
 -- TAB 3: ENEMY FRAMES (BattlegroundTargets Engine & Brackets)                --
 -- -------------------------------------------------------------------------- --
@@ -861,6 +880,10 @@ SelectTab = function(tabId)
 	elseif tabId == 2 then
 		-- Timers & FC
 		if AutoBG_Settings then
+			sliderObjectiveWidth:SetValue(AutoBG_Settings.ObjectiveWidth or 260)
+			sliderObjectiveHeight:SetValue(AutoBG_Settings.ObjectiveHeight or 22)
+			sliderObjectiveScale:SetValue((AutoBG_Settings.ObjectiveScale or 1) * 100)
+			sliderObjectiveOpacity:SetValue((AutoBG_Settings.ObjectiveOpacity or 0.95) * 100)
 			cbABTimers:SetChecked(AutoBG_Settings.ABTimers and 1 or nil)
 			cbAVTimers:SetChecked(AutoBG_Settings.AVTimers and 1 or nil)
 			cbWSGTimers:SetChecked(AutoBG_Settings.WSGTimers and 1 or nil)
