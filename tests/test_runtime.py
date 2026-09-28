@@ -27,6 +27,7 @@ function UnitIsVisible() return visible~=false end
 function UnitDistanceSquared() return distanceSquared or 25, rangeKnown~=false end
 function UnitInLineOfSight() return sight~=false and not sightUnknown end
 function UnitGUID(u) if u=="player" then return "0x00000000" end return "0x00000001" end
+function UnitTokenFromName() return nil end
 function UnitClass() return "Rogue", "ROGUE" end
 function UnitLevel() return 60 end
 function UnitRace() return "Human", "Human" end
@@ -502,6 +503,66 @@ class RuntimeTests(unittest.TestCase):
             fire(AutoBG_SpyEventFrame,"UNIT_AURA","nameplate1")
             assert(#sounds==0)
             distanceSquared=25
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==1)
+        """)
+
+    def test_same_faction_duel_can_turn_a_cached_friend_into_hostile(self):
+        self.load_units()
+        self.runlua("""
+            local duel=false
+            UnitCanAttack=function() return duel end
+            fire(AutoBG_SpyEventFrame,"UNIT_CASTEVENT","0x00000001",nil,"CAST",5215)
+            assert(not AutoBG_Spy.Frame.rows[1]:IsShown())
+            duel=true
+            auras={{spellId=5215,name="Prowl"}}
+            fire(AutoBG_SpyEventFrame,"UNIT_CASTEVENT","0x00000001",nil,"CAST",5215)
+            assert(AutoBG_Spy.Frame.rows[1].targetStealth)
+            fire(AutoBG_SpyEventFrame,"UNIT_AURA","target")
+            assert(#sounds==1 and AutoBG_Spy.AlertWindow:IsShown())
+        """)
+
+    def test_world_cast_only_alerts_when_exact_loaded_enemy_becomes_detectable(self):
+        self.load_units()
+        self.runlua("""
+            local loaded=false
+            local resolvedGUID="0x00000002"
+            UnitExists=function(u)
+                if u=="target" or u=="focus" or u=="mouseover" or u=="nameplate1" then return false end
+                if u=="0x00000001" then return loaded end
+                return true
+            end
+            UnitTokenFromName=function(name,exact)
+                assert(name=="Enemy" and exact==true)
+                if loaded then return "resolved" end
+            end
+            UnitGUID=function(u)
+                if u=="player" then return "0x00000000" end
+                if u=="resolved" then return resolvedGUID end
+                return "0x00000001"
+            end
+            auras={{spellId=5215,name="Prowl"}}
+            fire(AutoBG_SpyEventFrame,"UNIT_CASTEVENT","0x00000001",nil,"CAST",5215)
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0 and AutoBG_Spy.Frame.rows[1].targetStealth)
+            now=1.6; loaded=true; distanceSquared=25
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0) -- A same-name unit with a different GUID cannot trigger it.
+            resolvedGUID="0x00000001"; distanceSquared=400
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
+            distanceSquared=25; sight=false
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
+            sight=true; rangeKnown=false
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
+            rangeKnown=true; visible=false
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==0)
+            visible=true
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==1 and AutoBG_Spy.AlertWindow:IsShown())
             for _,f in ipairs(tickers) do f() end
             assert(#sounds==1)
         """)

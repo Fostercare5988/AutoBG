@@ -70,7 +70,18 @@ function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground, observ
 	elseif not opt.Enabled or not opt.StealthAlert then
 		return
 	end
-	if not observedUnit or not guid or UnitGUID(observedUnit) ~= guid then return false end
+	if not guid then return false end
+	if not observedUnit or UnitGUID(observedUnit) ~= guid then
+		-- Cast telemetry alone is not an alert. Resolve a currently loaded exact-name unit,
+		-- then verify identity before applying the visibility, range, LOS and aura gates.
+		local resolved = UnitTokenFromName(name, true)
+		if not resolved then
+			local realmAt = string.find(name, "-", 1, true)
+			if realmAt then resolved = UnitTokenFromName(string.sub(name, 1, realmAt - 1), true) end
+		end
+		if not resolved or UnitGUID(resolved) ~= guid then return false end
+		observedUnit = resolved
+	end
 	if not UnitExists(observedUnit) or not UnitIsVisible(observedUnit)
 		or not UnitIsPlayer(observedUnit) or not UnitCanAttack("player", observedUnit) then return false end
 	if UnitIsDead(observedUnit) or UnitIsGhost(observedUnit) then return false end
@@ -107,7 +118,6 @@ local nameToTrackIndex = {}
 local guidToName = {}
 local nameToGUID = {}
 local hostileCache = {}
-local friendlyCache = {}
 local soundDebounce = {}
 local playerRaceCache = {}
 
@@ -269,12 +279,10 @@ end
 
 local function IsHostilePlayer(guid, name)
 	if not guid and not name then return false end
-
-	if name and friendlyCache[name] then return false end
-	if name and hostileCache[name] then return true end
+	-- A same-faction player can change attackability during a duel. Recheck the
+	-- current GUID before consulting any remembered name-only hostility.
 
 	if name and name == UnitName("player") then
-		friendlyCache[name] = true
 		return false
 	end
 	local pGUID = UnitGUID("player")
@@ -303,13 +311,11 @@ local function IsHostilePlayer(guid, name)
 			if name then hostileCache[name] = true end
 			return true
 		else
-			if name then friendlyCache[name] = true end
 			return false
 		end
 	end
 
 	if guid and UnitIsFriend and UnitIsFriend("player", guid) == 1 then
-		if name then friendlyCache[name] = true end
 		return false
 	end
 
@@ -344,7 +350,6 @@ end
 -- -------------------------------------------------------------------------- --
 function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, stealthSpell, race, observedUnit)
 	if not name or name == "" then return end
-	if friendlyCache[name] then return end
 
 	local opt = GetSpySettings()
 	if opt and not opt.Enabled then return end
@@ -463,7 +468,6 @@ end
 -- -------------------------------------------------------------------------- --
 function Spy:ClearHistory()
 	table.wipe(hostileCache)
-	table.wipe(friendlyCache)
 	table.wipe(playerRaceCache)
 	table.wipe(soundDebounce)
 	table.wipe(nameToTrackIndex)
@@ -1058,7 +1062,7 @@ local function OnSpyTick()
 					changed = true
 				end
 			end
-			if e.isStealthed and not e.wasStealthedAlerted and e.observedGUID then
+			if e.isStealthed and not e.wasStealthedAlerted and opt.StealthAlert then
 				e.wasStealthedAlerted = Spy:NotifyStealth(e.name, e.stealthSpell, e.classToken, e.guid, false, e.observedGUID) and true or false
 			end
 			i = i + 1

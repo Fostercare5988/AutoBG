@@ -694,14 +694,14 @@ local cbSpyEnable = CreateCheckButton("AutoBG_Spy_Enable", panelSpy, "Enable Ope
 end)
 cbSpyEnable:SetPoint("TOPLEFT", panelSpy, "TOPLEFT", 10, -30)
 
-local cbSpySound = CreateCheckButton("AutoBG_Spy_SoundAlert", panelSpy, "Sound on Enemy Detected", "Play alert sound when a hostile enemy enters radar range.", function()
+local cbSpySound = CreateCheckButton("AutoBG_Spy_SoundAlert", panelSpy, "Sound on Enemy Detected", "Play the general sound for a newly tracked enemy. The stealth warning sound uses the separate Stealth alerts outside BGs setting.", function()
 	if not AutoBG_Settings then AutoBG_Settings = {} end
 	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
 	AutoBG_Settings.Spy.SoundAlert = this:GetChecked() and true or false
 end)
 cbSpySound:SetPoint("TOPLEFT", cbSpyEnable, "BOTTOMLEFT", 0, -6)
 
-local cbSpyStealth = CreateCheckButton("AutoBG_Spy_StealthAlert", panelSpy, "Stealth alerts outside BGs", "Warn only for a directly observed stealthed enemy within 10 yards and clear line of sight. BG alerts have their own setting under Targets.", function()
+local cbSpyStealth = CreateCheckButton("AutoBG_Spy_StealthAlert", panelSpy, "Stealth alerts outside BGs", "Popup and sound only for a visible stealthed enemy with a current aura, within 10 yards and clear line of sight. Distant stealth casts update rows only. BG alerts have their own setting.", function()
 	if not AutoBG_Settings then AutoBG_Settings = {} end
 	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
 	AutoBG_Settings.Spy.StealthAlert = this:GetChecked() and true or false

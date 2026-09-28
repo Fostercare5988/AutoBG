@@ -1,15 +1,15 @@
 # AutoBG
 
-Required ClassicAPI version: **v1.15.15+**. This is the maintainer's published support baseline for this addon suite; it is not a claim that every API used here was introduced in v1.15.15. After replacing ClassicAPI.dll, fully restart WoW; `/reload` cannot reload a DLL.
+**Required:** [ClassicAPI v1.15.15+](https://github.com/brues-code/ClassicAPI) and [SuperWoW v2.2+](https://github.com/balakethelock/SuperWoW). **Optional:** [UnitXP SP3](https://codeberg.org/konaka/UnitXP_SP3). Spy stealth warnings use ClassicAPI for distance and line of sight; UnitXP is not required. Fully restart WoW after changing a DLL (`/reload` cannot reload it).
 
 [![Interface: 1.12.1](https://img.shields.io/badge/Interface-1.12.1%20(5875)-orange.svg)](https://github.com/Fostercare5988/AutoBG)
 [![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-blue.svg)](https://github.com/Fostercare5988/AutoBG/releases)
 [![ClassicAPI: v1.15.15+](https://img.shields.io/badge/ClassicAPI-v1.15.15+-green.svg)](https://github.com/brues-code/ClassicAPI)
 [![SuperWoW: v2.2+](https://img.shields.io/badge/SuperWoW-v2.2+-brightgreen.svg)](https://github.com/balakethelock/SuperWoW)
-[![UnitXP: SP3](https://img.shields.io/badge/UnitXP-SP3-teal.svg)](https://codeberg.org/konaka/UnitXP_SP3)
+[![UnitXP: optional](https://img.shields.io/badge/UnitXP-SP3%20optional-teal.svg)](https://codeberg.org/konaka/UnitXP_SP3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**AutoBG v2.0.0** provides PvP automation and battleground information for **World of Warcraft 1.12.1 (Build 5875)**. It uses **ClassicAPI v1.15.15+**, **SuperWoW v2.2+**, and optional **UnitXP SP3** for timers, unit identity, and distance measurements.
+**AutoBG v2.0.0** provides PvP automation and battleground information for **World of Warcraft 1.12.1 (Build 5875)**. It requires **ClassicAPI v1.15.15+** and **SuperWoW v2.2+**. **UnitXP SP3 is optional** for additional carrier-distance and raw-health data when available.
 
 
 Created and actively maintained by **[Fostercare5988](https://github.com/Fostercare5988)**.
@@ -22,9 +22,9 @@ AutoBG is engineered around strict low-level system integration:
 
 | Engine Component | Minimum Version | Architectural Role & Implementation |
 | :--- | :--- | :--- |
-| **ClassicAPI** | `v1.15.15+` | Timers (`C_Timer.After`), modern linear $O(n)$ slot-batching aura queries (`C_UnitAuras.GetAuraSlots` / `GetAuraDataBySlot`), native `hooksecurefunc`, and source-rewritten Lua 5.1 syntax. |
-| **SuperWoW** | `v2.2+` | Direct memory state access, exact-name targeting fallback (`TargetByName(name, true)`), direct GUID targeting (`TargetUnit(guid)`), and native hover state tracking (`SetMouseoverUnit`). |
-| **UnitXP** | `SP3` (Optional, but recommended) | High-precision raw 3D Euclidean distance calculations (`UnitXP("distance", unit)`), line-of-sight tracking, and OS taskbar alert notifications (`FlashClientIcon`). |
+| **ClassicAPI** | `v1.15.15+` (required) | Timers, structured aura queries, exact-name unit lookup, distance and line-of-sight checks used by Spy alerts. |
+| **SuperWoW** | `v2.2+` (required) | GUID targeting, exact-name targeting, mouseover support and raw-GUID cast events. |
+| **UnitXP** | `SP3` (optional) | Additional carrier-distance and raw-health reads when available. Spy distance and line-of-sight checks do not depend on it. |
 
 ### Update and rendering model
 - Objective and flag-carrier updates use ClassicAPI tickers; temporary stealth expiry uses a throttled OnUpdate watcher.
@@ -42,7 +42,7 @@ AutoBG is engineered around strict low-level system integration:
 - **1-Click Multi-Queue**: Sends sequential requests for selected battlegrounds. Server queue status confirms registration; cancelling invalidates pending steps.
 - **Auto-Accept with Configurable Delay & AFK Guard**: Instant entry (0s) or configurable countdown slider (0–70s, up to 120s via command). Automatically pauses auto-enter and auto-queue operations whenever you are tagged as AFK to prevent deserted debuffs.
 - **Smart Spirit Release**: Auto-releases spirit upon death inside battlegrounds while safely preserving active Soulstones and Reincarnation (Ankh).
-- **Taskbar Window Flashing**: Direct OS-level notification flashing (`FlashClientIcon`) when queues pop while tabbed out.
+- **Taskbar Window Flashing**: Calls `FlashClientIcon` for queue notifications when the loaded client provides that function.
 
 ### 2. Objective & Base Timers
 - **Arathi Basin (AB)**: 60s node capture countdowns with faction color-coding (Red = Horde, Blue = Alliance).
@@ -87,7 +87,7 @@ AutoBG is engineered around strict low-level system integration:
 
 ---
 
-## Readability and PvP tracking update (unreleased)
+## Current UI and PvP behavior
 
 AB and AV objective timers use compact 22-pixel rows with flat, muted faction fills, centered warm-white names and a separate countdown. The fill covers the row height; the final ten seconds use amber countdown text. Drag the battleground heading to reposition; Ctrl-click a row to announce its timer.
 
@@ -97,13 +97,13 @@ Enemy rows now default to 210px width, 12px names and 26px height (40-player lis
 
 Detected enemy PvP trinket uses start a **180-second estimate**, per the deployment requirement. Duplicate cast/chat observations do not restart it. Generic immunity names and unsubstantiated compatibility IDs no longer trigger it. An icon without a countdown means no active tracked cooldown, not proof of readiness.
 
-Stealth popups and sounds require a directly observed hostile player, a current stealth aura, client visibility, a confirmed distance of at most 10 yards and clear line of sight. Cast/chat events alone only update the row state. The 10-yard radius is a conservative notification policy, not the server's stealth-detection formula. Unknown range/LOS stays silent. A pending directly observed enemy is rechecked by existing timers, so approaching can trigger one alert without another cast.
+Spy stealth popups and sounds require an exact-GUID hostile unit currently loaded and visible to the client, a current stealth aura, confirmed distance within 10 yards and clear line of sight. A cast or chat message alone can label the Spy row but never bypasses those checks. Spy retries a pending stealth observation through its existing timer, including when the enemy was first learned from a cast and had no target or nameplate token. Unknown range/LOS stays silent; the 10-yard radius is an addon notification policy, not the server's stealth-detection formula. The general enemy sound toggle controls a separate sound from the stealth warning toggle. Going into stealth out of range does not trigger a popup; finding that player later while they remain stealthed can trigger one.
 
 Successful Stealth/Vanish casts also update through ClassicAPI's instant-cast event path. A short 0.5-second settling window protects a new cast from an early empty aura snapshot; existing tickers recheck it once. A fresh cast supersedes an old death flag, while unavailable aura/health data does not erase the indicator. Explicit fades, melee activity and visible death remain authoritative. Row/alert clicks validate a cached GUID before using it, with an exact-name lookup when it is absent or mismatched.
 
 Only client-observed stealth can be reported. AutoBG cannot discover an unseen enemy merely because they are stealthed. An unavailable unit does not clear the last observed state; visible aura absence, matching fade messages, melee activity or known effect expiry can clear it.
 
-The code and mocked Lua regressions are checked; real BG event delivery, sound playback and rendering still require in-game validation. See [audit and test checklist](docs/AUTOBG_REVIEW_2026-09-26.md) and the [stealth/Spy regression review](docs/STEALTH_SPY_REVIEW_2026-09-27.md).
+The code and mocked Lua regressions are checked; the new cast-first detection path still requires in-game duel verification, as do BG event delivery, sound playback and rendering. See [audit and test checklist](docs/AUTOBG_REVIEW_2026-09-26.md) and the [stealth/Spy regression review](docs/STEALTH_SPY_REVIEW_2026-09-27.md).
 
 ## ⌨️ Commands & Shortcuts
 
@@ -142,9 +142,9 @@ The code and mocked Lua regressions are checked; real BG event delivery, sound p
 
 ### Prerequisites
 1. **World of Warcraft 1.12.1** (Build 5875).
-2. [**ClassicAPI v1.15.15+**](https://github.com/brues-code/ClassicAPI) (`ClassicAPI.dll`).
-3. [**SuperWoW v2.2+**](https://github.com/balakethelock/SuperWoW) (`SuperWoW.dll`).
-4. [**UnitXP SP3**](https://codeberg.org/konaka/UnitXP_SP3) (Optional, `UnitXP_SP3.dll`).
+2. **Required:** [ClassicAPI v1.15.15+](https://github.com/brues-code/ClassicAPI) (`ClassicAPI.dll`).
+3. **Required:** [SuperWoW v2.2+](https://github.com/balakethelock/SuperWoW) (upstream distributes `SuperWoWhook.dll` and `SuperWoWlauncher.exe`).
+4. **Optional:** [UnitXP SP3](https://codeberg.org/konaka/UnitXP_SP3) (`UnitXP_SP3.dll`); install it for additional carrier telemetry, not for Spy stealth warnings.
 
 ### Step-by-Step Installation
 1. Clone or download the repository into your WoW AddOns directory:
@@ -155,8 +155,12 @@ The code and mocked Lua regressions are checked; real BG event delivery, sound p
    ```text
    World of Warcraft/Interface/AddOns/AutoBG/AutoBG.toc
    ```
-3. Launch the game using your DLL loader or launcher with ClassicAPI and SuperWoW enabled.
-4. Ensure **AutoBG** is checked in the character selection AddOn screen.
+3. Install and enable the required DLLs using their upstream instructions, then launch WoW through the configured loader or SuperWoW launcher. Restart the client after any DLL update.
+4. Ensure **AutoBG** is checked in the character selection AddOn screen. Type `/abg` to open settings, or `/abg spy` to open Spy directly.
+5. If AutoBG reports a missing ClassicAPI or SuperWoW dependency in chat, check that both DLLs loaded and that ClassicAPI is at least v1.15.15. UnitXP is not required.
+
+### Spy duel check and issue reports
+`/abg spy` opens the Spy settings. **Test Stealth** plays the sound sample; **Test Spy** shows a preview. Neither tests live detection. For a live check, duel a same-faction druid: If Spy receives a distant Prowl event, it may label a tracked row but should not show a popup; finding the druid within 10 yards and clear line of sight while Prowl is still active should warn once. If it does not, report whether the Spy row showed PROWL, whether the druid was targetable or had a nameplate, your approximate distance, any Lua error, and your ClassicAPI/SuperWoW versions.
 
 ---
 
@@ -185,7 +189,7 @@ The code and mocked Lua regressions are checked; real BG event delivery, sound p
   - Removed cross-module position state corruption (Spy writing into Targets).
   - Preserved independent bracket positioning (`10`, `15`, `40`) with clean resets that never resurrect legacy keys.
 - **Engine Baseline Reconciliation & Polish (Phase 4)**:
-  - Enforced uniform `MIN_CLASSIC_API = 11508` (`ClassicAPI v1.15.14+`) and `SUPERWOW_VERSION` startup guards across all 6 modules.
+  - Enforced `MIN_CLASSIC_API = 11515` (`ClassicAPI v1.15.15+`) and `SUPERWOW_VERSION` startup guards across all 6 modules.
   - Aligned runtime requirements with actual API consumption, cleanly designating UnitXP SP3 as optional and eliminating unconsumed legacy claims.
   - Replaced technical developer stack startup output with clean, player-friendly notification text (`v2.0.0 loaded`).
   - Passed complete static linter audit with 0 errors and 0 warnings.
@@ -196,7 +200,7 @@ The code and mocked Lua regressions are checked; real BG event delivery, sound p
 - **Authentic WSG Flag Icons**: Displays real 32x32 transparent flag textures on target frame carrier rows (Red Horde flag on Alliance FC; Blue Alliance flag on Horde FC).
 - **Unified 4-Tab Control Panel (`AutoBG_Options.lua`)**: Replaced separate options dialogs with a modern 4-tab interface (`[General]`, `[Timers & FC]`, `[Enemy Frames]`, `[Spy]`) with bracket selectors and global action buttons (`[Test All Frames]`, `[Reset Positions]`, `[Close]`).
 - **Full Backward Compatibility**: Added `/bgt` and `/battlegroundtargets` aliases, cross-module tab routing (`AutoBG_OpenOptions("targets")`), and native settings profiles under `AutoBG_Settings`.
-- **Enhanced Engine Compliance**: Enforced strict startup guards (`MIN_CLASSIC_API = 11508`, `SUPERWOW_VERSION`), dual-mode event signatures (Rule C12 / AP-26), and zero-GC combat paths across all modules.
+- **Enhanced Engine Compliance**: Added ClassicAPI and SuperWoW startup guards and dual-mode event dispatch for the supported runtime.
 
 ### v1.6.0
 - **Warsong Flag Carrier Faction Correction**: Resolved architectural flag carrier inversion where Horde and Alliance carriers were swapped across frames and map coordinates; accurately binds carrier identity, flag tokens, and frame visual assets.
@@ -228,7 +232,7 @@ The code and mocked Lua regressions are checked; real BG event delivery, sound p
 - **Eradicated Legacy Map Approximations**: Removed 2006 manual map coordinate trigonometry and magic multipliers (`(px - fx) * 515`) in favor of direct 3D Euclidean distances and native `UnitXP("distance", unit)`.
 - **Zero-GC Pre-allocated Queue Buffers**: Pre-allocated static arrays and `table.wipe` recycling in `AutoBG_QueueAllBGs`, eliminating heap churn during multi-queue operations.
 - **Modern Hook Architecture**: Replaced manual function hooks with `hooksecurefunc` for clean compatibility with other stance-modifying addons.
-- **Universal Engine Guard**: Enforced strict dependency checks across all 4 module files for ClassicAPI v1.15.14+ and SuperWoW v2.2+.
+- **Universal Engine Guard**: Added ClassicAPI and SuperWoW startup checks across the then-current modules.
 
 ### v1.2.0
 - **Zero-GC Scan Loop Optimizations**: Pre-allocated static `RAID_UNITS` arrays across all modules and eliminated anonymous closure allocations in recurring scan tickers.

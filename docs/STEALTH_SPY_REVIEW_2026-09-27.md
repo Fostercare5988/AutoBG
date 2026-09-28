@@ -121,3 +121,40 @@ Retrospective: earlier mocks validated texture paths and state but ignored
 texture coordinates, leaving the class atlas branch uncovered. Record those
 coordinates for visual-state transitions. The general faithful-UI-mock lesson
 is already covered by the framework; no VanillaForge change is needed.
+
+## Public duel follow-up — 2026-09-28
+
+The maintainer and first external tester reported that Spy did not warn on a
+detectable Prowl during same-faction duels outside Durotar. The tester also
+expected a warning at the moment of entering stealth. The latter is deliberately
+excluded by the maintainer's proximity-only policy: distant casts may update
+row state, but cannot trigger a popup or stealth sound.
+
+[SOURCE-VERIFIED] Two independent control-flow gaps matched the missed-warning
+class. A name cached as friendly before a duel was rejected before current
+`UnitCanAttack` could be checked. Also, cast-first Spy entries lacked
+`observedGUID`, so the periodic warning retry never ran even if an exact-name
+loaded unit later became detectable. Spy now checks current attackability and
+uses ClassicAPI `UnitTokenFromName(name, true)` for that missing-token path,
+verifies the result's GUID, and retains current aura, visibility, 10-yard
+confirmed distance and line-of-sight gates. No new ticker was added.
+
+The two new Lua 5.1 regressions failed against the faulty logic and pass with
+the fix, alongside all 38 prior tests (40 total). These tests model the API
+control flow; they are not empirical proof of a particular duel event sequence.
+The user's live report establishes a real missed alert, but does not isolate
+which gap occurred in that session.
+
+[UNVERIFIED - TEST FIRST] With both required DLLs loaded, duel a same-faction
+druid. Prowl out of range should leave the popup silent while retaining row
+metadata if an event was observed. Approaching a still-Prowled druid within
+10 yards and clear line of sight should produce one popup and sound. Check
+nameplate/target visibility, whether Spy shows PROWL, Lua errors and the
+loaded ClassicAPI/SuperWoW versions if it remains silent. The settings'
+`Test Stealth` button only plays a sound sample.
+
+Retrospective: test state transitions in identity/hostility caches, not only
+steady hostile observations, and model absence of target/nameplate tokens in
+cast-first alert tests. This lesson is specific to Spy's duel tracking and is
+already covered by VanillaForge's general authoritative-state and regression
+workflow; no framework change is proposed.
