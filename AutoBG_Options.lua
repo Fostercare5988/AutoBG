@@ -701,12 +701,19 @@ local cbSpySound = CreateCheckButton("AutoBG_Spy_SoundAlert", panelSpy, "Sound o
 end)
 cbSpySound:SetPoint("TOPLEFT", cbSpyEnable, "BOTTOMLEFT", 0, -6)
 
-local cbSpyStealth = CreateCheckButton("AutoBG_Spy_StealthAlert", panelSpy, "Stealth alerts outside BGs", "Popup and sound only for a visible stealthed enemy with a current aura, within 10 yards and clear line of sight. Distant stealth casts update rows only. BG alerts have their own setting.", function()
+local cbSpyStealth = CreateCheckButton("AutoBG_Spy_StealthAlert", panelSpy, "Stealth alerts outside BGs", "Enable stealth popups and sound outside BGs. Choose nearby confirmation or received-event alerts below. BG alerts have their own setting.", function()
 	if not AutoBG_Settings then AutoBG_Settings = {} end
 	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
 	AutoBG_Settings.Spy.StealthAlert = this:GetChecked() and true or false
 end)
 cbSpyStealth:SetPoint("TOPLEFT", cbSpySound, "BOTTOMLEFT", 0, -6)
+
+local cbSpyProximity = CreateCheckButton("AutoBG_Spy_StealthProximityOnly", panelSpy, "Nearby stealth alerts only", "On (default): warn only after confirming a visible, hostile stealth aura within 10 yards and clear line of sight. Off: Spy-style warning on a received stealth cast or combat-log event, even if the enemy is distant or no longer targetable. BG alerts always use nearby confirmation.", function()
+	if not AutoBG_Settings then AutoBG_Settings = {} end
+	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
+	AutoBG_Settings.Spy.StealthProximityOnly = this:GetChecked() and true or false
+end)
+cbSpyProximity:SetPoint("TOPLEFT", cbSpyStealth, "BOTTOMLEFT", 0, -6)
 
 local cbSpyAutoHide = CreateCheckButton("AutoBG_Spy_AutoHide", panelSpy, "Auto-Hide When Empty", "Hide the Spy frame completely when no enemies are tracked.", function()
 	if not AutoBG_Settings then AutoBG_Settings = {} end
@@ -714,7 +721,7 @@ local cbSpyAutoHide = CreateCheckButton("AutoBG_Spy_AutoHide", panelSpy, "Auto-H
 	AutoBG_Settings.Spy.AutoHide = this:GetChecked() and true or false
 	if Spy and Spy.RenderRows then Spy:RenderRows() end
 end)
-cbSpyAutoHide:SetPoint("TOPLEFT", cbSpyStealth, "BOTTOMLEFT", 0, -6)
+cbSpyAutoHide:SetPoint("TOPLEFT", cbSpyProximity, "BOTTOMLEFT", 0, -6)
 
 local sliderSpyTimeout = CreateSlider("AutoBG_Spy_Timeout", panelSpy, "Inactivity Timeout (sec)", 10, 120, 5, false, function(val)
 	if not AutoBG_Settings then AutoBG_Settings = {} end
@@ -808,6 +815,7 @@ local function UpdateSpyWidgets()
 	cbSpyEnable:SetChecked(opt.Enabled and 1 or nil)
 	cbSpySound:SetChecked(opt.SoundAlert and 1 or nil)
 	cbSpyStealth:SetChecked(opt.StealthAlert and 1 or nil)
+	cbSpyProximity:SetChecked(opt.StealthProximityOnly ~= false and 1 or nil)
 	cbSpyAutoHide:SetChecked(opt.AutoHide and 1 or nil)
 
 	local timeout = opt.Timeout or 30

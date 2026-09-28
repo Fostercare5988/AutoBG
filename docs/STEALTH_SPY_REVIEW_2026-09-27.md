@@ -158,3 +158,43 @@ steady hostile observations, and model absence of target/nameplate tokens in
 cast-first alert tests. This lesson is specific to Spy's duel tracking and is
 already covered by VanillaForge's general authoritative-state and regression
 workflow; no framework change is proposed.
+
+## Claude proposal integration review — 2026-09-28
+
+The maintainer requested both warning behaviors as a setting. The Spy checkbox
+**Nearby stealth alerts only** remains on by default, including for existing
+SavedVariables. Turning it off enables a popup and sound for a received,
+recognized stealth cast or English combat-log event without the local
+visibility/range/aura check. BG warnings keep their existing proximity gate.
+The shared stealth-name lookup now accepts a trailing numeric rank such as
+`Prowl (1)`; BG and Spy use its canonical name for row icons and matching fade
+cleanup. This also removes the BG path that dereferenced a missing raw-name
+entry after a ranked name matched.
+
+[SOURCE-VERIFIED] The prior raw-name BG lookup could be nil after a normalized
+match; the revised control flow uses the same returned lookup data. The mode
+branch and the existing per-stealth-episode alert flag prevent repeated
+warnings for repeated observations. The Lua regressions cover both modes,
+ranked log names, fade, GUID-less log warnings, cast warnings and BG isolation.
+
+[UNVERIFIED - TEST FIRST] The exact combat-log spelling, event delivery,
+stealth aura timing, sound and popup rendering still need live testing on the
+user's client/server. Test both Spy modes in same-faction duels and against
+enemy players, then test BG warnings separately. A received event is evidence
+of an observed stealth action, not evidence that the enemy is nearby or
+currently visible. A client that receives no event cannot warn in event mode.
+
+The proposal's blanket distant-alert default was rejected because it would
+reverse the existing proximity-only preference. Its guessed class from the
+spell name was rejected because it could overwrite a known class and some
+stealth effects are not class-exclusive. A second aura-rank parser and a
+name-wide time debounce were omitted: the shared lookup and per-episode flag
+already cover those cases without suppressing a quick, real second episode.
+The Test Stealth button remains an audio sample, not a live-detection test.
+`Claude_Reply/` remains local and is ignored by Git.
+
+Retrospective: the independent bug was a mismatch between canonical effect
+names and ranked combat-log text; normalizing once at the shared lookup
+prevents each consumer from making a different decision. Alert scope is a
+user-facing policy and belongs in explicit options. These are project-specific
+findings and do not warrant a new VanillaForge Known Pattern.

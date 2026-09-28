@@ -728,6 +728,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 Enabled = true,
                 SoundAlert = true,
                 StealthAlert = true,
+                StealthProximityOnly = true,
                 AutoHide = false,
                 Timeout = 30,
                 MaxRows = 10,

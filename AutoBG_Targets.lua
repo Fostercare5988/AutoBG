@@ -214,7 +214,8 @@ end
 
 local function CheckIsStealthName(spellName)
 	if not spellName then return false end
-	local data = STEALTH_NAMES[spellName]
+	local canonicalName = string.gsub(spellName, "%s*%(%d+%)$", "")
+	local data = STEALTH_NAMES[canonicalName]
 	if data then
 		return true, data.name, data.texture, data.duration
 	end
@@ -1533,9 +1534,9 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 					local tDur = TRINKET_SPELL_NAMES[buffName]
 					if tDur then
 						TriggerTrinketCooldown(name)
-					elseif CheckIsStealthName(buffName) then
-						local data = STEALTH_NAMES[buffName]
-						SetUnitStealth(name, true, data.name, data.texture, data.duration)
+					else
+						local found, stealthName, texture, duration = CheckIsStealthName(buffName)
+						if found then SetUnitStealth(name, true, stealthName, texture, duration) end
 					end
 				end
 			end
@@ -1556,9 +1557,9 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 					local tDur = TRINKET_SPELL_NAMES[spellName]
 					if tDur then
 						TriggerTrinketCooldown(name)
-					elseif CheckIsStealthName(spellName) then
-						local data = STEALTH_NAMES[spellName]
-						SetUnitStealth(name, true, data.name, data.texture, data.duration)
+					else
+						local found, stealthName, texture, duration = CheckIsStealthName(spellName)
+						if found then SetUnitStealth(name, true, stealthName, texture, duration) end
 					end
 				end
 			end
@@ -1567,9 +1568,10 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 	elseif ev == "CHAT_MSG_SPELL_AURA_GONE_OTHER" then
 		if a1 then
 			local _, _, buffName, enemyName = string.find(a1, "^(.-) fades from (.-)%.$")
-			if buffName and enemyName and CheckIsStealthName(buffName) then
+			local found, stealthName = CheckIsStealthName(buffName)
+			if enemyName and found then
 				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
-				if name and stealthedState[name] and stealthedState[name].spellName == buffName then
+				if name and stealthedState[name] and stealthedState[name].spellName == stealthName then
 					SetUnitStealth(name, false)
 				end
 			end

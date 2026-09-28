@@ -50,7 +50,7 @@ function Spy:PlayStealthDetectedSound()
 end
 
 local SPY_DEFAULTS = {
-	Enabled = true, SoundAlert = true, StealthAlert = true,
+	Enabled = true, SoundAlert = true, StealthAlert = true, StealthProximityOnly = true,
 	AutoHide = false, Timeout = 30, MaxRows = 10, Scale = 1.0,
 }
 local function GetSpySettings()
@@ -68,7 +68,13 @@ function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground, observ
 	if inBattleground then
 		if AutoBG_Settings.Targets and AutoBG_Settings.Targets.StealthAlert == false then return end
 	elseif not opt.Enabled or not opt.StealthAlert then
-		return
+		return false
+	elseif not opt.StealthProximityOnly then
+		-- Spy-style mode reports a received stealth event without requiring a loaded unit.
+		if not name or name == "" then return false end
+		Spy:PlayStealthDetectedSound()
+		Spy:ShowAlert(spell or "Stealth", name, classToken, guid)
+		return true
 	end
 	if not guid then return false end
 	if not observedUnit or UnitGUID(observedUnit) ~= guid then
@@ -1311,9 +1317,9 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 			end
 			if enemyName and spellName then
 				hostileCache[enemyName] = true
-				local isStealth = Targets and Targets.CheckIsStealthName and Targets.CheckIsStealthName(spellName)
+				local isStealth, canonicalName = Targets.CheckIsStealthName(spellName)
 				local detectedRace = RACIAL_SPELL_NAMES[spellName]
-				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or nil, spellName, detectedRace)
+				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or nil, canonicalName or spellName, detectedRace)
 			end
 		end
 
@@ -1322,18 +1328,19 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 			local _, _, enemyName, buffName = string.find(arg1, "^(.-) gains (.-)%.$")
 			if enemyName and buffName then
 				hostileCache[enemyName] = true
-				local isStealth = Targets and Targets.CheckIsStealthName and Targets.CheckIsStealthName(buffName)
+				local isStealth, canonicalName = Targets.CheckIsStealthName(buffName)
 				local detectedRace = RACIAL_SPELL_NAMES[buffName]
-				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or nil, buffName, detectedRace)
+				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or nil, canonicalName or buffName, detectedRace)
 			end
 		end
 
 	elseif event == "CHAT_MSG_SPELL_AURA_GONE_OTHER" then
 		if arg1 then
 			local _, _, buffName, enemyName = string.find(arg1, "^(.-) fades from (.-)%.$")
-			if buffName and enemyName and Targets and Targets.CheckIsStealthName and Targets.CheckIsStealthName(buffName) then
+			local isStealth, canonicalName = Targets.CheckIsStealthName(buffName)
+			if enemyName and isStealth then
 				local idx = nameToTrackIndex[enemyName]
-				if idx and trackedEnemies[idx].stealthSpell == buffName then
+				if idx and trackedEnemies[idx].stealthSpell == canonicalName then
 					Spy:SetUnitStealthState(enemyName, false)
 				end
 			end

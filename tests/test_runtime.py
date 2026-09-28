@@ -340,6 +340,7 @@ class RuntimeTests(unittest.TestCase):
             AutoBG_Spy:RecordEnemy("New","ROGUE",60,"0x00000001",100,true,"Vanish",nil,"nameplate1")
             assert(#sounds==1 and AutoBG_Settings.Spy.Enabled)
             assert(AutoBG_Settings.Spy.SoundAlert==false)
+            assert(AutoBG_Settings.Spy.StealthProximityOnly==true)
         """)
     def test_trinket_all_routes_and_duplicate(self):
         for spell in [52317,5579,23276,23277,23273,23274]:
@@ -501,6 +502,81 @@ class RuntimeTests(unittest.TestCase):
             auras={{spellId=5215,name="Prowl"}}
             distanceSquared=121
             fire(AutoBG_SpyEventFrame,"UNIT_AURA","nameplate1")
+            assert(#sounds==0)
+            distanceSquared=25
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==1)
+        """)
+
+    def test_stacked_stealth_names_update_bg_rows_and_clear_on_fade(self):
+        self.bg()
+        self.runlua("""
+            local found,name,texture=AutoBG_Targets.CheckIsStealthName("Prowl (1)")
+            assert(found and name=="Prowl" and string.find(texture,"prowl"))
+            fire(AutoBG_Targets,"CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS","Enemy gains Stealth (1).")
+            local row=AutoBG_Targets.TargetButton[1]
+            assert(row.StealthIcon:IsShown())
+            fire(AutoBG_Targets,"CHAT_MSG_SPELL_AURA_GONE_OTHER","Stealth (1) fades from Enemy.")
+            assert(not row.StealthIcon:IsShown())
+            fire(AutoBG_Targets,"CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF","Enemy casts Prowl (1).")
+            assert(row.StealthIcon:IsShown() and string.find(row.StealthIcon.texture,"prowl"))
+        """)
+
+    def test_stacked_stealth_names_update_world_row_without_remote_alert(self):
+        self.load_units()
+        self.runlua("""
+            fire(AutoBG_SpyEventFrame,"CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS","Sneaky gains Prowl (1).")
+            local row=AutoBG_Spy.Frame.rows[1]
+            assert(row.targetStealth and row.targetStealthSpell=="Prowl")
+            assert(string.find(row.Icon.texture,"prowl") and #sounds==0)
+            fire(AutoBG_SpyEventFrame,"CHAT_MSG_SPELL_AURA_GONE_OTHER","Prowl fades from Sneaky.")
+            assert(not row.targetStealth)
+            fire(AutoBG_SpyEventFrame,"CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF","Sneaky casts Vanish (1).")
+            assert(row.targetStealth and row.targetStealthSpell=="Vanish" and #sounds==0)
+        """)
+
+    def test_spy_style_mode_warns_from_received_log_once_per_stealth_episode(self):
+        self.load_units()
+        self.runlua("""
+            AutoBG_Settings.Spy.StealthProximityOnly=false
+            fire(AutoBG_SpyEventFrame,"CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS","Sneaky gains Prowl (1).")
+            local row=AutoBG_Spy.Frame.rows[1]
+            assert(row.targetStealth and row.targetStealthSpell=="Prowl")
+            assert(#sounds==1 and AutoBG_Spy.AlertWindow:IsShown())
+            assert(AutoBG_Spy.AlertWindow.targetName=="Sneaky")
+            assert(string.find(AutoBG_Spy.AlertWindow.Icon.texture,"prowl"))
+            fire(AutoBG_SpyEventFrame,"CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF","Sneaky casts Prowl (1).")
+            for _,f in ipairs(tickers) do f() end
+            assert(#sounds==1)
+            fire(AutoBG_SpyEventFrame,"CHAT_MSG_SPELL_AURA_GONE_OTHER","Prowl (1) fades from Sneaky.")
+            assert(not row.targetStealth)
+            fire(AutoBG_SpyEventFrame,"CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF","Sneaky casts Vanish (1).")
+            assert(#sounds==2 and row.targetStealthSpell=="Vanish")
+            assert(string.find(AutoBG_Spy.AlertWindow.Title.text,"Vanish"))
+        """)
+
+    def test_spy_style_mode_warns_from_cast_without_visible_unit(self):
+        self.load_units()
+        self.runlua("""
+            AutoBG_Settings.Spy.StealthProximityOnly=false
+            distanceSquared=900; visible=false; sight=false
+            fire(AutoBG_SpyEventFrame,"UNIT_CASTEVENT","0x00000001",nil,"CAST",5215)
+            assert(#sounds==1 and AutoBG_Spy.AlertWindow:IsShown())
+            assert(AutoBG_Spy.Frame.rows[1].targetStealthSpell=="Prowl")
+            fire(AutoBG_SpyEventFrame,"UNIT_CASTEVENT","0x00000001",nil,"CAST",5215)
+            assert(#sounds==1)
+        """)
+
+    def test_spy_style_mode_does_not_change_bg_proximity_rule(self):
+        self.bg()
+        self.runlua("""
+            AutoBG_Settings.Spy.StealthProximityOnly=false
+            fire(AutoBG_Targets,"UNIT_CASTEVENT","0x00000001",nil,"CAST",1784)
+            assert(AutoBG_Targets.TargetButton[1].StealthIcon:IsShown())
+            assert(#sounds==0)
+            auras={{spellId=1784,name="Stealth"}}
+            distanceSquared=400
+            fire(AutoBG_Targets,"UNIT_AURA","nameplate1")
             assert(#sounds==0)
             distanceSquared=25
             for _,f in ipairs(tickers) do f() end
