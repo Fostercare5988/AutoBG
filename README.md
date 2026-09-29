@@ -4,8 +4,8 @@ PvP automation, battleground objective timers, flag-carrier tracking, enemy unit
 
 ## Features
 
-- **Queue & Match Automation**: 1-click multi-queueing, auto-accept with configurable delay (0–120s) and AFK protection, automatic match exit, automatic re-queue upon departure, and smart spirit release that respects active Soulstones and Reincarnation.
-- **Objective Timers**: Precise capture countdowns for Arathi Basin bases and Alterac Valley nodes, flag respawn timers in Warsong Gulch, and synchronized Spirit Healer resurrection wave countdowns.
+- **Queue & Match Automation**: 1-click multi-queueing, auto-accept with configurable delay (0–119s) and AFK protection, automatic match exit, automatic re-queue upon departure, and smart spirit release that respects active Soulstones and Reincarnation.
+- **Objective Timers**: Capture countdowns for Arathi Basin bases and Alterac Valley nodes, flag respawn timers in Warsong Gulch, and Spirit Healer resurrection wave countdowns. AB victory predictions estimate the result from current scores and base control.
 - **Flag Carrier HUD**: Dedicated Alliance and Horde flag-carrier unit cards showing real-time health, distance, and debuff stacks, with one-click targeting and focus support.
 - **Enemy Unit Frames**: Dynamic PvP roster displays for 10v10, 15v15, and 40v40 battlegrounds featuring class coloring, carrier badges, and estimated enemy trinket cooldown tracking.
 - **Open-World Radar (Spy)**: Alerts you to nearby hostile players and stealth activations in the open world, with configurable distance thresholds.
@@ -36,14 +36,14 @@ PvP automation, battleground objective timers, flag-carrier tracking, enemy unit
 | `/abg` | Open options panel |
 | `/abg q [wsg\|ab\|av\|tg\|all]` | Queue for specific battlegrounds or all three |
 | `/abg a` | Toggle auto-accept queue pop |
-| `/abg delay <seconds>` | Set auto-accept countdown delay (0–120s) |
+| `/abg delay <seconds>` | Set auto-accept countdown delay (0–119s) |
 | `/abg j` / `/abg l` / `/abg r` | Toggle auto-rejoin / auto-leave / smart spirit release |
 | `/abg efc` / `/abg ffc` | Target enemy or friendly flag carrier |
 | `/abg focus` | Set enemy flag carrier as focus |
 | `/abg spy` | Open Spy radar settings |
 | `/bgt` or `/abg targets` | Open enemy frames configuration |
 | `/abg test` | Toggle interface preview mode |
-| `/abg reset` | Reset all configuration and frame positions to defaults |
+| `/abg reset` | Reset all AutoBG settings and saved positions, then reload the UI |
 | `Left-Click` on Carrier / Target | Target player |
 | `Right-Click` on Carrier / Target | Set focus |
 | `Ctrl + Left-Click` on Timer | Announce countdown to Battleground chat |
@@ -53,10 +53,11 @@ PvP automation, battleground objective timers, flag-carrier tracking, enemy unit
 
 - **Stealth Detection**: Spy can only report what your game client actually receives from the server. It cannot detect players across the map if the server does not send their presence or actions to your client. In the default "Nearby" mode, alerts only sound when a stealthed enemy is within 10 yards with line of sight.
 - **Trinket Cooldowns**: Displayed enemy PvP trinket timers are fixed 180-second estimates based on observed trinket activations.
+- **Timer Estimates**: Resurrection timers prefixed with `~` are estimates until healer telemetry is available. AB projections change as base control changes.
 
 ---
 
-For detailed configuration, customization options, and live duel test instructions, see the [User Guide](docs/USER_GUIDE.md). Technical architecture and integration review history are documented under [docs/](docs/).
+For detailed configuration, customization options, and duel test instructions, see the [User Guide](docs/USER_GUIDE.md).
 
 ## License
 

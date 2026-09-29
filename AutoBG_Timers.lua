@@ -1,4 +1,4 @@
--- AutoBG Timers & Objective Countdown Engine (Zero-Bloat Consolidated Architecture)
+-- AutoBG objective countdowns, resurrection waves and score projection.
 -- Author & Maintainer: Fostercare5988
 -- Built natively for ClassicAPI v1.15.15+, SuperWoW 2.2+, UnitXP SP3
 
@@ -829,6 +829,8 @@ local AB_RPS = {
     [5] = 30,
 }
 
+local AB_TICK_INTERVAL = { [0] = 0, [1] = 12, [2] = 9, [3] = 6, [4] = 3, [5] = 1 }
+
 local function GetABWorldStateInfo()
     local aRes, hRes, aBases, hBases
     local n = (GetNumWorldStateUI and GetNumWorldStateUI()) or 0
@@ -863,7 +865,8 @@ local function GetABWorldStateInfo()
     return aRes, hRes, aBases or 0, hBases or 0
 end
 
-local pendingCapsBuffer = {}
+local pendingCapsBuffer, pendingCapsPool = {}, {}
+local function CapTimeSort(x, y) return x.time < y.time end
 local function GetABPendingCaps()
     table.wipe(pendingCapsBuffer)
     local now = GetTime()
@@ -872,10 +875,14 @@ local function GetABPendingCaps()
         local faction = (type(data) == "table" and data.faction) or nil
         if expire and expire > now and faction then
             local rem = expire - now
-            table.insert(pendingCapsBuffer, { node = node, time = rem, faction = faction })
+            local index = #pendingCapsBuffer + 1
+            local cap = pendingCapsPool[index]
+            if not cap then cap = {}; pendingCapsPool[index] = cap end
+            cap.node, cap.time, cap.faction = node, rem, faction
+            pendingCapsBuffer[index] = cap
         end
     end
-    table.sort(pendingCapsBuffer, function(x, y) return x.time < y.time end)
+    table.sort(pendingCapsBuffer, CapTimeSort)
     return pendingCapsBuffer
 end
 
@@ -1003,10 +1010,11 @@ local function CalculateABProjection(aRes, hRes, aBases, hBases)
     return aFinal, hFinal, etaStr, etaColor, basesNeeded, announceStr
 end
 
--- Diff cache for AB Projection strings to guarantee zero layout thrashing (Rule C15 / AP-31)
+-- Observed scores and interpolated estimates have separate owners.
 local lastR1Status, lastR1Score = "", ""
 local lastR2Bases, lastR2Score = "", ""
 local lastRecordedARes, lastRecordedHRes = nil, nil
+local interpolatedARes, interpolatedHRes = nil, nil
 local lastRecordedABases, lastRecordedHBases = nil, nil
 local lastATickTime, lastHTickTime = nil, nil
 
@@ -1040,6 +1048,7 @@ local function UpdateABProjection(isTestAll, isAB)
         lastR1Status, lastR1Score = "", ""
         lastR2Bases, lastR2Score = "", ""
         lastRecordedARes, lastRecordedHRes = nil, nil
+        interpolatedARes, interpolatedHRes = nil, nil
         lastRecordedABases, lastRecordedHBases = nil, nil
         lastATickTime, lastHTickTime = nil, nil
         ABProjectionFrame.announceText = nil
@@ -1057,22 +1066,24 @@ local function UpdateABProjection(isTestAll, isAB)
 
     if lastRecordedARes == nil or aRes ~= lastRecordedARes then
         lastRecordedARes = aRes
+        interpolatedARes = aRes
         lastATickTime = now
     elseif aBases ~= lastRecordedABases then
         local oldRate = AB_RPS[lastRecordedABases or 0] or 0
         local elapsed = lastATickTime and math.max(0, now - lastATickTime) or 0
-        lastRecordedARes = math.min(AB_MAX_RESOURCES, lastRecordedARes + oldRate * elapsed)
+        interpolatedARes = math.min(AB_MAX_RESOURCES, interpolatedARes + oldRate * math.min(AB_TICK_INTERVAL[lastRecordedABases or 0] or 0, elapsed))
         lastATickTime = now
     end
     lastRecordedABases = aBases
 
     if lastRecordedHRes == nil or hRes ~= lastRecordedHRes then
         lastRecordedHRes = hRes
+        interpolatedHRes = hRes
         lastHTickTime = now
     elseif hBases ~= lastRecordedHBases then
         local oldRate = AB_RPS[lastRecordedHBases or 0] or 0
         local elapsed = lastHTickTime and math.max(0, now - lastHTickTime) or 0
-        lastRecordedHRes = math.min(AB_MAX_RESOURCES, lastRecordedHRes + oldRate * elapsed)
+        interpolatedHRes = math.min(AB_MAX_RESOURCES, interpolatedHRes + oldRate * math.min(AB_TICK_INTERVAL[lastRecordedHBases or 0] or 0, elapsed))
         lastHTickTime = now
     end
     lastRecordedHBases = hBases
@@ -1083,11 +1094,11 @@ local function UpdateABProjection(isTestAll, isAB)
     local elapsedA = lastATickTime and math.max(0, now - lastATickTime) or 0
     local elapsedH = lastHTickTime and math.max(0, now - lastHTickTime) or 0
 
-    local maxTickA = (aBases == 5 and 1) or (aBases == 4 and 3) or (aBases == 3 and 6) or (aBases == 2 and 9) or (aBases == 1 and 12) or 0
-    local maxTickH = (hBases == 5 and 1) or (hBases == 4 and 3) or (hBases == 3 and 6) or (hBases == 2 and 9) or (hBases == 1 and 12) or 0
+    local maxTickA = AB_TICK_INTERVAL[aBases] or 0
+    local maxTickH = AB_TICK_INTERVAL[hBases] or 0
 
-    local curARes = math.min(AB_MAX_RESOURCES, lastRecordedARes + aRate * (maxTickA > 0 and math.min(maxTickA, elapsedA) or 0))
-    local curHRes = math.min(AB_MAX_RESOURCES, lastRecordedHRes + hRate * (maxTickH > 0 and math.min(maxTickH, elapsedH) or 0))
+    local curARes = math.min(AB_MAX_RESOURCES, interpolatedARes + aRate * (maxTickA > 0 and math.min(maxTickA, elapsedA) or 0))
+    local curHRes = math.min(AB_MAX_RESOURCES, interpolatedHRes + hRate * (maxTickH > 0 and math.min(maxTickH, elapsedH) or 0))
 
     local aFinal, hFinal, etaStr, etaColor, basesNeeded, announceStr = CalculateABProjection(curARes, curHRes, aBases, hBases)
     if not aFinal then
@@ -1387,6 +1398,7 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             if NodeBarFrame and NodeBarFrame:IsShown() then NodeBarFrame:Hide() end
             if ABProjectionFrame and ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
             lastRecordedARes, lastRecordedHRes = nil, nil
+            interpolatedARes, interpolatedHRes = nil, nil
             lastRecordedABases, lastRecordedHBases = nil, nil
             lastATickTime, lastHTickTime = nil, nil
         end
@@ -1399,7 +1411,7 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             if WSGFlagFrame and WSGFlagFrame:IsShown() then WSGFlagFrame:Hide() end
         end
         if not inPVP then
-            if RessFrame and RessFrame:IsShown() then RessFrame:Hide() end
+            if RespawnFrame:IsShown() then RespawnFrame:Hide() end
             if StartTimerFrame and StartTimerFrame:IsShown() then StartTimerFrame:Hide() end
             table.wipe(timers.Global)
         end
@@ -1411,6 +1423,7 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             lastR2Bases, lastR2Score = "", ""
             lastProjWinner = nil
             lastRecordedARes, lastRecordedHRes = nil, nil
+            interpolatedARes, interpolatedHRes = nil, nil
             lastRecordedABases, lastRecordedHBases = nil, nil
             lastATickTime, lastHTickTime = nil, nil
             spiritHealerSyncTime = GetTime()
@@ -1420,7 +1433,7 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         if inPVP then
             local healerTime     = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
             spiritHealerSyncTime = (healerTime > 0) and (GetTime() - (30 - healerTime)) or GetTime()
-            spiritHealerSynced   = true
+            spiritHealerSynced   = healerTime > 0
         end
     else
         ParseCombatMessage(msg or arg1, ev)

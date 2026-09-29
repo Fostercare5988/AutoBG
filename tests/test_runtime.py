@@ -224,6 +224,111 @@ class RuntimeTests(unittest.TestCase):
             assert(#delayed==0)
         """)
 
+    def prepare_rejoin(self):
+        self.load_core()
+        self.runlua('''
+            AutoBG_Settings.AutoRejoin=true; AutoBG_Settings.AutoLeave=false
+            AutoBG_Settings.NotifySound=false; inBG=true
+            function GetBattlefieldWinner() return 1 end
+            function JoinBattlegroundQueue(name) requested[#requested+1]=name end
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            queues[1]={status='active',map='Warsong Gulch'}
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            inBG=false; queues[1]=nil
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            assert(#requested==1)
+        ''')
+
+    def test_rejoin_retry_is_local_and_bounded(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            local index=1
+            while delayed[index] and index<20 do
+                local callback=delayed[index]; index=index+1; callback()
+            end
+            assert(#requested==3, 'Rejoin must stop after three attempts')
+            assert(index<20, 'Retry chain must terminate')
+        ''')
+
+    def test_unrelated_queue_does_not_confirm_rejoin(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            queues[2]={status='queued',map='Arathi Basin'}
+            delayed[#delayed]()
+            assert(#requested==2, 'A different queue cannot confirm WSG')
+            queues[1]={status='queued',map='Warsong Gulch'}
+            delayed[#delayed]()
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            assert(#requested==2)
+        ''')
+
+    def test_queue_window_submission_does_not_publish_rejoin_success(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            function JoinBattlefield() end
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            delayed[1]()
+            assert(#requested==2, 'Submission must still verify queue state')
+        ''')
+
+    def test_manual_queue_and_cancel_supersede_rejoin(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            local old=delayed[1]
+            AutoBG_TriggerBattlegroundFinder('Arathi Basin')
+            old(); assert(#requested==2)
+            AutoBG_CancelAllQueues()
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            old(); assert(#requested==2)
+        ''')
+
+    def test_disabling_rejoin_before_queue_window_cancels_submission(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            joined=0; function JoinBattlefield() joined=joined+1 end
+            AutoBG_Settings.AutoRejoin=false
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW'); assert(joined==0)
+            delayed[1]()
+            AutoBG_Settings.AutoRejoin=true
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            assert(#requested==1)
+            AutoBG_TriggerBattlegroundFinder('Arathi Basin')
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW'); assert(joined==1)
+        ''')
+
+    def test_cancelled_queue_callbacks_cannot_close_a_later_queue_window(self):
+        self.load_core()
+        self.runlua('''
+            closed=0
+            function JoinBattlegroundQueue() end
+            function JoinBattlefield() end
+            function CloseBattlefield() closed=closed+1 end
+            AutoBG_TriggerBattlegroundFinder('Warsong Gulch')
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            assert(closed==1)
+            local callbacks={unpack(delayed)}
+            AutoBG_CancelAllQueues()
+            for _,callback in ipairs(callbacks) do callback() end
+            assert(closed==1,'Cancelled work cannot close a new window')
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW'); assert(closed==1)
+        ''')
+
+    def test_delayed_leave_cannot_leave_a_different_or_disabled_match(self):
+        self.load_core()
+        self.runlua('''
+            AutoBG_Settings.AutoLeave=true; inBG=true; left=0
+            function GetBattlefieldWinner() return 1 end
+            function LeaveBattlefield() left=left+1 end
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            queues[1]={status='active',map='Warsong Gulch'}
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            AutoBG_Settings.AutoLeave=false
+            delayed[#delayed](); assert(left==0)
+            AutoBG_Settings.AutoLeave=true; inBG=false
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            delayed[1](); assert(left==0)
+        ''')
+
     def test_deserter_uses_identity(self):
         self.load_core()
         self.runlua("""
@@ -1135,6 +1240,21 @@ class TimerFeatureTests(unittest.TestCase):
             tickers[1]()
             assert(string.find(AutoBG_ABProjectionFrame.r1Status:GetText(), "Win 15:54") ~= nil)
             assert(AutoBG_ABProjectionFrame.announceText == 'Win in 15:54')
+        ''')
+
+    def test_projection_base_change_does_not_overwrite_observed_score(self):
+        self.lua.execute('''
+            inBG=true; now=100; AutoBG_Settings.ABProjection=true
+            wsScores={'Bases: 3  400/2000','Bases: 2  350/2000'}
+            function GetRealZoneText() return 'Arathi Basin' end
+            function GetNumWorldStateUI() return 2 end
+            function GetWorldStateUIInfo(i) return 1,wsScores[i],nil end
+            fire(AutoBG_TimersEventFrame,'ZONE_CHANGED_NEW_AREA'); tickers[1]()
+            now=103; wsScores[1]='Bases: 4  400/2000'; tickers[1]()
+            local previous=AutoBG_ABProjectionFrame.announceText
+            now=103.1; tickers[1]()
+            assert(AutoBG_ABProjectionFrame.announceText==previous,
+                'A stable server score must not reset interpolation after a base change')
         ''')
 
     def test_accept_delay_slider_range_and_clamping(self):

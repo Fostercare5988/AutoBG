@@ -7,7 +7,7 @@ Detailed configuration, interface controls, and gameplay reference for **AutoBG*
 ## 1. Interface Controls & Movement
 
 ### Objective Timers (Arathi Basin & Alterac Valley)
-- **Moving the Timers**: Drag the battleground header (e.g., "Arathi Basin") to reposition the timer cluster. The position is saved per character.
+- **Moving the Timers**: Drag the battleground header (e.g., "Arathi Basin") to reposition the timer cluster. AutoBG settings and timer/carrier positions are shared across characters on the account.
 - **Chat Announcements**: Hold `Ctrl` and Left-Click any timer row (node, base, or respawn timer) to announce the remaining countdown to Battleground chat (`/bg`).
 - **Countdown Appearance**: Under `/abg timers`, customize row width (180–420 px), height (18–32 px), UI scale (60–150%), and opacity (20–100%).
 
@@ -59,7 +59,7 @@ To verify that stealth alerts work properly with your client setup:
 ## 3. Automation Options
 
 - **Auto-Queue**: Use `/abg q <bg>` or the multi-queue buttons in `/abg` to queue for specific or all battlegrounds.
-- **Auto-Accept**: Enable under `/abg` or via `/abg a`. You can configure a delay (0 to 120 seconds) using `/abg delay <seconds>` to give yourself time to prepare. Auto-accept automatically pauses if your character is flagged AFK.
-- **Auto-Leave**: Automatically leaves the match when the scoreboard appears at the end of the game (`/abg l`).
-- **Auto-Rejoin**: Automatically rejoins the same battleground queue upon exiting a completed match (`/abg j`).
+- **Auto-Accept**: Enable under `/abg` or via `/abg a`. You can configure a delay (0 to 119 seconds) using `/abg delay <seconds>` to give yourself time to prepare. Auto-accept automatically pauses if your character is flagged AFK.
+- **Auto-Leave**: Automatically leaves a completed match when the client reports a winner (`/abg l`). Disable it before departure to cancel the pending exit.
+- **Auto-Rejoin**: Requests the same battleground queue upon exiting a completed match (`/abg j`). Success requires that exact queue to appear in the client's queue status; unsuccessful requests stop after three attempts. A manual queue request or cancellation supersedes the pending rejoin.
 - **Smart Spirit Release**: Automatically releases your spirit upon death inside a battleground, while preserving active Soulstone or Reincarnation buffs (`/abg r`).
