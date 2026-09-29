@@ -580,8 +580,11 @@ local function HandleMatchEnd()
     end
 
     if AutoBG_Settings and AutoBG_Settings.AutoLeave then
-        LeaveBattlefield(0)
-        AutoBG_Print("Instantly left |cFFFFFF00" .. (lastPlayedBG or "battleground") .. "|r.")
+        if ClearTarget then ClearTarget() end
+        AutoBG_TimerAfter(1.5, function()
+            LeaveBattlefield(0)
+            AutoBG_Print("Auto-left |cFFFFFF00" .. (lastPlayedBG or "battleground") .. "|r.")
+        end)
     end
 end
 
