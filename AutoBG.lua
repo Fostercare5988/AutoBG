@@ -430,7 +430,7 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
     if mmBtn then ClickFrame(mmBtn) end
 
     local requestGeneration = queueGeneration
-    AutoBG_TimerAfter(0.08, function()
+    local function TryClickDropdown(attempt)
         if requestGeneration ~= queueGeneration then return end
         local targetFound = false
         local lowerTarget = string.lower(cleanName)
@@ -447,8 +447,20 @@ function AutoBG_TriggerBattlegroundFinder(bgName)
         end
         if not targetFound then
             local b = _G["DropDownList1Button" .. btnIdx]
-            if b and b:IsShown() then ClickFrame(b) end
+            if b and b:IsShown() then
+                ClickFrame(b)
+                targetFound = true
+            end
         end
+        if not targetFound and attempt < 4 then
+            AutoBG_TimerAfter(0.12, function()
+                TryClickDropdown(attempt + 1)
+            end)
+        end
+    end
+
+    AutoBG_TimerAfter(0.08, function()
+        TryClickDropdown(1)
     end)
 end
 
@@ -581,16 +593,38 @@ local function HandleMatchEnd()
 
     if AutoBG_Settings and AutoBG_Settings.AutoLeave then
         if ClearTarget then ClearTarget() end
-        AutoBG_TimerAfter(1.5, function()
+        AutoBG_TimerAfter(0.3, function()
             LeaveBattlefield(0)
             AutoBG_Print("Auto-left |cFFFFFF00" .. (lastPlayedBG or "battleground") .. "|r.")
         end)
     end
 end
 
+local function CheckRejoinSuccess(generation)
+    AutoBG_TimerAfter(1.5, function()
+        if generation ~= queueGeneration or currentZonePVP then return end
+        if not (AutoBG_Settings and AutoBG_Settings.AutoRejoin) then return end
+        local isQueued = false
+        local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
+        for i = 1, maxQueues do
+            local status = GetBattlefieldStatus(i)
+            if status and status ~= "none" then
+                isQueued = true
+                break
+            end
+        end
+        if not isQueued and hasHandledEnd and pendingAutoRejoin then
+            rejoinRequested = false
+            TryAutoRejoin()
+        end
+    end)
+end
+
 local function TryAutoRejoin()
-    if currentZonePVP or not rejoinWorldReady or rejoinRequested or not hasHandledEnd or not pendingAutoRejoin or
+    if currentZonePVP or not rejoinWorldReady or rejoinRequested or not hasHandledEnd or
        not (AutoBG_Settings and AutoBG_Settings.AutoRejoin) then return end
+    local targetBG = pendingAutoRejoin or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
+    if not targetBG then return end
     local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
     for i = 1, maxQueues do
         if GetBattlefieldStatus(i) == "active" then return end
@@ -602,8 +636,28 @@ local function TryAutoRejoin()
         return
     end
     rejoinRequested = true
-    AutoBG_TriggerBattlegroundFinder(pendingAutoRejoin)
+    pendingAutoRejoin = targetBG
+    AutoBG_TriggerBattlegroundFinder(targetBG)
+    CheckRejoinSuccess(queueGeneration)
 end
+
+-- Ensure Auto-Rejoin target is captured regardless of how the player leaves the battleground
+hooksecurefunc("LeaveBattlefield", function()
+    if currentZonePVP then
+        UpdateZoneCache()
+        if currentZoneText ~= "" then
+            lastPlayedBG = currentZoneText
+            if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = currentZoneText end
+        end
+        hasHandledEnd = true
+        rejoinRequested = false
+        rejoinWorldReady = false
+        if AutoBG_Settings and AutoBG_Settings.AutoRejoin and lastPlayedBG then
+            local _, cleanName = GetBGButtonIndex(lastPlayedBG)
+            pendingAutoRejoin = cleanName
+        end
+    end
+end)
 
 -- Auto-Accept Popup Dismissal Hook (Rule B10)
 hooksecurefunc("StaticPopup_Show", function(which, text_arg1, text_arg2, data)
@@ -789,11 +843,13 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                     AutoBG_Print("Auto-Rejoin / Auto-Queue halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
                 end
             else
-                if hasHandledEnd and pendingAutoRejoin and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
+                local targetRejoin = pendingAutoRejoin or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
+                if hasHandledEnd and targetRejoin and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
+                    pendingAutoRejoin = targetRejoin
                     TryAutoRejoin()
                     if rejoinWorldReady and not rejoinRequested and not rejoinFallbackScheduled then
                         rejoinFallbackScheduled = true
-                        AutoBG_TimerAfter(1.2, function()
+                        AutoBG_TimerAfter(0.4, function()
                             rejoinFallbackScheduled = false
                             TryAutoRejoin()
                         end)
@@ -864,7 +920,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 playerIsAFK = false
             end
         end
-        if a1 and (string.find(a1, "wins!") or string.find(a1, "won the battle") or string.find(a1, "wins the battle") or string.find(a1, "victorious!")) then
+        if a1 and (string.find(a1, "wins") or string.find(a1, "won") or string.find(a1, "victorious") or string.find(a1, "victory")) then
             if currentZonePVP then HandleMatchEnd() end
         end
 
@@ -928,6 +984,9 @@ end)
 
 -- Scoreboard Hook (Rule B10)
 hooksecurefunc("WorldStateScoreFrame_Update", function()
+    if currentZonePVP and GetBattlefieldWinner() then
+        HandleMatchEnd()
+    end
     if not AutoBG_Settings or not AutoBG_Settings.ScoreColor then return end
 
     local offset = (WorldStateScoreScrollFrame and FauxScrollFrame_GetOffset(WorldStateScoreScrollFrame)) or 0
