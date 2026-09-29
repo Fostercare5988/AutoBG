@@ -159,6 +159,43 @@ class RuntimeTests(unittest.TestCase):
             current(); assert(#accepted==1 and accepted[1][2]==1)
         """)
 
+    def test_invalid_saved_accept_delay_is_normalized_before_queue_events(self):
+        self.load_core()
+        self.runlua("""
+            for _,value in ipairs({'invalid',false,{},-10,'5',999}) do
+                AutoBG_Settings.AutoAcceptDelay=value
+                fire(AutoBGFrame,'ADDON_LOADED','AutoBG')
+                local expected=value=='5' and 5 or (value==999 and 120 or 0)
+                assert(AutoBG_Settings.AutoAcceptDelay==expected)
+            end
+            AutoBG_Settings.AutoAcceptDelay='invalid'
+            fire(AutoBGFrame,'ADDON_LOADED','AutoBG')
+            AutoBG_Settings.AutoAccept=true; AutoBG_Settings.NotifySound=false
+            queues[1]={status='confirm',map='Warsong Gulch'}
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            assert(#accepted==1)
+        """)
+
+    def test_disabling_login_queue_invalidates_its_pending_callback(self):
+        self.load_core()
+        self.runlua("""
+            AutoBG_Settings.AutoQueueLogin=true
+            AutoBG_QueueAllBGs=function() requested[#requested+1]='login' end
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            assert(#delayed==1)
+            AutoBG_Settings.AutoQueueLogin=false
+            delayed[1](); assert(#requested==0)
+        """)
+
+    def test_enabled_login_queue_still_runs_after_delay(self):
+        self.load_core()
+        self.runlua("""
+            AutoBG_Settings.AutoQueueLogin=true
+            AutoBG_QueueAllBGs=function() requested[#requested+1]='login' end
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            delayed[1](); assert(#requested==1)
+        """)
+
     def test_queue_cancel_supersedes_callback(self):
         self.load_core()
         self.runlua("""
@@ -879,6 +916,110 @@ class RuntimeTests(unittest.TestCase):
             assert(not warrior.targetStealth and warrior.Icon.texcoords[2]<.25)
             assert(#sounds==0 and not AutoBG_Spy.AlertWindow:IsShown())
         """)
+
+class CarrierOwnershipTests(unittest.TestCase):
+    # Use the complete module: button handlers and exported commands share ownership.
+    def runlua(self, text):
+        self.lua.execute(text)
+
+    def setUp(self):
+        self.lua=LuaRuntime(unpack_returned_tuples=True)
+        self.lua.execute(MOCKS)
+        self.runlua('''
+            names={other="Other", live="Carrier"}; targetUnit="other"; focusUnit="other"
+            focusCalls=0; targetCalls=0; printed={}
+            local function resolve(u)
+                if u=="target" then return targetUnit end
+                if u=="focus" then return focusUnit end
+                return u
+            end
+            function UnitExists(u) return names[resolve(u)]~=nil end
+            function UnitName(u) return names[resolve(u)] end
+            function UnitIsUnit(a,b) return resolve(a)==resolve(b) end
+            function UnitTokenFromName() return resolvedUnit end
+            function TargetUnit(u)
+                targetCalls=targetCalls+1
+                if UnitExists(u) then targetUnit=resolve(u) end
+            end
+            function FocusUnit(u)
+                focusCalls=focusCalls+1
+                if UnitExists(u) then focusUnit=resolve(u) end
+            end
+            function TargetByName() if nameMatch then targetUnit=nameMatch end end
+            function AutoBG_Print(msg) printed[#printed+1]=msg end
+        ''')
+        self.lua.execute(source("AutoBG_FC.lua"))
+        self.runlua('fire(AutoBG_FCEventFrame,"CHAT_MSG_BG_SYSTEM_HORDE","Alliance flag was picked up by Carrier!")')
+
+    def test_missing_carrier_does_not_focus_previous_target_or_report_success(self):
+        self.runlua('''
+            assert(not AutoBG_FocusCarrier("enemy"))
+            assert(not AutoBG_TargetCarrier("enemy"))
+            assert(focusCalls==0 and focusUnit=="other" and #printed==0)
+            this=AutoBG_HordeFC; arg1="RightButton"; this.scripts.OnClick()
+            assert(focusCalls==0 and focusUnit=="other")
+        ''')
+
+    def test_stale_cached_guid_resolves_current_carrier(self):
+        self.runlua('''
+            AutoBG_HordeFC.carrierGuid="0x0000DEAD"; resolvedUnit="live"
+            assert(AutoBG_TargetCarrier("enemy") and targetUnit=="live")
+            this=AutoBG_HordeFC; arg1="RightButton"; this.scripts.OnClick()
+            assert(focusUnit=="live" and focusCalls==1)
+        ''')
+
+    def test_mismatched_cached_identity_uses_verified_name_match(self):
+        self.runlua('''
+            names["0x0000DEAD"]="Different"; AutoBG_HordeFC.carrierGuid="0x0000DEAD"
+            nameMatch="live"
+            assert(AutoBG_FocusCarrier("enemy") and focusUnit=="live")
+        ''')
+
+    def test_qualified_realm_conflict_is_not_selected(self):
+        self.runlua('''
+            fire(AutoBG_FCEventFrame,"CHAT_MSG_BG_SYSTEM_HORDE","Alliance flag was picked up by Carrier-First!")
+            names.live="Carrier-Second"; resolvedUnit="live"; nameMatch="live"
+            assert(not AutoBG_FocusCarrier("enemy") and focusCalls==0)
+        ''')
+
+    def test_successful_exact_name_focus_and_target(self):
+        self.runlua('''
+            nameMatch="live"
+            assert(AutoBG_TargetCarrier("enemy") and targetUnit=="live")
+            assert(AutoBG_FocusCarrier("enemy") and focusUnit=="live")
+            assert(#printed==2)
+        ''')
+
+    def test_horde_missing_enemy_does_not_select_friendly_carrier(self):
+        self.runlua('''
+            function UnitFactionGroup() return "Horde" end
+            nameMatch="live"
+            assert(AutoBG_GetEnemyCarrier()==nil)
+            assert(AutoBG_GetFriendlyCarrier()=="Carrier")
+            assert(not AutoBG_TargetCarrier("enemy") and targetCalls==0)
+            assert(not AutoBG_FocusCarrier("enemy") and focusCalls==0)
+        ''')
+
+    def test_horde_missing_friendly_does_not_select_enemy_carrier(self):
+        self.runlua('''
+            function UnitFactionGroup() return "Horde" end
+            fire(AutoBG_FCEventFrame,"PLAYER_ENTERING_WORLD")
+            fire(AutoBG_FCEventFrame,"CHAT_MSG_BG_SYSTEM_ALLIANCE","Horde flag was picked up by Carrier!")
+            assert(AutoBG_GetFriendlyCarrier()==nil and AutoBG_GetEnemyCarrier()=="Carrier")
+            assert(not AutoBG_TargetCarrier("friendly") and targetCalls==0)
+        ''')
+
+    def test_unknown_distance_is_not_zero(self):
+        self.lua.execute(section("AutoBG_FC.lua", "local function GetDistance(unit)", "local carrierAuraSlots") + '\nTestDistance=GetDistance')
+        self.runlua('''
+            distanceSquared=0; rangeKnown=false
+            assert(TestDistance("live")==nil)
+            rangeKnown=true; assert(TestDistance("live")==0)
+            distanceSquared=100; assert(TestDistance("live")==10)
+            rangeKnown=false
+            function UnitXP() return 12 end
+            assert(TestDistance("live")==12)
+        ''')
 
 if __name__=="__main__":
     unittest.main(verbosity=2)

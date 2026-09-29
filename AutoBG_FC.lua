@@ -48,6 +48,36 @@ local function GetDistanceColor(d)
     else return "|cFFFF4040" end
 end
 
+local function CarrierNameMatches(unit, name)
+    if not unit or not UnitExists(unit) or not UnitIsPlayer(unit) then return false end
+    local actual = UnitName(unit)
+    if not actual or not name then return false end
+    if string.find(actual, "-", 1, true) and string.find(name, "-", 1, true) then
+        return actual == name
+    end
+    return string.gsub(actual, "%-.*$", "") == string.gsub(name, "%-.*$", "")
+end
+
+local function SelectCarrier(name, guid, focus)
+    if not name or name == "" then return false end
+    local unit = CarrierNameMatches(guid, name) and guid or nil
+    if not unit then
+        local resolved = UnitTokenFromName(name, true)
+        if CarrierNameMatches(resolved, name) then unit = resolved end
+    end
+    if not unit then
+        TargetByName(string.gsub(name, "%-.*$", ""), true)
+        if not CarrierNameMatches("target", name) then return false end
+        unit = "target"
+    end
+    if focus then
+        FocusUnit(unit)
+        return UnitIsUnit("focus", unit)
+    end
+    TargetUnit(unit)
+    return UnitIsUnit("target", unit)
+end
+
 local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     local frame = CreateFrame("Button", name, UIParent)
     frame:SetWidth(220)
@@ -73,25 +103,7 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     -- SuperWoW Hybrid Targeting & Focus (Rule B9, C2, D1, AP-03, AP-08)
     frame:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     frame:SetScript("OnClick", function()
-        local button = arg1
-        local cleanName = this.carrierName and string.gsub(this.carrierName, "%-.*$", "")
-        if button == "RightButton" then
-            if this.carrierGuid and FocusUnit then
-                if pcall(FocusUnit, this.carrierGuid) then return end
-            end
-            if cleanName and cleanName ~= "" then
-                TargetByName(cleanName, true)
-                if FocusUnit then pcall(FocusUnit, "target") end
-            end
-            return
-        end
-
-        if this.carrierGuid and TargetUnit then
-            if pcall(TargetUnit, this.carrierGuid) then return end
-        end
-        if cleanName and cleanName ~= "" then
-            TargetByName(cleanName, true)
-        end
+        SelectCarrier(this.carrierName, this.carrierGuid, arg1 == "RightButton")
     end)
 
     -- SuperWoW Native Mouseover & Tooltip (Rule D1)
@@ -280,8 +292,8 @@ end)
 local function GetDistance(unit)
     -- 1. ClassicAPI Native Hardware Euclidean Engine (Rule B10)
     if unit and UnitDistanceSquared then
-        local ok, dSq = pcall(UnitDistanceSquared, unit)
-        if ok and type(dSq) == "number" and dSq >= 0 then
+        local ok, dSq, checked = pcall(UnitDistanceSquared, unit)
+        if ok and checked and type(dSq) == "number" and dSq >= 0 then
             return math.floor(math.sqrt(dSq) + 0.5)
         end
     end
@@ -436,24 +448,23 @@ function AutoBG_GetCarrier(faction)
 end
 
 function AutoBG_GetFriendlyCarrier()
-    local myFaction = UnitFactionGroup("player")
-    return (myFaction == "Horde") and carrierHorde or carrierAlliance
+    if UnitFactionGroup("player") == "Horde" then return carrierHorde end
+    return carrierAlliance
 end
 
 function AutoBG_GetEnemyCarrier()
-    local myFaction = UnitFactionGroup("player")
-    return (myFaction == "Horde") and carrierAlliance or carrierHorde
+    if UnitFactionGroup("player") == "Horde" then return carrierAlliance end
+    return carrierHorde
 end
 
 function AutoBG_TargetCarrier(which)
-    local myFaction = UnitFactionGroup("player")
     local w = which and string.lower(which) or "enemy"
     local target = nil
 
     if w == "friendly" or w == "ffc" then
-        target = (myFaction == "Horde") and carrierHorde or carrierAlliance
+        target = AutoBG_GetFriendlyCarrier()
     else
-        target = (myFaction == "Horde") and carrierAlliance or carrierHorde
+        target = AutoBG_GetEnemyCarrier()
     end
 
     if not target or target == "" then
@@ -462,28 +473,19 @@ function AutoBG_TargetCarrier(which)
     end
 
     local frame = (target == carrierAlliance and AllianceFC) or (target == carrierHorde and HordeFC)
-    if frame and frame.carrierGuid and TargetUnit then
-        if pcall(TargetUnit, frame.carrierGuid) then
-            if AutoBG_Print then AutoBG_Print("Targeted " .. target .. " via GUID.") end
-            return true
-        end
-    end
-
-    local cleanTarget = string.gsub(target, "%-.*$", "")
-    TargetByName(cleanTarget, true)
-    if AutoBG_Print then AutoBG_Print("Targeted " .. target .. " (exact match).") end
-    return true
+    local selected = SelectCarrier(target, frame and frame.carrierGuid, false)
+    if selected and AutoBG_Print then AutoBG_Print("Targeted " .. target .. ".") end
+    return selected
 end
 
 function AutoBG_FocusCarrier(which)
-    local myFaction = UnitFactionGroup("player")
     local w = which and string.lower(which) or "enemy"
     local target = nil
 
     if w == "friendly" or w == "ffc" then
-        target = (myFaction == "Horde") and carrierHorde or carrierAlliance
+        target = AutoBG_GetFriendlyCarrier()
     else
-        target = (myFaction == "Horde") and carrierAlliance or carrierHorde
+        target = AutoBG_GetEnemyCarrier()
     end
 
     if not target or target == "" then
@@ -492,18 +494,9 @@ function AutoBG_FocusCarrier(which)
     end
 
     local frame = (target == carrierAlliance and AllianceFC) or (target == carrierHorde and HordeFC)
-    if frame and frame.carrierGuid and FocusUnit then
-        if pcall(FocusUnit, frame.carrierGuid) then
-            if AutoBG_Print then AutoBG_Print("Focused " .. target .. " via GUID.") end
-            return true
-        end
-    end
-
-    local cleanTarget = string.gsub(target, "%-.*$", "")
-    TargetByName(cleanTarget, true)
-    if FocusUnit then pcall(FocusUnit, "target") end
-    if AutoBG_Print then AutoBG_Print("Focused " .. target .. ".") end
-    return true
+    local selected = SelectCarrier(target, frame and frame.carrierGuid, true)
+    if selected and AutoBG_Print then AutoBG_Print("Focused " .. target .. ".") end
+    return selected
 end
 
 function AutoBG_GetCarrierInfo(faction)

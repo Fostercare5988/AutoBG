@@ -711,6 +711,10 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 if AutoBG_Settings[k] == nil then AutoBG_Settings[k] = v end
             end
         end
+        -- Older/manual SavedVariables must not break queue comparisons or sliders.
+        local delay = tonumber(AutoBG_Settings.AutoAcceptDelay) or 0
+        if delay ~= delay then delay = 0 end
+        AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(120, math.floor(delay)))
         -- Drop settings that now belong to FostercareTweaks.
         AutoBG_Settings.HideCastbar = nil
         AutoBG_Settings.HideStanceBar = nil
@@ -804,7 +808,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                         hasQueuedOnLogin = true
                         local generation = queueGeneration
                         AutoBG_TimerAfter(3.0, function()
-                            if generation ~= queueGeneration then return end
+                            if generation ~= queueGeneration or not (AutoBG_Settings and AutoBG_Settings.AutoQueueLogin) then return end
                             local currDes, currRem = AutoBG_HasDeserter()
                             if currDes then
                                 AutoBG_Print("Auto-Queue on login halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(currRem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)

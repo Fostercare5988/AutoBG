@@ -1,5 +1,11 @@
 # AutoBG
 
+The [2026-09-29 queue/carrier review](docs/QUEUE_CARRIER_REVIEW_2026-09-29.md)
+fixes stale login queue callbacks, malformed saved accept delays, carrier
+target/focus identity, missing Horde carrier selection and unknown distances.
+56 Lua 5.1 regression tests pass. In-game acceptance remains pending; Spy warning
+policy, battleground layout and dependency requirements are unchanged.
+
 **Required:** [ClassicAPI v1.15.15+](https://github.com/brues-code/ClassicAPI) and [SuperWoW v2.2+](https://github.com/balakethelock/SuperWoW). **Optional:** [UnitXP SP3](https://codeberg.org/konaka/UnitXP_SP3). Spy stealth warnings use ClassicAPI for distance and line of sight; UnitXP is not required. Fully restart WoW after changing a DLL (`/reload` cannot reload it).
 
 [![Interface: 1.12.1](https://img.shields.io/badge/Interface-1.12.1%20(5875)-orange.svg)](https://github.com/Fostercare5988/AutoBG)
