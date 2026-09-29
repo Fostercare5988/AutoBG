@@ -1073,7 +1073,7 @@ class TimerFeatureTests(unittest.TestCase):
             AutoBG_Settings.TestAllTimers = true
             tickers[1]()
             assert(AutoBG_ABProjectionFrame:IsShown())
-            assert(AutoBG_ABProjectionFrame.announceText == 'AB Projection: Alliance 1450 - Horde 1280 (Win 03:45, Need 3 Bases)')
+            assert(AutoBG_ABProjectionFrame.announceText == 'Win in 03:45')
 
             -- Normal click without Ctrl must not send chat
             ctrlDown = false
@@ -1084,8 +1084,57 @@ class TimerFeatureTests(unittest.TestCase):
             ctrlDown = true
             AutoBG_ABProjectionFrame.scripts.OnClick()
             assert(#chatSent == 1)
-            assert(chatSent[1].msg == 'AB Projection: Alliance 1450 - Horde 1280 (Win 03:45, Need 3 Bases)')
+            assert(chatSent[1].msg == 'Win in 03:45')
             assert(chatSent[1].chatType == 'BATTLEGROUND')
+        ''')
+
+    def test_ab_projection_live_timer_counts_down_every_second(self):
+        self.lua.execute('''
+            inBG = true
+            now = 100
+            AutoBG_Settings.TestAllTimers = false
+            AutoBG_Settings.ABProjection = true
+
+            local wsScores = {
+                [1] = "Bases: 3  400/2000",
+                [2] = "Bases: 2  350/2000",
+            }
+            function GetRealZoneText() return "Arathi Basin" end
+            function GetNumWorldStateUI() return 2 end
+            function GetWorldStateUIInfo(i) return 1, wsScores[i], nil end
+
+            fire(AutoBG_TimersEventFrame, 'ZONE_CHANGED_NEW_AREA')
+            tickers[1]()
+
+            assert(AutoBG_ABProjectionFrame:IsShown())
+            assert(string.find(AutoBG_ABProjectionFrame.r1Status:GetText(), "Win 16:00") ~= nil)
+            assert(AutoBG_ABProjectionFrame.announceText == 'Win in 16:00')
+
+            -- 1 second elapsed: timer must count down live to 15:59
+            now = 101
+            tickers[1]()
+            assert(string.find(AutoBG_ABProjectionFrame.r1Status:GetText(), "Win 15:59") ~= nil)
+            assert(AutoBG_ABProjectionFrame.announceText == 'Win in 15:59')
+
+            -- 2 seconds elapsed: timer must count down live to 15:58
+            now = 102
+            tickers[1]()
+            assert(string.find(AutoBG_ABProjectionFrame.r1Status:GetText(), "Win 15:58") ~= nil)
+            assert(AutoBG_ABProjectionFrame.announceText == 'Win in 15:58')
+
+            -- Ctrl+Click announces the live remaining time
+            chatSent = {}
+            ctrlDown = true
+            AutoBG_ABProjectionFrame.scripts.OnClick()
+            assert(#chatSent == 1)
+            assert(chatSent[1].msg == 'Win in 15:58')
+
+            -- At 6 seconds (now = 106), server score tick arrives (+10 score for 3 bases)
+            now = 106
+            wsScores[1] = "Bases: 3  410/2000"
+            tickers[1]()
+            assert(string.find(AutoBG_ABProjectionFrame.r1Status:GetText(), "Win 15:54") ~= nil)
+            assert(AutoBG_ABProjectionFrame.announceText == 'Win in 15:54')
         ''')
 
     def test_accept_delay_slider_range_and_clamping(self):
