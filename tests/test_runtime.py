@@ -165,7 +165,7 @@ class RuntimeTests(unittest.TestCase):
             for _,value in ipairs({'invalid',false,{},-10,'5',999}) do
                 AutoBG_Settings.AutoAcceptDelay=value
                 fire(AutoBGFrame,'ADDON_LOADED','AutoBG')
-                local expected=value=='5' and 5 or (value==999 and 120 or 0)
+                local expected=value=='5' and 5 or (value==999 and 119 or 0)
                 assert(AutoBG_Settings.AutoAcceptDelay==expected)
             end
             AutoBG_Settings.AutoAcceptDelay='invalid'
@@ -1020,6 +1020,86 @@ class CarrierOwnershipTests(unittest.TestCase):
             function UnitXP() return 12 end
             assert(TestDistance("live")==12)
         ''')
+
+
+class TimerFeatureTests(unittest.TestCase):
+    def setUp(self):
+        self.lua = LuaRuntime(unpack_returned_tuples=True)
+        self.lua.execute(MOCKS)
+        self.lua.execute('''
+            chatSent = {}
+            SlashCmdList = {}
+            function hooksecurefunc() end
+            function PlaySound() end
+            function SendChatMessage(msg, chatType)
+                chatSent[#chatSent+1] = { msg = msg, chatType = chatType }
+            end
+            function IsControlKeyDown() return ctrlDown == true end
+        ''')
+        self.lua.execute(source("AutoBG_Timers.lua"))
+
+    def test_game_start_timer_shows_countdown_and_clears_on_begin(self):
+        self.lua.execute('''
+            inBG = true
+            now = 100
+            fire(AutoBG_TimersEventFrame, 'PLAYER_ENTERING_WORLD')
+            assert(not AutoBG_StartTimerFrame:IsShown())
+
+            -- 1. Pre-match announcement in WSG
+            fire(AutoBG_TimersEventFrame, 'CHAT_MSG_BG_SYSTEM_NEUTRAL', 'The Battle for Warsong Gulch begins in 2 minutes.')
+            tickers[1]()
+            assert(AutoBG_StartTimerFrame:IsShown())
+            local row = AutoBG_StartTimerFrame.rows[1]
+            assert(row:IsShown())
+            assert(row.displayTime == '2:00')
+            assert(row.announceText == 'Match Starts: 2:00')
+
+            -- 2. 30 seconds update
+            fire(AutoBG_TimersEventFrame, 'CHAT_MSG_BG_SYSTEM_NEUTRAL', 'The battle begins in 30 seconds.')
+            tickers[1]()
+            assert(AutoBG_StartTimerFrame:IsShown())
+            assert(row.displayTime == '0:30')
+
+            -- 3. Match start clears the timer
+            fire(AutoBG_TimersEventFrame, 'CHAT_MSG_BG_SYSTEM_NEUTRAL', 'The battle has begun!')
+            tickers[1]()
+            assert(not AutoBG_StartTimerFrame:IsShown())
+        ''')
+
+    def test_ab_projection_ctrl_click_announces_to_chat(self):
+        self.lua.execute('''
+            inBG = true
+            now = 500
+            AutoBG_Settings.TestAllTimers = true
+            tickers[1]()
+            assert(AutoBG_ABProjectionFrame:IsShown())
+            assert(AutoBG_ABProjectionFrame.announceText == 'AB Projection: Alliance 1450 - Horde 1280 (Win 03:45, Need 3 Bases)')
+
+            -- Normal click without Ctrl must not send chat
+            ctrlDown = false
+            AutoBG_ABProjectionFrame.scripts.OnClick()
+            assert(#chatSent == 0)
+
+            -- Ctrl+Click announces projection to BATTLEGROUND channel
+            ctrlDown = true
+            AutoBG_ABProjectionFrame.scripts.OnClick()
+            assert(#chatSent == 1)
+            assert(chatSent[1].msg == 'AB Projection: Alliance 1450 - Horde 1280 (Win 03:45, Need 3 Bases)')
+            assert(chatSent[1].chatType == 'BATTLEGROUND')
+        ''')
+
+    def test_accept_delay_slider_range_and_clamping(self):
+        self.lua.execute(source("AutoBG.lua"))
+        self.lua.execute('''
+            AutoBG_Settings.AutoAcceptDelay = 119
+            fire(AutoBGFrame, 'ADDON_LOADED', 'AutoBG')
+            assert(AutoBG_Settings.AutoAcceptDelay == 119)
+
+            AutoBG_Settings.AutoAcceptDelay = 200
+            fire(AutoBGFrame, 'ADDON_LOADED', 'AutoBG')
+            assert(AutoBG_Settings.AutoAcceptDelay == 119)
+        ''')
+
 
 if __name__=="__main__":
     unittest.main(verbosity=2)

@@ -229,7 +229,7 @@ local cbSkipAFK = CreateCheckButton("AutoBG_Opt_SkipAFK", panelGeneral, "Pause A
 end)
 cbSkipAFK:SetPoint("TOPLEFT", cbAutoAccept, "BOTTOMLEFT", 0, -4)
 
-local sliderAcceptDelay = CreateSlider("AutoBG_Opt_AcceptDelay", panelGeneral, "Enter Delay", 0, 70, 1, false, function(val)
+local sliderAcceptDelay = CreateSlider("AutoBG_Opt_AcceptDelay", panelGeneral, "Enter Delay", 0, 119, 1, false, function(val)
 	if AutoBG_Settings then
 		AutoBG_Settings.AutoAcceptDelay = val
 		if val == 0 then
@@ -381,12 +381,17 @@ cbAVTimers:SetPoint("TOPLEFT", cbABTimers, "BOTTOMLEFT", 0, -6)
 local cbWSGTimers = CreateCheckButton("AutoBG_Opt_WSGTimers", panelTimers, "WSG Flag Respawns", "Show 23s flag respawn countdowns in Warsong Gulch.", function()
 	if AutoBG_Settings then AutoBG_Settings.WSGTimers = this:GetChecked() and true or false end
 end)
-cbWSGTimers:SetPoint("TOPLEFT", cbAVTimers, "BOTTOMLEFT", 0, -6)
+cbWSGTimers:SetPoint("TOPLEFT", cbAVTimers, "BOTTOMLEFT", 0, -5)
+
+local cbStartTimer = CreateCheckButton("AutoBG_Opt_StartTimer", panelTimers, "Match Start Timer", "Show countdown timer until battleground gates open.", function()
+	if AutoBG_Settings then AutoBG_Settings.StartTimer = this:GetChecked() and true or false end
+end)
+cbStartTimer:SetPoint("TOPLEFT", cbWSGTimers, "BOTTOMLEFT", 0, -5)
 
 local cbRessTimer = CreateCheckButton("AutoBG_Opt_RessTimer", panelTimers, "Spirit Healer Timer", "Show synced 30s Spirit Healer resurrection wave timer.", function()
 	if AutoBG_Settings then AutoBG_Settings.RessTimer = this:GetChecked() and true or false end
 end)
-cbRessTimer:SetPoint("TOPLEFT", cbWSGTimers, "BOTTOMLEFT", 0, -6)
+cbRessTimer:SetPoint("TOPLEFT", cbStartTimer, "BOTTOMLEFT", 0, -5)
 
 local cbQueueTimers = CreateCheckButton("AutoBG_Opt_QueueTimers", panelTimers, "BG Queue Timers", "Show on-screen timer for active BG queue wait times.", function()
 	if AutoBG_Settings then AutoBG_Settings.QueueTimers = this:GetChecked() and true or false end
@@ -895,6 +900,7 @@ SelectTab = function(tabId)
 			cbABTimers:SetChecked(AutoBG_Settings.ABTimers and 1 or nil)
 			cbAVTimers:SetChecked(AutoBG_Settings.AVTimers and 1 or nil)
 			cbWSGTimers:SetChecked(AutoBG_Settings.WSGTimers and 1 or nil)
+			cbStartTimer:SetChecked((AutoBG_Settings.StartTimer ~= false) and 1 or nil)
 			cbRessTimer:SetChecked(AutoBG_Settings.RessTimer and 1 or nil)
 			cbQueueTimers:SetChecked(AutoBG_Settings.QueueTimers and 1 or nil)
 			cbNodeColors:SetChecked(AutoBG_Settings.NodeColors and 1 or nil)

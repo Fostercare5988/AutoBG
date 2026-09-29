@@ -161,7 +161,7 @@ local defaultSettings = {
     TestAllTimers = false, LastPlayedBG = nil,
     Positions = {}, SkipIfAFK = true,
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
-    AutoQueue_BR = false, ABProjection = true,
+    AutoQueue_BR = false, ABProjection = true, StartTimer = true,
 }
 
 -- Battleground Icons
@@ -714,7 +714,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         -- Older/manual SavedVariables must not break queue comparisons or sliders.
         local delay = tonumber(AutoBG_Settings.AutoAcceptDelay) or 0
         if delay ~= delay then delay = 0 end
-        AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(120, math.floor(delay)))
+        AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(119, math.floor(delay)))
         -- Drop settings that now belong to FostercareTweaks.
         AutoBG_Settings.HideCastbar = nil
         AutoBG_Settings.HideStanceBar = nil
@@ -971,6 +971,8 @@ local toggleCommands = {
     autoqueue = { key = "AutoQueueLogin", label = "Auto-Queue on Login" },
     proj = { key = "ABProjection", label = "AB Score Projection" },
     projection = { key = "ABProjection", label = "AB Score Projection" },
+    start = { key = "StartTimer", label = "Match Start Timer" },
+    starttimer = { key = "StartTimer", label = "Match Start Timer" },
 }
 
 SLASH_AUTOBG1 = "/abg"
@@ -1050,7 +1052,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "delay" or cmd == "acceptdelay" then
         local val = tonumber(arg)
         if val then
-            AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(120, math.floor(val)))
+            AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(119, math.floor(val)))
             AutoBG_Print("Auto-Accept Enter Delay set to |cFFFFFF00" .. (AutoBG_Settings.AutoAcceptDelay == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r", true)
             if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
         else

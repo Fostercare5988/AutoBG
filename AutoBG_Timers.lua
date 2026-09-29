@@ -452,6 +452,7 @@ end
 -- =========================================================
 local QueueFrame   = CreateDraggableTimerFrame("AutoBG_QueueFrame", "BG Queues", -220, -100, 130)
 local RespawnFrame = CreateRespawnFrame("AutoBG_RespawnFrame", 0, -100)
+local StartTimerFrame = CreateBarTimerFrame("AutoBG_StartTimerFrame", "Match Start", 1.0, 0.82, 0.0, 0, -60, 1, false)
 local NodeBarFrame = CreateBarTimerFrame("AutoBG_NodeFrame",    "AB Nodes",  0.90, 0.20, 0.20,  220, -100, 5, true)
 local AVNodeFrame  = CreateBarTimerFrame("AutoBG_AVNodeFrame",  "AV Nodes",  0.75, 0.75, 0.75,  220, -150, 8, true)
 local WSGFlagFrame = CreateBarTimerFrame("AutoBG_WSGFlagFrame", "WSG Flags", 0.70, 0.40, 1.00, -110, -150, 2)
@@ -470,6 +471,7 @@ local function CreateABProjectionFrame(name)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
+    frame:RegisterForClicks("LeftButtonUp")
     frame:RegisterForDrag("LeftButton")
 
     frame:SetBackdrop({
@@ -488,12 +490,19 @@ local function CreateABProjectionFrame(name)
         this:StopMovingOrSizing()
         if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
     end)
+    frame:SetScript("OnClick", function()
+        local self = this or frame
+        if IsControlKeyDown() and self.announceText and self.announceText ~= "" then
+            SendTimerAnnouncement(self.announceText)
+        end
+    end)
     frame:SetScript("OnEnter", function()
         GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
         GameTooltip:SetText("Arathi Basin Score Projection", 1, 0.82, 0)
         GameTooltip:AddLine("Live score forecast based on base capture rates and impending flips.", 0.9, 0.9, 0.9, 1)
         GameTooltip:AddLine("Row 1: Projected Alliance Score & Win/Loss ETA", 0.4, 0.7, 1.0)
         GameTooltip:AddLine("Row 2: Projected Horde Score & Bases Needed to Win", 1.0, 0.4, 0.4)
+        GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce projection to chat", 0.7, 0.7, 0.7)
         GameTooltip:AddLine("|cFF00FF00Left-drag:|r Reposition HUD overlay", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
@@ -545,6 +554,7 @@ function AutoBG_LoadTimerPositions()
         AutoBG_LoadPosition(NodeBarFrame, "AutoBG_NodeFrame",    "TOP",  220, -100)
         AutoBG_LoadPosition(AVNodeFrame,  "AutoBG_AVNodeFrame",  "TOP",  220, -150)
         AutoBG_LoadPosition(WSGFlagFrame, "AutoBG_WSGFlagFrame", "TOP", -110, -150)
+        AutoBG_LoadPosition(StartTimerFrame, "AutoBG_StartTimerFrame", "TOP", 0, -60)
 
         if AutoBG_Settings and AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] then
             AutoBG_LoadPosition(ABProjectionFrame, "AutoBG_ABProjectionFrame", "TOP", -160, -25)
@@ -571,6 +581,7 @@ function AutoBG_ResetTimerPositions()
         AutoBG_Settings.Positions["AutoBG_NodeFrame"] = nil
         AutoBG_Settings.Positions["AutoBG_AVNodeFrame"] = nil
         AutoBG_Settings.Positions["AutoBG_WSGFlagFrame"] = nil
+        AutoBG_Settings.Positions["AutoBG_StartTimerFrame"] = nil
         AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] = nil
     end
 
@@ -579,6 +590,7 @@ function AutoBG_ResetTimerPositions()
     NodeBarFrame:ClearAllPoints(); NodeBarFrame:SetPoint("TOP", UIParent, "TOP",  220, -100) -- octowow-ignore: AP-31
     AVNodeFrame:ClearAllPoints();  AVNodeFrame:SetPoint("TOP",  UIParent, "TOP",  220, -150) -- octowow-ignore: AP-31
     WSGFlagFrame:ClearAllPoints(); WSGFlagFrame:SetPoint("TOP", UIParent, "TOP", -110, -150) -- octowow-ignore: AP-31
+    StartTimerFrame:ClearAllPoints(); StartTimerFrame:SetPoint("TOP", UIParent, "TOP", 0, -60) -- octowow-ignore: AP-31
 
     ABProjectionFrame:ClearAllPoints()
     if AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
@@ -640,6 +652,9 @@ local AV_TEST_DATA = {
 local WSG_TEST_DATA = {
     { name = "Alliance Flag", remaining = 11, faction = "Alliance" },
     { name = "Horde Flag",    remaining = 17, faction = "Horde"    },
+}
+local START_TEST_DATA = {
+    { name = "Match Starts",  remaining = 45, faction = nil },
 }
 
 -- =========================================================
@@ -748,6 +763,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
             for nodeName, data in pairs(timerTable) do
                 local expireTime = (type(data) == "table" and data.expire) or data
                 local faction    = (type(data) == "table" and data.faction) or nil
+                local rowMax     = (type(data) == "table" and data.max) or maxTime
                 local remaining  = expireTime - now
                 if remaining > 0 then
                     sortCount = sortCount + 1
@@ -756,6 +772,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
                     item.name    = nodeName
                     item.expire  = expireTime
                     item.faction = faction
+                    item.maxTime = rowMax
                 else
                     timerTable[nodeName] = nil
                 end
@@ -779,7 +796,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
                 if remaining > 0 then
                     displayCount = displayCount + 1
                     local row = frame.rows[displayCount]
-                    ApplyTimerRowData(row, item.name, item.faction, remaining, maxTime, colorMode, useColors)
+                    ApplyTimerRowData(row, item.name, item.faction, remaining, item.maxTime or maxTime, colorMode, useColors)
                     row.fillExpiry = item.expire
                 end
             end
@@ -998,6 +1015,7 @@ local function UpdateABProjection(isTestAll, isAB)
         if lastR1Score ~= r1Sc then ABProjectionFrame.r1Score:SetText(r1Sc); lastR1Score = r1Sc end
         if lastR2Bases ~= r2Base then ABProjectionFrame.r2Bases:SetText(r2Base); lastR2Bases = r2Base end
         if lastR2Score ~= r2Sc then ABProjectionFrame.r2Score:SetText(r2Sc); lastR2Score = r2Sc end
+        ABProjectionFrame.announceText = "AB Projection: Alliance 1450 - Horde 1280 (Win 03:45, Need 3 Bases)"
 
         if not ABProjectionFrame:IsShown() then
             AutoBG_LoadTimerPositions()
@@ -1010,18 +1028,21 @@ local function UpdateABProjection(isTestAll, isAB)
         if ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
         lastR1Status, lastR1Score = "", ""
         lastR2Bases, lastR2Score = "", ""
+        ABProjectionFrame.announceText = nil
         return
     end
 
     local aRes, hRes, aBases, hBases = GetABWorldStateInfo()
     if not aRes or not hRes then
         if ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
+        ABProjectionFrame.announceText = nil
         return
     end
 
     local aFinal, hFinal, etaStr, etaColor, basesNeeded = CalculateABProjection(aRes, hRes, aBases, hBases)
     if not aFinal then
         if ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
+        ABProjectionFrame.announceText = nil
         return
     end
 
@@ -1034,6 +1055,7 @@ local function UpdateABProjection(isTestAll, isAB)
     if lastR1Score ~= r1Sc then ABProjectionFrame.r1Score:SetText(r1Sc); lastR1Score = r1Sc end
     if lastR2Bases ~= r2Base then ABProjectionFrame.r2Bases:SetText(r2Base); lastR2Bases = r2Base end
     if lastR2Score ~= r2Sc then ABProjectionFrame.r2Score:SetText(r2Sc); lastR2Score = r2Sc end
+    ABProjectionFrame.announceText = string.format("AB Projection: Alliance %s - Horde %s (%s, %s)", r1Sc, r2Sc, etaStr or "", basesNeeded or "")
 
     if not ABProjectionFrame:IsShown() then
         AutoBG_LoadTimerPositions()
@@ -1049,6 +1071,9 @@ local function UpdateAllTimers()
 
     local now         = GetTime()
     local isTestAll   = AutoBG_Settings.TestAllTimers
+
+    -- 0. Match Start Timer (Pre-game gate countdown)
+    RenderCountdownBars(StartTimerFrame, timers.Global, AutoBG_Settings.StartTimer ~= false, inPVP, 120, START_TEST_DATA, "time")
 
     -- 1. AB Nodes: proportional time-color bars (60s cap)
     RenderCountdownBars(NodeBarFrame, timers.AB, AutoBG_Settings.ABTimers, isAB, 60, AB_TEST_DATA, "time")
@@ -1251,12 +1276,30 @@ local function ParseCombatMessage(msg, ev)
     end
 
     -- 3. Gate Pre-Match Announcements
-    if     string.find(lower, "begins in 2 minute")  then timers.Global["Match Starts"] = GetTime() + 120
-    elseif string.find(lower, "begins in 1 minute")  then timers.Global["Match Starts"] = GetTime() + 60
-    elseif string.find(lower, "begins in 30 second") then timers.Global["Match Starts"] = GetTime() + 30
-    elseif string.find(lower, "begins in 15 second") then timers.Global["Match Starts"] = GetTime() + 15
-    elseif string.find(lower, "begun") or string.find(lower, "open") then
-        timers.Global["Match Starts"] = nil
+    local _, _, m = string.find(lower, "begins? in (%d+)%s*min")
+    if not m then _, _, m = string.find(lower, "begin in (%d+)%s*min") end
+    if not m then _, _, m = string.find(lower, "starts? in (%d+)%s*min") end
+    if not m then _, _, m = string.find(lower, "opens? in (%d+)%s*min") end
+    if not m and string.find(lower, "two minute") then m = "2" end
+    if not m and string.find(lower, "one minute") then m = "1" end
+
+    if m then
+        local sec = tonumber(m) * 60
+        timers.Global["Match Starts"] = { expire = GetTime() + sec, max = sec }
+    else
+        local _, _, s = string.find(lower, "begins? in (%d+)%s*sec")
+        if not s then _, _, s = string.find(lower, "begin in (%d+)%s*sec") end
+        if not s then _, _, s = string.find(lower, "starts? in (%d+)%s*sec") end
+        if not s then _, _, s = string.find(lower, "opens? in (%d+)%s*sec") end
+        if not s and string.find(lower, "30 second") then s = "30" end
+        if not s and string.find(lower, "15 second") then s = "15" end
+
+        if s then
+            local sec = tonumber(s)
+            timers.Global["Match Starts"] = { expire = GetTime() + sec, max = sec }
+        elseif string.find(lower, "begun") or string.find(lower, "let the battle begin") or string.find(lower, "gates? (.-)open") or string.find(lower, "gates have opened") then
+            timers.Global["Match Starts"] = nil
+        end
     end
 
     -- 4. WSG Flag Respawns (23s)
@@ -1276,6 +1319,8 @@ EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_ALLIANCE")
 EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 EventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
 EventFrame:RegisterEvent("CHAT_MSG_MONSTER_YELL")
+EventFrame:RegisterEvent("CHAT_MSG_RAID_BOSS_EMOTE")
+EventFrame:RegisterEvent("CHAT_MSG_MONSTER_EMOTE")
 EventFrame:RegisterEvent("PLAYER_UNGHOST")
 EventFrame:RegisterEvent("PLAYER_ALIVE")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -1302,10 +1347,13 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         end
         if not inPVP then
             if RessFrame and RessFrame:IsShown() then RessFrame:Hide() end
+            if StartTimerFrame and StartTimerFrame:IsShown() then StartTimerFrame:Hide() end
+            table.wipe(timers.Global)
         end
         if ev == "PLAYER_ENTERING_WORLD" then
             AutoBG_LoadTimerPositions()
             table.wipe(timers.Global)
+            if StartTimerFrame and StartTimerFrame:IsShown() then StartTimerFrame:Hide() end
             lastR1Status, lastR1Score = "", ""
             lastR2Bases, lastR2Score = "", ""
             lastProjWinner = nil
