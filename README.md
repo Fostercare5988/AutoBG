@@ -54,6 +54,7 @@ PvP automation, battleground objective timers, flag-carrier tracking, enemy unit
 - **Stealth Detection**: Spy can only report what your game client actually receives from the server. It cannot detect players across the map if the server does not send their presence or actions to your client. In the default "Nearby" mode, alerts only sound when a stealthed enemy is within 10 yards with line of sight.
 - **Trinket Cooldowns**: Displayed enemy PvP trinket timers are fixed 180-second estimates based on observed trinket activations.
 - **Timer Estimates**: Resurrection timers prefixed with `~` are estimates until healer telemetry is available. AB projections change as base control changes.
+- **Match Exit & Rejoin**: Auto-leave drains current/queued casts before its deferred departure. Rejoin starts on the first engine tick after world-load, waits for a loaded player and cleared active-BG status, and confirms the exact queue. Short readiness retries are bounded; duplicate queue-window replies do not submit twice.
 
 ---
 

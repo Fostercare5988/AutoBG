@@ -20,15 +20,14 @@ local inviteGeneration = {}
 local notifiedQueues = {}
 local pendingAutoRejoin = nil
 local suppressBattlefieldFrameUntil = 0
+local suppressedBattlefieldBG = nil
 local needsQueueAfterResurrect = false
 local hasHandledEnd = false
 local lastPlayedBG = nil
-local rejoinRequested = false
-local rejoinFallbackScheduled = false
 local rejoinWorldReady = false
-local rejoinBG = nil
-local rejoinAttempts = 0
+local rejoinRequest = nil
 local TryAutoRejoin
+local FinishRejoin
 
 -- Deferred work uses the required ClassicAPI timers.
 function AutoBG_TimerAfter(delay, func)
@@ -207,9 +206,7 @@ function AutoBG_CancelAllQueues()
     pendingAutoRejoin = nil
     needsQueueAfterResurrect = false
     hasHandledEnd = false
-    rejoinRequested = false
-    rejoinBG = nil
-    rejoinAttempts = 0
+    FinishRejoin()
     local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
     local cancelled = 0
     for i = 1, maxQueues do
@@ -377,7 +374,7 @@ if BattlefieldFrame then
     local orig_BattlefieldFrame_OnShow = BattlefieldFrame:GetScript("OnShow")
     BattlefieldFrame:SetScript("OnShow", function()
         if orig_BattlefieldFrame_OnShow then orig_BattlefieldFrame_OnShow() end
-        if suppressBattlefieldFrameUntil and GetTime() < suppressBattlefieldFrameUntil then
+        if GetTime() < suppressBattlefieldFrameUntil and GetBattlefieldInfo() == suppressedBattlefieldBG then
             AutoBG_HideBattlefieldWindow()
         end
     end)
@@ -414,9 +411,7 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin)
     if not isRejoin and not isAutoQueueing then
         queueGeneration = queueGeneration + 1
         hasHandledEnd = false
-        rejoinBG = nil
-        rejoinRequested = false
-        rejoinAttempts = 0
+        FinishRejoin()
     end
     local hasDeserter, remaining = AutoBG_HasDeserter()
     if hasDeserter then
@@ -543,9 +538,7 @@ function AutoBG_QueueAllBGs()
     queueGeneration = queueGeneration + 1
     local generation = queueGeneration
     hasHandledEnd = false
-    rejoinBG = nil
-    rejoinRequested = false
-    rejoinAttempts = 0
+    FinishRejoin()
     isAutoQueueing = true
     local idx = 1
 
@@ -589,37 +582,82 @@ quickQueueBtn:SetScript("OnClick", function()
     AutoBG_TriggerBattlegroundFinder(bg)
 end)
 
+FinishRejoin = function()
+    if rejoinRequest then
+        if rejoinRequest.timer then rejoinRequest.timer:Cancel() end
+        suppressBattlefieldFrameUntil = 0
+    end
+    rejoinRequest = nil
+    hasHandledEnd = false
+    pendingAutoRejoin = nil
+end
+
+local function BeginRejoin(bg)
+    if rejoinRequest and rejoinRequest.timer then rejoinRequest.timer:Cancel() end
+    rejoinRequest = nil
+    pendingAutoRejoin = nil
+    if AutoBG_Settings and AutoBG_Settings.AutoRejoin and bg then
+        local _, cleanName = GetBGButtonIndex(bg)
+        rejoinRequest = { bg = cleanName, generation = queueGeneration, attempts = 0, phase = "world" }
+        pendingAutoRejoin = cleanName
+    end
+end
+
+local function ScheduleRejoin(request, delay)
+    if request ~= rejoinRequest or request.generation ~= queueGeneration or request.timer then return end
+    local timer
+    timer = C_Timer.NewTimer(delay, function()
+        if request ~= rejoinRequest or request.generation ~= queueGeneration or request.timer ~= timer then return end
+        request.timer = nil
+        if rejoinWorldReady and request.phase == "world" then request.phase = "ready" end
+        TryAutoRejoin()
+    end)
+    request.timer = timer
+end
+
+local function WaitForRejoinReady(request)
+    if GetTime() >= request.readyDeadline then
+        FinishRejoin()
+        AutoBG_Print("Auto-Rejoin stopped: the player or battleground status is not ready. Use /abg q to retry.", true)
+    else
+        ScheduleRejoin(request, 0.05)
+    end
+end
+
+local function PrepareBattlefieldExit()
+    -- NamPower 4.6.2 also clears its queued casts through this native API.
+    SpellStopCasting()
+    SpellStopTargeting()
+    ClearTarget()
+end
+
 local function HandleMatchEnd()
     if hasHandledEnd then return end
-    hasHandledEnd = true
-    rejoinRequested = false
-    rejoinFallbackScheduled = false
-    rejoinWorldReady = false
-    rejoinAttempts = 0
-    rejoinBG = nil
-
     UpdateZoneCache()
+    if not currentZonePVP then return end
+    hasHandledEnd = true
+    rejoinWorldReady = false
     if currentZoneText ~= "" then
         lastPlayedBG = currentZoneText
         if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = currentZoneText end
     end
-    if AutoBG_Settings and AutoBG_Settings.AutoRejoin and lastPlayedBG then
-        local _, cleanName = GetBGButtonIndex(lastPlayedBG)
-        pendingAutoRejoin = cleanName
-        rejoinBG = cleanName
-    end
+    BeginRejoin(lastPlayedBG)
 
     if AutoBG_Settings and AutoBG_Settings.FlashTaskbar and FlashClientIcon then
         FlashClientIcon()
     end
 
     if AutoBG_Settings and AutoBG_Settings.AutoLeave then
-        if ClearTarget then ClearTarget() end
+        if UnitExists("player") then PrepareBattlefieldExit() end
         local finishedBG = currentZoneText
         local generation = queueGeneration
         AutoBG_TimerAfter(0.3, function()
+            UpdateZoneCache()
             if generation ~= queueGeneration or not hasHandledEnd or not currentZonePVP or
-               currentZoneText ~= finishedBG or not (AutoBG_Settings and AutoBG_Settings.AutoLeave) then return end
+               currentZoneText ~= finishedBG or not UnitExists("player") or
+               not (AutoBG_Settings and AutoBG_Settings.AutoLeave) then return end
+            -- A cast may have been queued again during the exit delay.
+            PrepareBattlefieldExit()
             LeaveBattlefield(0)
             AutoBG_Print("Auto-left |cFFFFFF00" .. (lastPlayedBG or "battleground") .. "|r.")
         end)
@@ -634,74 +672,67 @@ local function IsQueuedFor(bg)
     return false
 end
 
-local function FinishRejoin()
-    hasHandledEnd = false
-    rejoinRequested = false
-    rejoinBG = nil
-    pendingAutoRejoin = nil
-end
-
-local function CheckRejoinSuccess(generation, targetBG)
-    AutoBG_TimerAfter(1.5, function()
-        if generation ~= queueGeneration or currentZonePVP then return end
-        if not (AutoBG_Settings and AutoBG_Settings.AutoRejoin) then FinishRejoin(); return end
-        if not hasHandledEnd or rejoinBG ~= targetBG then return end
-        if IsQueuedFor(targetBG) then
-            FinishRejoin()
-        else
-            rejoinRequested = false
-            TryAutoRejoin()
-        end
-    end)
-end
-
 TryAutoRejoin = function()
-    if currentZonePVP or not rejoinWorldReady or rejoinRequested or not hasHandledEnd or
-       not (AutoBG_Settings and AutoBG_Settings.AutoRejoin) then return end
-    local targetBG = rejoinBG or pendingAutoRejoin or AutoBG_Settings.LastPlayedBG or lastPlayedBG
-    if not targetBG then return end
-    if IsQueuedFor(targetBG) then FinishRejoin(); return end
-    if rejoinAttempts >= 3 then
+    if not hasHandledEnd then return end
+    if currentZonePVP or not rejoinWorldReady then return end
+    if not (AutoBG_Settings and AutoBG_Settings.AutoRejoin) then FinishRejoin(); return end
+    if not rejoinRequest then BeginRejoin(lastPlayedBG) end
+    local request = rejoinRequest
+    if not request or request.generation ~= queueGeneration then return end
+    request.readyDeadline = request.readyDeadline or GetTime() + 5.0
+    if request.phase == "world" then
+        -- NewTimer(0) runs on an engine tick, outside the world-load event.
+        ScheduleRejoin(request, 0)
+        return
+    end
+    if not UnitExists("player") then WaitForRejoinReady(request); return end
+    if IsQueuedFor(request.bg) then FinishRejoin(); return end
+    if request.deadline and GetTime() < request.deadline then
+        ScheduleRejoin(request, request.deadline - GetTime())
+        return
+    end
+    if request.attempts >= 3 then
         FinishRejoin()
         AutoBG_Print("Auto-Rejoin could not confirm the queue after three attempts. Use /abg q to retry.", true)
         return
     end
     local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
     for i = 1, maxQueues do
-        if GetBattlefieldStatus(i) == "active" then return end
+        if GetBattlefieldStatus(i) == "active" then WaitForRejoinReady(request); return end
+    end
+    if IsPlayerDeadOrGhost() then WaitForRejoinReady(request); return end
+    local hasDeserter, remaining = AutoBG_HasDeserter()
+    if hasDeserter then
+        FinishRejoin()
+        AutoBG_Print("Auto-Rejoin halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(remaining) .. ".", true)
+        return
     end
     if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
         AutoBG_Print("Auto-Rejoin paused: You are tagged as |cFFFF5555AFK|r.")
-        hasHandledEnd = false
-        pendingAutoRejoin = nil
+        FinishRejoin()
         return
     end
-    rejoinRequested = true
-    rejoinAttempts = rejoinAttempts + 1
-    rejoinBG = targetBG
-    pendingAutoRejoin = targetBG
-    AutoBG_TriggerBattlegroundFinder(targetBG, true)
-    CheckRejoinSuccess(queueGeneration, targetBG)
+    request.attempts = request.attempts + 1
+    request.phase = "list"
+    request.deadline = GetTime() + 1.5
+    pendingAutoRejoin = request.bg
+    AutoBG_TriggerBattlegroundFinder(request.bg, true)
+    ScheduleRejoin(request, 1.5)
 end
 
 -- Ensure Auto-Rejoin target is captured regardless of how the player leaves the battleground
 hooksecurefunc("LeaveBattlefield", function()
     if currentZonePVP then
+        local departedBG = currentZoneText
         UpdateZoneCache()
-        if currentZoneText ~= "" then
-            lastPlayedBG = currentZoneText
-            if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = currentZoneText end
+        if currentZonePVP then departedBG = currentZoneText end
+        if departedBG ~= "" then
+            lastPlayedBG = departedBG
+            if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = departedBG end
         end
         hasHandledEnd = true
-        rejoinRequested = false
         rejoinWorldReady = false
-        rejoinAttempts = 0
-        rejoinBG = nil
-        if AutoBG_Settings and AutoBG_Settings.AutoRejoin and lastPlayedBG then
-            local _, cleanName = GetBGButtonIndex(lastPlayedBG)
-            pendingAutoRejoin = cleanName
-            rejoinBG = cleanName
-        end
+        BeginRejoin(lastPlayedBG)
     end
 end)
 
@@ -738,6 +769,7 @@ frame:RegisterEvent("PLAYER_ALIVE")
 frame:RegisterEvent("PLAYER_UNGHOST")
 frame:RegisterEvent("UI_ERROR_MESSAGE")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("PLAYER_LEAVING_WORLD")
 frame:RegisterEvent("ZONE_CHANGED")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
@@ -861,6 +893,15 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             end
         end
 
+    elseif ev == "PLAYER_LEAVING_WORLD" then
+        rejoinWorldReady = false
+        if rejoinRequest then
+            if rejoinRequest.timer then rejoinRequest.timer:Cancel(); rejoinRequest.timer = nil end
+            rejoinRequest.phase = "world"
+            rejoinRequest.deadline = nil
+            rejoinRequest.readyDeadline = nil
+        end
+
     elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
         local wasInBattleground = currentZonePVP
         UpdateZoneCache()
@@ -872,40 +913,24 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = currentZoneText end
             end
             if not wasInBattleground then
-                hasHandledEnd = false
-                pendingAutoRejoin = nil
-                rejoinRequested = false
-                rejoinFallbackScheduled = false
+                FinishRejoin()
                 rejoinWorldReady = false
-                rejoinAttempts = 0
-                rejoinBG = nil
             end
         else
             if ev == "PLAYER_ENTERING_WORLD" then rejoinWorldReady = true end
-            local hasDes, rem = AutoBG_HasDeserter()
-            if hasDes then
-                pendingAutoRejoin = nil
-                hasHandledEnd = false
-                if not hadDeserterDebuff then
-                    hadDeserterDebuff = true
-                    AutoBG_Print("Auto-Rejoin / Auto-Queue halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
-                end
-            else
-                local targetRejoin = pendingAutoRejoin or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
-                if hasHandledEnd and targetRejoin and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
-                    pendingAutoRejoin = targetRejoin
-                    TryAutoRejoin()
-                    if rejoinWorldReady and not rejoinRequested and not rejoinFallbackScheduled then
-                        rejoinFallbackScheduled = true
-                        AutoBG_TimerAfter(0.4, function()
-                            rejoinFallbackScheduled = false
-                            TryAutoRejoin()
-                        end)
+            if hasHandledEnd and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
+                TryAutoRejoin()
+            elseif UnitExists("player") then
+                if hasHandledEnd then FinishRejoin() end
+                local hasDes, rem = AutoBG_HasDeserter()
+                if hasDes then
+                    FinishRejoin()
+                    if not hadDeserterDebuff then
+                        hadDeserterDebuff = true
+                        AutoBG_Print("Auto-Rejoin / Auto-Queue halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
                     end
-                elseif not pendingAutoRejoin then
-                    hasHandledEnd = false
+                    return
                 end
-
                 if AutoBG_Settings and AutoBG_Settings.AutoQueueLogin and not hasQueuedOnLogin then
                     if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
                         AutoBG_Print("Auto-Queue on login skipped: You are tagged as |cFFFF5555AFK|r.")
@@ -934,28 +959,44 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         end
 
     elseif ev == "BATTLEFIELDS_SHOW" then
-        if rejoinBG and not (AutoBG_Settings and AutoBG_Settings.AutoRejoin) then
+        local request = rejoinRequest
+        if request and (currentZonePVP or not rejoinWorldReady) then return end
+        if request and not (AutoBG_Settings and AutoBG_Settings.AutoRejoin) then
             FinishRejoin()
             return
         end
-        if pendingAutoRejoin or (hasHandledEnd and lastPlayedBG and AutoBG_Settings and AutoBG_Settings.AutoRejoin) or isAutoQueueing then
+        if request then
+            if not UnitExists("player") or IsPlayerDeadOrGhost() or
+               (request.phase ~= "list" and request.phase ~= "queue") then return end
+            local shownBG = GetBattlefieldInfo()
+            if shownBG ~= request.bg then return end
+            if AutoBG_HasDeserter() then FinishRejoin(); return end
+            if request.phase == "queue" then AutoBG_HideBattlefieldWindow(); return end
+        end
+        if pendingAutoRejoin or isAutoQueueing then
             if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
                 AutoBG_Print("Auto-Queue / Auto-Rejoin skipped: You are tagged as |cFFFF5555AFK|r.")
-                pendingAutoRejoin = nil
-                hasHandledEnd = false
+                FinishRejoin()
                 isAutoQueueing = false
                 return
             end
             local bgTitle = pendingAutoRejoin or (GetBattlefieldInfo and GetBattlefieldInfo()) or "Battleground"
+            if request then
+                -- A list reply is not confirmation; submit once and await status.
+                request.phase = "queue"
+                request.deadline = GetTime() + 1.5
+            end
             if SetSelectedBattlefield then pcall(SetSelectedBattlefield, 0) end
             pcall(JoinBattlefield, 0)
 
             suppressBattlefieldFrameUntil = GetTime() + 4.0
+            suppressedBattlefieldBG = bgTitle
             AutoBG_HideBattlefieldWindow()
 
             local generation = queueGeneration
             local function HideRequestedWindow()
-                if generation == queueGeneration and GetTime() < suppressBattlefieldFrameUntil then
+                if generation == queueGeneration and GetTime() < suppressBattlefieldFrameUntil and
+                   GetBattlefieldInfo() == suppressedBattlefieldBG then
                     AutoBG_HideBattlefieldWindow()
                 end
             end
@@ -966,8 +1007,8 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
 
             AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (First Available).")
             pendingAutoRejoin = nil
-            if not rejoinBG then hasHandledEnd = false end
-        elseif suppressBattlefieldFrameUntil and GetTime() < suppressBattlefieldFrameUntil then
+            if not rejoinRequest then hasHandledEnd = false end
+        elseif GetTime() < suppressBattlefieldFrameUntil and GetBattlefieldInfo() == suppressedBattlefieldBG then
             AutoBG_HideBattlefieldWindow()
         end
 

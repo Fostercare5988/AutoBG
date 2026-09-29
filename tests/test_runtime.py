@@ -16,13 +16,13 @@ def section(file, start, end):
     return text[text.index(start):text.index(end, text.index(start))]
 
 MOCKS = r"""
-now=1; sounds={}; alerts={}; tickers={}; delayed={}
+now=1; sounds={}; alerts={}; tickers={}; delayed={}; timers={}; afterDelays={}
 CLASSIC_API_VERSION=11515; SUPERWOW_VERSION="2.2"
 AutoBG_Settings={}
 function GetTime() return now end
 function UnitName(u) if u=="player" then return "Me" else return "Enemy" end end
 function UnitFactionGroup() return "Alliance" end
-function UnitExists() return true end
+function UnitExists(u) return not (u=="player" and playerExists==false) end
 function UnitIsVisible() return visible~=false end
 function UnitDistanceSquared() return distanceSquared or 25, rangeKnown~=false end
 function UnitInLineOfSight() return sight~=false and not sightUnknown end
@@ -47,12 +47,27 @@ function GetBattlefieldScore() return "Enemy",0,0,0,0,0,0,0,"Rogue","ROGUE" end
 function RequestBattlefieldScoreData() end
 function GetLocale() return "enUS" end
 function SpellInfo(id) if id==999 then return "Invisibility" end end
+function SpellStopCasting() castStops=(castStops or 0)+1; queuedCast=nil end
+function SpellStopTargeting() terrainStops=(terrainStops or 0)+1 end
+function ClearTarget() targetClears=(targetClears or 0)+1 end
 function PlaySoundFile(path) sounds[#sounds+1]=path end
 table.wipe=function(t) for k in pairs(t) do t[k]=nil end end
 wipe=table.wipe
 C_Timer={
  NewTicker=function(t,f) tickers[#tickers+1]=f end,
- After=function(t,f) delayed[#delayed+1]=f end
+ After=function(t,f) delayed[#delayed+1]=f; afterDelays[#afterDelays+1]=t end,
+ NewTimer=function(delay,callback)
+  local timer={due=now+delay,cancelled=false}
+  function timer:Cancel() self.cancelled=true end
+  function timer:IsCancelled() return self.cancelled end
+  timers[#timers+1]=timer
+  delayed[#delayed+1]=function()
+   if timer.cancelled then return end
+   now=math.max(now,timer.due)
+   callback()
+  end
+  return timer
+ end
 }
 C_UnitAuras={
  GetAuraDataByIndex=function(u,i) return auras and auras[i] end,
@@ -126,7 +141,7 @@ class RuntimeTests(unittest.TestCase):
     def load_core(self):
         self.runlua("""
             SlashCmdList={}; queues={}; accepted={}; requested={}
-            function hooksecurefunc() end
+            hooks={}; function hooksecurefunc(name,callback) hooks[name]=callback end
             function PlaySound() end
             function GetBattlefieldStatus(id)
                 local q=queues[id] or {}
@@ -134,6 +149,7 @@ class RuntimeTests(unittest.TestCase):
             end
             function AcceptBattlefieldPort(id,accept) accepted[#accepted+1]={id,accept} end
             function GetBattlefieldWinner() return nil end
+            function GetBattlefieldInfo() return battlefieldName or 'Warsong Gulch' end
             function AutoBG_IsPlayerAFK() return false end
         """)
         self.lua.execute(source("AutoBG.lua"))
@@ -224,7 +240,7 @@ class RuntimeTests(unittest.TestCase):
             assert(#delayed==0)
         """)
 
-    def prepare_rejoin(self):
+    def prepare_rejoin(self, start=True):
         self.load_core()
         self.runlua('''
             AutoBG_Settings.AutoRejoin=true; AutoBG_Settings.AutoLeave=false
@@ -235,9 +251,13 @@ class RuntimeTests(unittest.TestCase):
             queues[1]={status='active',map='Warsong Gulch'}
             fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
             inBG=false; queues[1]=nil
-            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
-            assert(#requested==1)
         ''')
+        if start:
+            self.runlua('''
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            if #requested==0 then table.remove(delayed,1)() end
+            assert(#requested==1)
+            ''')
 
     def test_rejoin_retry_is_local_and_bounded(self):
         self.prepare_rejoin()
@@ -327,6 +347,214 @@ class RuntimeTests(unittest.TestCase):
             AutoBG_Settings.AutoLeave=true; inBG=false
             fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
             delayed[1](); assert(left==0)
+        ''')
+
+    def test_auto_exit_clears_queued_spells_again_immediately_before_leaving(self):
+        self.load_core()
+        self.runlua('''
+            AutoBG_Settings.AutoLeave=true; inBG=true; queuedCast=45605
+            function GetBattlefieldWinner() return 1 end
+            function LeaveBattlefield()
+                assert(queuedCast==nil, 'Queued spells must not survive auto-exit')
+                assert(castStops==2 and terrainStops==2 and targetClears==2)
+                left=true
+            end
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            queues[1]={status='active',map='Warsong Gulch'}
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            assert(queuedCast==nil and not left)
+            assert(afterDelays[#afterDelays]==0.3, 'Keep the deferred exit guard')
+            queuedCast=52717
+            delayed[#delayed]()
+            assert(left)
+        ''')
+
+    def test_auto_exit_requires_a_live_player_at_departure(self):
+        self.load_core()
+        self.runlua('''
+            AutoBG_Settings.AutoLeave=true; inBG=true; left=0
+            function GetBattlefieldWinner() return 1 end
+            function LeaveBattlefield() left=left+1 end
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            queues[1]={status='active',map='Warsong Gulch'}
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            playerExists=false
+            delayed[#delayed]()
+            assert(left==0, 'Do not call leave against an unloaded player')
+        ''')
+
+    def test_stale_match_end_does_not_arm_exit_in_the_outside_world(self):
+        self.load_core()
+        self.runlua('''
+            AutoBG_Settings.AutoLeave=true; inBG=true
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            inBG=false
+            function GetBattlefieldWinner() return 1 end
+            hooks.WorldStateScoreFrame_Update()
+            assert(#delayed==0 and castStops==nil, 'Ignore stale winner state outside a BG')
+        ''')
+
+    def test_leave_hook_preserves_bg_identity_when_native_zone_state_changes_first(self):
+        self.load_core()
+        self.runlua('''
+            AutoBG_Settings.AutoRejoin=true; AutoBG_Settings.AutoLeave=false
+            zoneName='Warsong Gulch'; function GetRealZoneText() return zoneName end
+            inBG=true; fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            function JoinBattlegroundQueue(bg) requested[#requested+1]=bg end
+            inBG=false; zoneName='Stormwind City'
+            hooks.LeaveBattlefield()
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            if #requested==0 then delayed[#delayed]() end
+            assert(#requested==1 and requested[1]=='Warsong')
+            assert(AutoBG_Settings.LastPlayedBG=='Warsong Gulch')
+        ''')
+
+    def test_rejoin_waits_for_world_load_and_first_engine_tick(self):
+        self.prepare_rejoin(start=False)
+        self.runlua('''
+            joined=0; function JoinBattlefield() joined=joined+1 end
+            fire(AutoBGFrame,'ZONE_CHANGED_NEW_AREA')
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            assert(#requested==0 and joined==0)
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            assert(#requested==0, 'No queue request inside world-load dispatch')
+            table.remove(delayed,1)()
+            assert(#requested==1 and now==1, 'First engine tick adds no fixed wait')
+        ''')
+
+    def test_rejoin_does_not_query_player_auras_until_player_exists(self):
+        self.prepare_rejoin(start=False)
+        self.runlua('''
+            playerExists=false
+            C_UnitAuras.GetAuraDataByIndex=function() error('Player is unloading') end
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            table.remove(delayed,1)()
+            assert(#requested==0)
+            assert(timers[#timers].due<=now+0.05)
+            playerExists=true
+            C_UnitAuras.GetAuraDataByIndex=function() return nil end
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            assert(#requested==1 and now==1, 'Ready event bypasses the fallback wait')
+        ''')
+
+    def test_rejoin_recovers_stale_active_status_without_another_event(self):
+        self.prepare_rejoin(start=False)
+        self.runlua('''
+            queues[1]={status='active',map='Warsong Gulch'}
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            table.remove(delayed,1)()
+            assert(#requested==0)
+            local wait=timers[#timers] and (timers[#timers].due-now) or afterDelays[#afterDelays]
+            assert(wait<=0.051, 'Readiness fallback must react within 50ms')
+            queues[1]=nil
+            delayed[#delayed]()
+            assert(#requested==1 and now<=1.051)
+        ''')
+
+    def test_rejoin_readiness_wait_is_bounded(self):
+        self.prepare_rejoin(start=False)
+        self.runlua('''
+            playerExists=false
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            local index=1
+            while delayed[index] and index<120 do
+                local callback=delayed[index]; index=index+1; callback()
+            end
+            assert(#requested==0 and index<120, 'Stop the short readiness retry chain')
+            playerExists=true
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            assert(#requested==0, 'A timed-out transition must not revive')
+        ''')
+
+    def test_rejoin_list_must_identify_the_requested_battleground(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            joined=0; function JoinBattlefield() joined=joined+1 end
+            battlefieldName='Arathi Basin'
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW'); assert(joined==0)
+            function GetBattlefieldInfo() return nil end
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW'); assert(joined==0)
+            function GetBattlefieldInfo() return 'Warsong Gulch' end
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW'); assert(joined==1)
+        ''')
+
+    def test_rejoin_submits_each_list_once_and_leaves_other_windows_alone(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            joined=0; closed=0
+            function JoinBattlefield() joined=joined+1 end
+            function CloseBattlefield() closed=closed+1 end
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            assert(joined==1, 'Duplicate list replies cannot join twice')
+            local before=closed; battlefieldName='Arathi Basin'
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            -- The retry is delayed[1]; the rest are dismissal callbacks.
+            for i=2,#delayed do delayed[i]() end
+            assert(closed==before, 'An unrelated list must not be dismissed')
+        ''')
+
+    def test_rejoin_status_confirmation_cancels_retry_immediately(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            local retry=delayed[1]
+            queues[1]={status='queued',map='Warsong Gulch'}
+            fire(AutoBGFrame,'UPDATE_BATTLEFIELD_STATUS')
+            queues[1]=nil
+            retry()
+            assert(#requested==1, 'Verified success cannot later become a retry')
+        ''')
+
+    def test_rejoin_response_timeout_starts_again_after_list_submission(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            function JoinBattlefield() end
+            now=2.4; fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            delayed[1]()
+            assert(#requested==1, 'Allow a full response window after submission')
+            delayed[#delayed]()
+            assert(#requested==2)
+        ''')
+
+    def test_world_departure_blocks_late_rejoin_callbacks_and_list_replies(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            local retry=delayed[1]
+            joined=0; function JoinBattlefield() joined=joined+1 end
+            fire(AutoBGFrame,'PLAYER_LEAVING_WORLD')
+            playerExists=false
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            retry()
+            assert(#requested==1 and joined==0)
+            playerExists=true
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            retry(); assert(#requested==1)
+            delayed[#delayed]()
+            assert(#requested==2)
+        ''')
+
+    def test_manual_request_supersedes_rejoin_before_its_first_engine_tick(self):
+        self.prepare_rejoin(start=False)
+        self.runlua('''
+            fire(AutoBGFrame,'PLAYER_ENTERING_WORLD')
+            local ready=delayed[1]
+            AutoBG_TriggerBattlegroundFinder('Arathi Basin')
+            ready()
+            assert(#requested==1 and requested[1]=='Arathi')
+        ''')
+
+    def test_deserter_arriving_between_list_request_and_reply_aborts_rejoin(self):
+        self.prepare_rejoin()
+        self.runlua('''
+            joined=0; function JoinBattlefield() joined=joined+1 end
+            auras={{spellId=26013,name='Deserter'}}
+            fire(AutoBGFrame,'BATTLEFIELDS_SHOW')
+            assert(joined==0)
+            delayed[1]()
+            assert(#requested==1)
         ''')
 
     def test_deserter_uses_identity(self):
