@@ -1327,6 +1327,7 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 		local eventType = modern and "CAST" or arg3
 		local spellId = modern and arg3 or arg4
 		if not casterGUID then return end
+		if type(casterGUID) == "string" and string.sub(casterGUID, 1, 6) ~= "0x0000" then return end
 
 		local rawName = UnitName(casterGUID) or guidToName[casterGUID]
 		if not IsHostilePlayer(casterGUID, rawName) then return end
