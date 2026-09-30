@@ -126,6 +126,8 @@ local nameToGUID = {}
 local hostileCache = {}
 local soundDebounce = {}
 local playerRaceCache = {}
+local groupNames = {}
+local groupGUIDs = {}
 
 Spy.isTestMode = false
 
@@ -283,48 +285,83 @@ function Spy:CheckUnitStealth(unit)
 	return Targets.CheckUnitStealth(unit)
 end
 
-local function IsHostilePlayer(guid, name)
-	if not guid and not name then return false end
-	-- A same-faction player can change attackability during a duel. Recheck the
-	-- current GUID before consulting any remembered name-only hostility.
+local function IsGroupMember(name, guid, unit)
+	if name then
+		if name == UnitName("player") then return true end
+		if groupNames[name] then return true end
+		local realmAt = string.find(name, "-", 1, true)
+		if realmAt and groupNames[string.sub(name, 1, realmAt - 1)] then return true end
+	end
+	if guid then
+		local pGUID = UnitGUID("player")
+		if pGUID and guid == pGUID then return true end
+		if groupGUIDs[guid] then return true end
+		if UnitInParty and UnitInParty(guid) then return true end
+		if UnitInRaid and UnitInRaid(guid) then return true end
+	end
+	if unit then
+		if UnitIsUnit and UnitIsUnit(unit, "player") then return true end
+		if UnitInParty and UnitInParty(unit) then return true end
+		if UnitInRaid and UnitInRaid(unit) then return true end
+	end
+	return false
+end
+Spy.IsGroupMember = IsGroupMember
 
-	if name and name == UnitName("player") then
+local function IsHostilePlayer(guid, name, unit)
+	if not guid and not name and not unit then return false end
+
+	-- 1. Never hostile to player or any group member (party/raid)
+	if IsGroupMember(name, guid, unit) then
+		if name then hostileCache[name] = nil end
 		return false
 	end
-	local pGUID = UnitGUID("player")
-	if guid and pGUID and guid == pGUID then
-		return false
-	end
 
-	-- In SuperWoW / 1.12.1, player GUIDs start with 0x0000
+	-- 2. In SuperWoW / 1.12.1, player GUIDs start with 0x0000
 	if guid and type(guid) == "string" and string.sub(guid, 1, 6) ~= "0x0000" then
 		return false
 	end
 
-	if guid and UnitIsPlayer and not UnitIsPlayer(guid) then
+	local checkTarget = unit or guid
+	if checkTarget and UnitIsPlayer and not UnitIsPlayer(checkTarget) then
 		return false
 	end
 
-	if guid and UnitCanAttack and UnitCanAttack("player", guid) then
+	-- 3. Friendly check: if UnitIsFriend returns truthy and cannot attack, definitely not hostile
+	if checkTarget and UnitIsFriend and UnitIsFriend("player", checkTarget) then
+		local canAtk = UnitCanAttack and UnitCanAttack("player", checkTarget)
+		if not canAtk then
+			if name then hostileCache[name] = nil end
+			return false
+		end
+	end
+
+	-- 4. Authoritative attackability: if player can attack them, they are hostile
+	if checkTarget and UnitCanAttack and UnitCanAttack("player", checkTarget) then
 		if name then hostileCache[name] = true end
 		return true
 	end
 
-	local f = guid and UnitFactionGroup and UnitFactionGroup(guid)
+	-- 5. If we can verify they CANNOT be attacked:
+	if checkTarget and UnitCanAttack and not UnitCanAttack("player", checkTarget) then
+		if name then hostileCache[name] = nil end
+		return false
+	end
+
+	-- 6. Different faction fallback (only when not verified unattackable above)
+	local f = checkTarget and UnitFactionGroup and UnitFactionGroup(checkTarget)
 	local pf = GetPlayerFaction()
 	if f and pf then
 		if f ~= pf then
 			if name then hostileCache[name] = true end
 			return true
 		else
+			if name then hostileCache[name] = nil end
 			return false
 		end
 	end
 
-	if guid and UnitIsFriend and UnitIsFriend("player", guid) == 1 then
-		return false
-	end
-
+	-- 7. Hostility cache fallback (only if not a group member)
 	if name and hostileCache[name] then
 		return true
 	end
@@ -351,11 +388,91 @@ local function ResetEnemyEntry(e)
 	e.pendingUntil = nil
 end
 
+function Spy:PruneGroupMembers()
+	local changed = false
+	local i = 1
+	while i <= activeEnemyCount do
+		local e = trackedEnemies[i]
+		if e and (IsGroupMember(e.name, e.guid) or (e.guid and UnitIsFriend and UnitIsFriend("player", e.guid) and not (UnitCanAttack and UnitCanAttack("player", e.guid)))) then
+			if e.name then
+				hostileCache[e.name] = nil
+				soundDebounce[e.name] = nil
+				nameToTrackIndex[e.name] = nil
+				nameToGUID[e.name] = nil
+			end
+			if e.guid then guidToName[e.guid] = nil end
+			for k = i, activeEnemyCount - 1 do
+				trackedEnemies[k], trackedEnemies[k + 1] = trackedEnemies[k + 1], trackedEnemies[k]
+			end
+			ResetEnemyEntry(trackedEnemies[activeEnemyCount])
+			activeEnemyCount = activeEnemyCount - 1
+			changed = true
+		else
+			i = i + 1
+		end
+	end
+	if changed then
+		for k = 1, activeEnemyCount do
+			if trackedEnemies[k].name then
+				nameToTrackIndex[trackedEnemies[k].name] = k
+			end
+		end
+		Spy:RenderRows()
+	end
+end
+
+local function UpdateGroupRoster()
+	table.wipe(groupNames)
+	table.wipe(groupGUIDs)
+
+	local pName = UnitName("player")
+	if pName then groupNames[pName] = true end
+	local pGUID = UnitGUID("player")
+	if pGUID then groupGUIDs[pGUID] = true end
+
+	local numRaid = GetNumRaidMembers and GetNumRaidMembers() or 0
+	if numRaid > 0 then
+		for i = 1, numRaid do
+			local name = GetRaidRosterInfo(i)
+			if name then
+				groupNames[name] = true
+				local realmAt = string.find(name, "-", 1, true)
+				if realmAt then groupNames[string.sub(name, 1, realmAt - 1)] = true end
+			end
+			local u = "raid" .. i
+			local guid = UnitGUID(u)
+			if guid then groupGUIDs[guid] = true end
+		end
+	else
+		local numParty = GetNumPartyMembers and GetNumPartyMembers() or 0
+		if numParty > 0 then
+			for i = 1, numParty do
+				local u = "party" .. i
+				local name = UnitName(u)
+				if name then
+					groupNames[name] = true
+					local realmAt = string.find(name, "-", 1, true)
+					if realmAt then groupNames[string.sub(name, 1, realmAt - 1)] = true end
+				end
+				local guid = UnitGUID(u)
+				if guid then groupGUIDs[guid] = true end
+			end
+		end
+	end
+
+	Spy:PruneGroupMembers()
+end
+Spy.UpdateGroupRoster = UpdateGroupRoster
+
 -- -------------------------------------------------------------------------- --
 -- Record / Update Hostile Player Entry                                       --
 -- -------------------------------------------------------------------------- --
 function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, stealthSpell, race, observedUnit)
 	if not name or name == "" then return end
+	if IsGroupMember(name, guid, observedUnit) then return end
+	if observedUnit and UnitIsFriend and UnitIsFriend("player", observedUnit) and not (UnitCanAttack and UnitCanAttack("player", observedUnit)) then
+		return
+	end
 
 	local opt = GetSpySettings()
 	if opt and not opt.Enabled then return end
@@ -1158,6 +1275,8 @@ end
 local eventFrame = CreateFrame("Frame", "AutoBG_SpyEventFrame", UIParent)
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
+eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 eventFrame:RegisterEvent("UNIT_CASTEVENT")
 eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
@@ -1184,10 +1303,16 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 	end
 	if event == "PLAYER_ENTERING_WORLD" then
 		Spy:ClearHistory()
+		UpdateGroupRoster()
 		return
 	end
 	if event == "PLAYER_LOGIN" then
 		Spy:CreateFrames()
+		UpdateGroupRoster()
+		return
+	end
+	if event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
+		UpdateGroupRoster()
 		return
 	end
 
@@ -1245,13 +1370,13 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 	elseif event == "NAME_PLATE_UNIT_ADDED" then
 		local unit = arg1
 		if not unit or not UnitIsPlayer(unit) then return end
-		if not UnitCanAttack("player", unit) and UnitFactionGroup(unit) == GetPlayerFaction() then return end
+		if not UnitCanAttack("player", unit) then return end
 
 		local name = UnitName(unit)
-		if not name then return end
+		local guid = UnitGUID(unit)
+		if not name or IsGroupMember(name, guid, unit) then return end
 		hostileCache[name] = true
 
-		local guid = UnitGUID(unit)
 		local _, classToken = UnitClass(unit)
 		local level = UnitLevel(unit)
 		local rawRace = UnitRace(unit)
@@ -1269,9 +1394,9 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 		local unit = event == "PLAYER_TARGET_CHANGED" and "target" or (event == "PLAYER_FOCUS_CHANGED" and "focus" or "mouseover")
 		if UnitExists(unit) and UnitIsPlayer(unit) and UnitCanAttack("player", unit) then
 			local name = UnitName(unit)
-			if name then
+			local guid = UnitGUID(unit)
+			if name and not IsGroupMember(name, guid, unit) then
 				hostileCache[name] = true
-				local guid = UnitGUID(unit)
 				local _, classToken = UnitClass(unit)
 				local level = UnitLevel(unit)
 				local rawRace = UnitRace(unit)
@@ -1291,9 +1416,9 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 		if unit then
 			if UnitExists(unit) and UnitIsPlayer(unit) and UnitCanAttack("player", unit) then
 				local name = UnitName(unit)
-				if name then
+				local guid = UnitGUID(unit)
+				if name and not IsGroupMember(name, guid, unit) then
 					hostileCache[name] = true
-					local guid = UnitGUID(unit)
 					local _, classToken = UnitClass(unit)
 					local level = UnitLevel(unit)
 					local rawRace = UnitRace(unit)
@@ -1315,7 +1440,7 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 			if not enemyName then
 				_, _, enemyName, spellName = string.find(arg1, "^(.-) performs (.-)%.$")
 			end
-			if enemyName and spellName then
+			if enemyName and spellName and not IsGroupMember(enemyName) then
 				hostileCache[enemyName] = true
 				local isStealth, canonicalName = Targets.CheckIsStealthName(spellName)
 				local detectedRace = RACIAL_SPELL_NAMES[spellName]
@@ -1326,7 +1451,7 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 	elseif event == "CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS" then
 		if arg1 then
 			local _, _, enemyName, buffName = string.find(arg1, "^(.-) gains (.-)%.$")
-			if enemyName and buffName then
+			if enemyName and buffName and not IsGroupMember(enemyName) then
 				hostileCache[enemyName] = true
 				local isStealth, canonicalName = Targets.CheckIsStealthName(buffName)
 				local detectedRace = RACIAL_SPELL_NAMES[buffName]
@@ -1338,7 +1463,7 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 		if arg1 then
 			local _, _, buffName, enemyName = string.find(arg1, "^(.-) fades from (.-)%.$")
 			local isStealth, canonicalName = Targets.CheckIsStealthName(buffName)
-			if enemyName and isStealth then
+			if enemyName and isStealth and not IsGroupMember(enemyName) then
 				local idx = nameToTrackIndex[enemyName]
 				if idx and trackedEnemies[idx].stealthSpell == canonicalName then
 					Spy:SetUnitStealthState(enemyName, false)
@@ -1349,7 +1474,7 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 	elseif event == "CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE" then
 		if arg1 then
 			local _, _, enemyName = string.find(arg1, "^(.-)'s ")
-			if enemyName then
+			if enemyName and not IsGroupMember(enemyName) then
 				hostileCache[enemyName] = true
 				Spy:RecordEnemy(enemyName)
 			end
@@ -1361,7 +1486,7 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 			if not enemyName then _, _, enemyName = string.find(arg1, "^(.-) crits ") end
 			if not enemyName then _, _, enemyName = string.find(arg1, "^(.-) misses ") end
 			if not enemyName then _, _, enemyName = string.find(arg1, "^(.-) attacks%.") end
-			if enemyName then
+			if enemyName and not IsGroupMember(enemyName) then
 				hostileCache[enemyName] = true
 				Spy:RecordEnemy(enemyName)
 				Spy:SetUnitStealthState(enemyName, false)

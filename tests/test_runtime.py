@@ -1250,6 +1250,140 @@ class RuntimeTests(unittest.TestCase):
             assert(#sounds==0 and not AutoBG_Spy.AlertWindow:IsShown())
         """)
 
+    def test_party_and_raid_allies_are_never_admitted_to_spy(self):
+        self.load_units()
+        self.runlua("""
+            -- Setup party roster with Kwagga and lotus
+            local party = {
+                party1 = { name = "lotus", guid = "0x00000010", faction = "Horde" },
+                party2 = { name = "Kwagga", guid = "0x00000020", faction = "Horde" },
+            }
+            GetNumPartyMembers = function() return 2 end
+            GetNumRaidMembers = function() return 0 end
+            UnitName = function(u)
+                if u == "player" then return "Claude" end
+                if party[u] then return party[u].name end
+                if u == "0x00000010" then return "lotus" end
+                if u == "0x00000020" then return "Kwagga" end
+                return u
+            end
+            UnitGUID = function(u)
+                if u == "player" then return "0x00000000" end
+                if party[u] then return party[u].guid end
+                return u
+            end
+            UnitFactionGroup = function(u)
+                if u == "player" then return "Alliance" end
+                if party[u] then return party[u].faction end
+                if u == "0x00000010" or u == "0x00000020" then return "Horde" end
+                return "Alliance"
+            end
+            UnitCanAttack = function(p, u)
+                if u == "party1" or u == "party2" or u == "0x00000010" or u == "0x00000020" then
+                    return false
+                end
+                return true
+            end
+            UnitIsFriend = function(p, u)
+                if u == "party1" or u == "party2" or u == "0x00000010" or u == "0x00000020" then
+                    return true
+                end
+                return false
+            end
+            UnitInParty = function(u)
+                if u == "party1" or u == "party2" or u == "0x00000010" or u == "0x00000020" then
+                    return true
+                end
+                return false
+            end
+
+            -- Fire PARTY_MEMBERS_CHANGED to build group roster
+            fire(AutoBG_SpyEventFrame, "PARTY_MEMBERS_CHANGED")
+
+            -- 1. Nameplate added for party member (cross-faction) must NOT be admitted
+            fire(AutoBG_SpyEventFrame, "NAME_PLATE_UNIT_ADDED", "party1")
+            fire(AutoBG_SpyEventFrame, "NAME_PLATE_UNIT_ADDED", "party2")
+            assert(not AutoBG_Spy.Frame.rows[1]:IsShown(), "Party member nameplates must not enter Spy")
+
+            -- 2. Spell cast telemetry from party member must NOT be admitted
+            fire(AutoBG_SpyEventFrame, "UNIT_CASTEVENT", "0x00000010", nil, "CAST", 1064) -- Chain Heal
+            assert(not AutoBG_Spy.Frame.rows[1]:IsShown(), "Party member casts must not enter Spy")
+
+            -- 3. Chat combat log events from party member must NOT be admitted
+            fire(AutoBG_SpyEventFrame, "CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF", "lotus casts Healing Wave.")
+            assert(not AutoBG_Spy.Frame.rows[1]:IsShown(), "Party member buffs in chat must not enter Spy")
+
+            fire(AutoBG_SpyEventFrame, "CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS", "Kwagga hits Infinite Dragonspawn for 100.")
+            assert(not AutoBG_Spy.Frame.rows[1]:IsShown(), "Party member hits in chat must not enter Spy")
+
+            -- 4. Target changed to party member must NOT be admitted
+            UnitExists = function(u) return u == "target" end
+            UnitIsPlayer = function(u) return true end
+            local oldUnitName = UnitName
+            UnitName = function(u)
+                if u == "target" then return "lotus" end
+                return oldUnitName(u)
+            end
+            local oldUnitGUID = UnitGUID
+            UnitGUID = function(u)
+                if u == "target" then return "0x00000010" end
+                return oldUnitGUID(u)
+            end
+            fire(AutoBG_SpyEventFrame, "PLAYER_TARGET_CHANGED")
+            assert(not AutoBG_Spy.Frame.rows[1]:IsShown(), "Targeting party member must not enter Spy")
+        """)
+
+    def test_party_join_prunes_active_spy_rows_and_clears_hostility(self):
+        self.load_units()
+        self.runlua("""
+            -- Initially, lotus is an open-world enemy player
+            UnitCanAttack = function(p, u) return true end
+            UnitFactionGroup = function(u)
+                if u == "player" then return "Alliance" end
+                return "Horde"
+            end
+            GetNumPartyMembers = function() return 0 end
+            GetNumRaidMembers = function() return 0 end
+
+            AutoBG_Spy:RecordEnemy("lotus", "SHAMAN", 60, "0x00000010", 100, false)
+            assert(AutoBG_Spy.Frame.rows[1]:IsShown())
+            assert(AutoBG_Spy.Frame.rows[1].NameText:GetText() == "lotus")
+
+            -- lotus now joins player's party
+            local party = {
+                party1 = { name = "lotus", guid = "0x00000010" },
+            }
+            GetNumPartyMembers = function() return 1 end
+            UnitName = function(u)
+                if u == "player" then return "Claude" end
+                if party[u] then return party[u].name end
+                return u
+            end
+            UnitGUID = function(u)
+                if u == "player" then return "0x00000000" end
+                if party[u] then return party[u].guid end
+                return u
+            end
+            UnitCanAttack = function(p, u)
+                if u == "party1" or u == "0x00000010" then return false end
+                return true
+            end
+            UnitIsFriend = function(p, u)
+                if u == "party1" or u == "0x00000010" then return true end
+                return false
+            end
+            UnitInParty = function(u)
+                if u == "party1" or u == "0x00000010" then return true end
+                return false
+            end
+
+            -- Event fires: party roster changes
+            fire(AutoBG_SpyEventFrame, "PARTY_MEMBERS_CHANGED")
+
+            -- Row must be cleared and hidden immediately
+            assert(not AutoBG_Spy.Frame.rows[1]:IsShown(), "Spy row must be pruned when enemy joins party")
+        """)
+
 class CarrierOwnershipTests(unittest.TestCase):
     # Use the complete module: button handlers and exported commands share ownership.
     def runlua(self, text):
