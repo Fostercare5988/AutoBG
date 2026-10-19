@@ -40,11 +40,12 @@ local isAB, isAV, isWSG, inPVP = false, false, false, false
 
 local function UpdateZoneCache()
     cachedZone = string.lower((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
-    isAB  = (string.find(cachedZone, "arathi")  ~= nil)
-    isAV  = (string.find(cachedZone, "alterac") ~= nil)
-    isWSG = (string.find(cachedZone, "warsong") ~= nil)
     local inInstance, instanceType = IsInInstance()
-    inPVP = (inInstance and instanceType == "pvp")
+    inPVP = (inInstance and instanceType == "pvp") and true or false
+    -- Only battleground instances count; Arathi Highlands and Alterac Mountains do not.
+    isAB  = inPVP and string.find(cachedZone, "arathi")  ~= nil
+    isAV  = inPVP and string.find(cachedZone, "alterac") ~= nil
+    isWSG = inPVP and string.find(cachedZone, "warsong") ~= nil
 end
 UpdateZoneCache()
 

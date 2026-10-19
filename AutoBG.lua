@@ -692,7 +692,7 @@ local function HandleMatchEnd()
                not (AutoBG_Settings and AutoBG_Settings.AutoLeave) then return end
             -- A cast may have been queued again during the exit delay.
             PrepareBattlefieldExit()
-            LeaveBattlefield(0)
+            LeaveBattlefield()
             AutoBG_Print("Auto-left |cFFFFFF00" .. (lastPlayedBG or "battleground") .. "|r.")
         end)
     end
@@ -770,25 +770,11 @@ hooksecurefunc("LeaveBattlefield", function()
     end
 end)
 
--- Auto-Accept Popup Dismissal Hook (Rule B10)
+-- ProcessBattlefieldQueue owns accepting. Blizzard may show the entry popup after it
+-- accepted the same queue (data = queue index), so only hide that popup here.
 hooksecurefunc("StaticPopup_Show", function(which, text_arg1, text_arg2, data)
-    if which == "CONFIRM_BATTLEFIELD_ENTRY" and AutoBG_Settings and AutoBG_Settings.AutoAccept then
-        local qId = data or 1
-        if notifiedQueues[qId] == "accepted" then
-            DismissBattlefieldPopups()
-            return
-        end
-        if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
-            AutoBG_Print("Auto-Accept skipped: You are tagged as |cFFFF5555AFK|r.")
-            return
-        end
-        local delay = AutoBG_Settings.AutoAcceptDelay or 0
-        if delay <= 0 then
-            notifiedQueues[qId] = "accepted"
-            AcceptBattlefieldPort(qId, 1)
-            DismissBattlefieldPopups()
-            AutoBG_Print("Instant Auto-Accepted |cFFFFFF00" .. (text_arg1 or "Battleground") .. "|r!")
-        end
+    if which == "CONFIRM_BATTLEFIELD_ENTRY" and notifiedQueues[data or 1] == "accepted" then
+        DismissBattlefieldPopups()
     end
 end)
 

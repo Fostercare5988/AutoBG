@@ -557,7 +557,8 @@ local function SelectBracket(size, startPreview)
 	for _, b in ipairs(bracketButtons) do
 		StyleSelection(b, b.size == size)
 	end
-	if startPreview ~= false and Targets and Targets.EnableConfigMode then
+	-- Inside a battleground the live enemy list stays; Toggle Preview still works on request.
+	if startPreview ~= false and Targets and Targets.EnableConfigMode and not Targets.activeBG then
 		Targets:EnableConfigMode(size)
 	end
 	UpdateTargetsWidgets(size)

@@ -427,6 +427,8 @@ local function ScanCarrier(carrierName, frame, flagType)
 end
 
 -- 6.6 Hz Native Hardware Ticker (ClassicAPI C_Timer)
+local showingTest = false
+
 local function ScanFlagCarriers()
     if not AutoBG_Settings or not AutoBG_Settings.FCFrame then
         if AllianceFC:IsShown() then AllianceFC:Hide() end
@@ -435,6 +437,13 @@ local function ScanFlagCarriers()
     end
 
     local isTestAll = AutoBG_Settings.TestAllTimers
+
+    if showingTest and not isTestAll then
+        -- The preview wrote over the live text; rebuild both frames from the tracked carriers.
+        showingTest = false
+        UpdateFCButton(AllianceFC, carrierAlliance)
+        UpdateFCButton(HordeFC, carrierHorde)
+    end
 
     if not isTestAll and not isWSG then
         if AllianceFC:IsShown() then AllianceFC:Hide() end
@@ -445,6 +454,7 @@ local function ScanFlagCarriers()
     if isTestAll then
         AllianceFC:Show(); AllianceFC.nameText:SetText("|cFFFF7D0AAlliance Druid|r"); AllianceFC.healthBar:SetValue(82); AllianceFC.hpText:SetText("82%"); AllianceFC.distText:SetText("|cFF00FF0024 yd|r")
         HordeFC:Show(); HordeFC.nameText:SetText("|cFFC79C6EHorde Warrior|r"); HordeFC.healthBar:SetValue(45); HordeFC.hpText:SetText("45%"); HordeFC.distText:SetText("|cFFFFFF0042 yd|r")
+        showingTest = true
         return
     end
 
