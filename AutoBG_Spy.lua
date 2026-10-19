@@ -167,7 +167,9 @@ Spy.isTestMode = false
 local renderTimer, purgeTicker, OnSpyTick, alertTimer
 local pendingObservations, spareObservations, pendingByGUID, pendingCount = {}, {}, {}, 0
 for i = 1, MAX_SPY_ENEMIES do pendingObservations[i], spareObservations[i] = {}, {} end
-local FlushObservations, flushingObservations
+local FlushObservations, flushingObservations, QueueObservation
+local NAMEPLATE_UNITS = {}
+for i = 1, 40 do NAMEPLATE_UNITS[i] = "nameplate" .. i end
 local function ClearObservations()
 	for i = 1, pendingCount do
 		pendingObservations[i].guid, pendingObservations[i].unit = nil, nil
@@ -187,7 +189,7 @@ end
 
 local function MaintainTicker()
 	local opt = GetSpySettings()
-	if opt.Enabled and activeEnemyCount > 0 and not Spy.isTestMode and not (Targets and Targets.activeBG) then
+	if opt.Enabled and not Spy.isTestMode and not (Targets and Targets.activeBG) then
 		if not purgeTicker then purgeTicker = C_Timer.NewTicker(1, OnSpyTick) end
 	else
 		StopTicker()
@@ -457,6 +459,7 @@ local function ResetEnemyEntry(e)
 	e.observedGUID = nil
 	e.pendingUntil = nil
 	e.inactive = false
+	e.dead = nil
 end
 
 function Spy:PruneGroupMembers()
@@ -617,7 +620,9 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	end
 	if healthPct then e.healthPct = healthPct end
 	e.lastSeen = now
-	e.inactive = false
+	-- Only a dead observed unit keeps the death state; any other sighting is alive.
+	e.dead = (observedUnit and UnitIsDead(observedUnit)) and true or nil
+	e.inactive = e.dead and true or false
 	if observedUnit and guid and UnitGUID(observedUnit) == guid then e.observedGUID = guid end
 
 	if isStealth == false and observedUnit and e.pendingUntil and now < e.pendingUntil then isStealth = nil end
@@ -660,6 +665,17 @@ function Spy:SetUnitStealthState(name, isStealthed, spellName)
 		e.wasStealthedAlerted = false
 	end
 
+	Spy:RequestRender()
+end
+
+-- NamPower UNIT_DIED: dim the row now and start its removal timeout from the death.
+function Spy:MarkDead(guid)
+	local name = guid and guidToName[guid]
+	local idx = name and nameToTrackIndex[name]
+	if not idx then return end
+	local e = trackedEnemies[idx]
+	e.dead, e.inactive = true, true
+	e.isStealthed, e.pendingUntil = false, nil
 	Spy:RequestRender()
 end
 
@@ -748,7 +764,9 @@ local function SpyRow_OnEnter(self)
 	if b.targetHealth then
 		GameTooltip:AddLine("Health: " .. b.targetHealth .. "%", 0.2, 1, 0.2)
 	end
-	if b.targetStealth then
+	if b.targetDead then
+		GameTooltip:AddLine("State: Dead", 1, 0.3, 0.3)
+	elseif b.targetStealth then
 		GameTooltip:AddLine("State: STEALTHED (" .. (b.targetStealthSpell or "Stealth") .. ")", 0.4, 0.6, 1)
 	end
 	if b.targetLastSeen and b.targetLastSeen > 0 then
@@ -1108,6 +1126,7 @@ function Spy:RenderRows()
 		row.targetLevel, row.targetHealth = data.level, data.healthPct
 		row.targetStealth, row.targetStealthSpell = data.isStealthed, data.stealthSpell
 		row.targetLastSeen = data.lastSeen
+		row.targetDead = data.dead
 		local inactive = data.inactive and true or false
 		if row.inactive ~= inactive then
 			row.inactive = inactive
@@ -1168,7 +1187,7 @@ OnSpyTick = function()
 	while i <= activeEnemyCount do
 		local e = trackedEnemies[i]
 		-- A loaded, visible enemy is still nearby even when it raises no new events.
-		if e.guid and UnitExists(e.guid) and UnitIsVisible(e.guid) then e.lastSeen = now end
+		if e.guid and not e.dead and UnitExists(e.guid) and UnitIsVisible(e.guid) then e.lastSeen = now end
 		if (now - e.lastSeen) > timeout then
 			nameToTrackIndex[e.name] = nil
 			if e.guid and guidToName[e.guid] == e.name then guidToName[e.guid] = nil end
@@ -1180,7 +1199,7 @@ OnSpyTick = function()
 			activeEnemyCount = activeEnemyCount - 1
 			changed = true
 		else
-			local inactive = (now - e.lastSeen) > ACTIVE_WINDOW
+			local inactive = e.dead or (now - e.lastSeen) > ACTIVE_WINDOW
 			if e.inactive ~= inactive then e.inactive = inactive; changed = true end
 			if e.pendingUntil and now >= e.pendingUntil then
 				e.pendingUntil = nil
@@ -1195,6 +1214,16 @@ OnSpyTick = function()
 				e.wasStealthedAlerted = Spy:NotifyStealth(e.name, e.stealthSpell, e.classToken, e.guid, false, e.observedGUID) and true or false
 			end
 			i = i + 1
+		end
+	end
+
+	-- Spy's nameplate scanner: ClassicAPI nameplateN slots find enemies who stand
+	-- still and raise no events. Slots can be vacant, so check all of them.
+	for slot = 1, 40 do
+		local unit = NAMEPLATE_UNITS[slot]
+		if UnitExists(unit) and UnitIsPlayer(unit) then
+			local guid = UnitGUID(unit)
+			if guid and not guidToName[guid] then QueueObservation(unit) end
 		end
 	end
 
@@ -1289,7 +1318,7 @@ end
 
 -- Unit tokens can change before next-frame dispatch. Retain GUID identity and
 -- read the final available aura snapshot once for each observed enemy.
-local function QueueObservation(unit)
+QueueObservation = function(unit)
 	if not unit then return end
 	local guid = UnitGUID(unit)
 	if not guid or not UnitIsPlayer(unit) or not UnitCanAttack("player", unit) then return end
@@ -1353,6 +1382,10 @@ eventFrame:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF")
 eventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
 eventFrame:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
 eventFrame:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
+-- NamPower: exact stealth gain/loss and deaths by GUID (Emyrk/nampower EVENTS.md).
+eventFrame:RegisterEvent("BUFF_ADDED_OTHER")
+eventFrame:RegisterEvent("BUFF_REMOVED_OTHER")
+eventFrame:RegisterEvent("UNIT_DIED")
 
 local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 	-- Accept frame/event arguments, event-first arguments and native 1.12 globals.
@@ -1446,6 +1479,22 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 				Spy:SetUnitStealthState(rawName, false)
 			end
 		end
+
+	elseif event == "BUFF_ADDED_OTHER" or event == "BUFF_REMOVED_OTHER" then
+		-- arg1 = guid, arg3 = spell ID; filter by spell before any unit lookup.
+		local isStealth, sName = Targets.CheckIsStealthSpell(arg3)
+		if not isStealth or not arg1 then return end
+		local name = guidToName[arg1] or UnitName(arg1)
+		if not name then return end
+		if event == "BUFF_REMOVED_OTHER" then
+			Spy:SetUnitStealthState(name, false)
+		elseif IsHostilePlayer(arg1, name) then
+			local _, classToken = UnitClass(arg1)
+			Spy:RecordEnemy(name, classToken, UnitLevel(arg1), arg1, nil, true, sName, nil, arg1)
+		end
+
+	elseif event == "UNIT_DIED" then
+		Spy:MarkDead(arg1)
 
 	elseif event == "NAME_PLATE_UNIT_ADDED" then
 		QueueObservation(arg1)

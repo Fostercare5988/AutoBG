@@ -1322,6 +1322,34 @@ function Targets:BattlefieldScoreUpdate(force)
 	RenderRoster()
 end
 
+-- NamPower GetUnitField reads the health fields directly; UnitHealth covers the rest.
+local function ReadHealth(unit)
+	if GetUnitField then
+		local hp, maxHp = GetUnitField(unit, "health"), GetUnitField(unit, "maxHealth")
+		if hp and maxHp and maxHp > 0 then return hp, maxHp end
+	end
+	return UnitHealth(unit), UnitHealthMax(unit)
+end
+
+local function SetObservedHealth(name, curHp, maxHp, dead)
+	local pct = 100
+	if maxHp and maxHp > 0 and curHp then
+		pct = math.floor((curHp / maxHp) * 100 + 0.5)
+	end
+	if dead or (curHp and curHp <= 0) then
+		pct = 0
+	end
+
+	if healthPct[name] == pct and deadState[name] == dead then return end
+	healthPct[name] = pct
+	deadState[name] = dead
+
+	local row = nameToRow[name]
+	if row and Targets.MainFrame:IsShown() then
+		RenderHealthForRow(row, name)
+	end
+end
+
 local function ObserveUnit(unit, scanAuras)
 	if not unit or not UnitExists(unit) or not UnitIsPlayer(unit) then return end
 	local rawName = UnitName(unit)
@@ -1349,25 +1377,8 @@ local function ObserveUnit(unit, scanAuras)
 	-- Cached/empty descriptors must not erase a newer stealth cast.
 	if not UnitIsVisible(unit) then return end
 	local dead = (UnitIsDeadOrGhost and UnitIsDeadOrGhost(unit)) or (UnitIsDead(unit) or UnitIsGhost(unit)) and true or false
-
-	local curHp, maxHp = UnitHealth(unit), UnitHealthMax(unit)
-
-	local pct = 100
-	if maxHp and maxHp > 0 and curHp then
-		pct = math.floor((curHp / maxHp) * 100 + 0.5)
-	end
-	if dead or (curHp and curHp <= 0) then
-		pct = 0
-	end
-
-	if healthPct[name] == pct and deadState[name] == dead then return end
-	healthPct[name] = pct
-	deadState[name] = dead
-
-	local row = nameToRow[name]
-	if row and Targets.MainFrame:IsShown() then
-		RenderHealthForRow(row, name)
-	end
+	local curHp, maxHp = ReadHealth(unit)
+	SetObservedHealth(name, curHp, maxHp, dead)
 end
 
 function Targets:EnableConfigMode(size)
@@ -1515,6 +1526,12 @@ Targets:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS")
 Targets:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF")
 Targets:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
 Targets:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
+-- NamPower GUID events: health, death and buffs for every loaded enemy, not only
+-- those on a target/mouseover/nameplate token (Emyrk/nampower EVENTS.md).
+Targets:RegisterEvent("UNIT_HEALTH_GUID")
+Targets:RegisterEvent("UNIT_DIED")
+Targets:RegisterEvent("BUFF_ADDED_OTHER")
+Targets:RegisterEvent("BUFF_REMOVED_OTHER")
 
 local TARGETS_LIFECYCLE_EVENTS = {
 	PLAYER_LOGIN = true,
@@ -1576,6 +1593,30 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 
 	elseif ev == "NAME_PLATE_UNIT_ADDED" or ev == "UNIT_NAME_UPDATE" then
 		ObserveUnit(a1)
+
+	elseif ev == "UNIT_HEALTH_GUID" then
+		-- arg1 = guid. Fires for every unit the client tracks; only roster GUIDs matter.
+		local name = a1 and guidToName[a1]
+		if name and nameToRow[name] then
+			local curHp, maxHp = ReadHealth(a1)
+			SetObservedHealth(name, curHp, maxHp, (curHp or 0) <= 0)
+		end
+
+	elseif ev == "UNIT_DIED" then
+		local name = a1 and guidToName[a1]
+		if name and nameToRow[name] then SetObservedHealth(name, 0, 100, true) end
+
+	elseif ev == "BUFF_ADDED_OTHER" or ev == "BUFF_REMOVED_OTHER" then
+		-- arg1 = guid, arg3 = spell ID. The aura itself is authoritative, so no settling wait.
+		local name = a1 and guidToName[a1]
+		local isStealth, sName, sTex, sDur = CheckIsStealthSpell(a3)
+		if name and isStealth then
+			if ev == "BUFF_ADDED_OTHER" then
+				SetUnitStealth(name, true, sName, sTex, sDur, a1)
+			elseif stealthedState[name] then
+				SetUnitStealth(name, false)
+			end
+		end
 
 	elseif ev == "UNIT_CASTEVENT" or ev == "UNIT_SPELLCAST_SUCCEEDED" then
 		local modern = ev == "UNIT_SPELLCAST_SUCCEEDED"
