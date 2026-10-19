@@ -35,6 +35,7 @@ local function GetDistanceColor(d)
 end
 
 local CarrierNameMatches
+local OnCarrierDebuff
 
 local function SelectCarrier(name, guid, focus)
     if not name or name == "" then return false end
@@ -180,7 +181,7 @@ end
 
 local function UpdateFCButton(frame, carrierName)
     frame.carrierName = carrierName
-    frame.carrierGuid = nil
+    frame.carrierGuid, frame.stackGuid = nil, nil
     frame.displayHealth, frame.displayHP, frame.displayDistance, frame.displayStacks = nil, nil, nil, nil
     if carrierName and carrierName ~= "" and (not AutoBG_Settings or AutoBG_Settings.FCFrame ~= false) then
         local color = (AutoBG_FindPlayerClass and AutoBG_GetClassColor and AutoBG_GetClassColor(AutoBG_FindPlayerClass(carrierName)))
@@ -203,10 +204,19 @@ EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 EventFrame:RegisterEvent("ZONE_CHANGED")
 EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+-- NamPower: debuff stack changes by GUID replace polling the carrier's auras.
+EventFrame:RegisterEvent("DEBUFF_ADDED_OTHER")
+EventFrame:RegisterEvent("DEBUFF_REMOVED_OTHER")
 
 EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     local ev = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
     local msg = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
+
+    if ev == "DEBUFF_ADDED_OTHER" or ev == "DEBUFF_REMOVED_OTHER" then
+        -- NamPower native globals: arg1 guid, arg3 spell ID, arg4 stacks, arg7 state (1 = removed).
+        if isWSG then OnCarrierDebuff(arg1, arg3, arg4, arg7) end
+        return
+    end
 
     if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
         UpdateZoneCache()
@@ -346,6 +356,21 @@ local function ReadCarrierHealth(unit)
     return UnitHealth(unit) or 0, UnitHealthMax(unit) or 100
 end
 
+local ASSAULT_DEBUFFS = { ["Focused Assault"] = true, ["Brutal Assault"] = true }
+
+local function SetCarrierStacks(frame, stacks)
+    if not frame.debuffText then return end
+    SetCarrierText(frame, "displayStacks", frame.debuffText, stacks > 0 and ("|cFFFF2020[" .. stacks .. "]|r") or "")
+end
+
+-- SuperWoW SpellInfo names the spell, so OctoWoW's spell IDs need not be known.
+OnCarrierDebuff = function(guid, spellId, stacks, state)
+    if not guid or not SpellInfo then return end
+    local frame = (guid == AllianceFC.carrierGuid and AllianceFC) or (guid == HordeFC.carrierGuid and HordeFC)
+    if not frame or not ASSAULT_DEBUFFS[SpellInfo(spellId) or ""] then return end
+    SetCarrierStacks(frame, state == 1 and 0 or (stacks or 1))
+end
+
 local function ScanCarrier(carrierName, frame, flagType)
     if not carrierName or carrierName == "" then return end
     local u = ResolveCarrierUnit(carrierName, frame.carrierGuid)
@@ -366,23 +391,23 @@ local function ScanCarrier(carrierName, frame, flagType)
                 SetCarrierText(frame, "displayHP", frame.hpText, hpLabel)
             end
 
-            -- GetAuraSlots returns a continuation token, not a table.
-            local debuffStacks = 0
-            local complete = true
-            local _, count = C_UnitAuras.GetAuraSlots(u, "HARMFUL", nil, nil, carrierAuraSlots)
-            for i = 1, count do
-                local name, _, applications = C_UnitAuras.UnitAuraBySlot(u, carrierAuraSlots[i])
-                if not name then complete = false end
-                if name == "Focused Assault" or name == "Brutal Assault" then
-                    debuffStacks = applications or 1
-                    break
+            -- Read the stacks once per identified carrier; DEBUFF_*_OTHER events keep them current.
+            if frame.stackGuid ~= frame.carrierGuid then
+                local debuffStacks = 0
+                local complete = true
+                -- GetAuraSlots returns a continuation token, not a table.
+                local _, count = C_UnitAuras.GetAuraSlots(u, "HARMFUL", nil, nil, carrierAuraSlots)
+                for i = 1, count do
+                    local name, _, applications = C_UnitAuras.UnitAuraBySlot(u, carrierAuraSlots[i])
+                    if not name then complete = false end
+                    if ASSAULT_DEBUFFS[name or ""] then
+                        debuffStacks = applications or 1
+                        break
+                    end
                 end
-            end
-            if frame.debuffText and complete then
-                if debuffStacks > 0 then
-                    SetCarrierText(frame, "displayStacks", frame.debuffText, "|cFFFF2020[" .. debuffStacks .. "]|r")
-                else
-                    SetCarrierText(frame, "displayStacks", frame.debuffText, "")
+                if complete then
+                    SetCarrierStacks(frame, debuffStacks)
+                    frame.stackGuid = frame.carrierGuid
                 end
             end
 
@@ -395,7 +420,7 @@ local function ScanCarrier(carrierName, frame, flagType)
             return
     end
     -- Lost identity must not leave the previous carrier's health on screen.
-    frame.carrierGuid = nil
+    frame.carrierGuid, frame.stackGuid = nil, nil
     SetCarrierText(frame, "displayHP", frame.hpText, "???")
     SetCarrierText(frame, "displayDistance", frame.distText, "|cFF808080? yd|r")
     if frame.debuffText then SetCarrierText(frame, "displayStacks", frame.debuffText, "") end

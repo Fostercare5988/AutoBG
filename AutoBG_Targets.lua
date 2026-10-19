@@ -733,6 +733,14 @@ local function SyncTargetTimers()
 	end
 end
 
+-- By spell ID, with SuperWoW SpellInfo names as the fallback for unlisted ranks.
+local function IsTrinketSpell(spellId)
+	if not spellId then return false end
+	if TRINKET_SPELL_IDS[spellId] then return true end
+	local sName = SpellInfo and SpellInfo(spellId)
+	return sName and TRINKET_SPELL_NAMES[sName] and true or false
+end
+
 local function TriggerTrinketCooldown(name)
 	if not name then return end
 	local now = GetTime()
@@ -1609,8 +1617,11 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 	elseif ev == "BUFF_ADDED_OTHER" or ev == "BUFF_REMOVED_OTHER" then
 		-- arg1 = guid, arg3 = spell ID. The aura itself is authoritative, so no settling wait.
 		local name = a1 and guidToName[a1]
+		if not name then return end
+		-- PvP trinkets apply their immunity aura on use ("X gains Immune ..." in the combat log).
+		if ev == "BUFF_ADDED_OTHER" and IsTrinketSpell(a3) then TriggerTrinketCooldown(name) end
 		local isStealth, sName, sTex, sDur = CheckIsStealthSpell(a3)
-		if name and isStealth then
+		if isStealth then
 			if ev == "BUFF_ADDED_OTHER" then
 				SetUnitStealth(name, true, sName, sTex, sDur, a1)
 			elseif stealthedState[name] then
@@ -1639,14 +1650,7 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 		end
 
 		if eventType == "CAST" then
-			local trinketDur = TRINKET_SPELL_IDS[spellId]
-			if not trinketDur and SpellInfo then
-				local sName = SpellInfo(spellId)
-				if sName and TRINKET_SPELL_NAMES[sName] then
-					trinketDur = TRINKET_SPELL_NAMES[sName]
-				end
-			end
-			if trinketDur then
+			if IsTrinketSpell(spellId) then
 				TriggerTrinketCooldown(name)
 			end
 
