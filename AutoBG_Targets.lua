@@ -1350,18 +1350,7 @@ local function ObserveUnit(unit, scanAuras)
 	if not UnitIsVisible(unit) then return end
 	local dead = (UnitIsDeadOrGhost and UnitIsDeadOrGhost(unit)) or (UnitIsDead(unit) or UnitIsGhost(unit)) and true or false
 
-	local curHp, maxHp = nil, nil
-	if UnitXP then
-		local ok1, val1 = pcall(UnitXP, "health", unit)
-		local ok2, val2 = pcall(UnitXP, "maxhealth", unit)
-		if ok1 and ok2 and type(val1) == "number" and type(val2) == "number" and val2 > 0 then
-			curHp, maxHp = val1, val2
-		end
-	end
-	if not curHp or not maxHp or maxHp <= 0 then
-		curHp = UnitHealth(unit)
-		maxHp = UnitHealthMax(unit)
-	end
+	local curHp, maxHp = UnitHealth(unit), UnitHealthMax(unit)
 
 	local pct = 100
 	if maxHp and maxHp > 0 and curHp then
@@ -1513,7 +1502,7 @@ Targets:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 Targets:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 Targets:RegisterEvent("UNIT_AURA")
 Targets:RegisterEvent("UNIT_HEALTH")
-Targets:RegisterEvent("UNIT_HEALTH_FREQUENT")
+Targets:RegisterEvent("UNIT_HEALTH_FREQUENT") -- UNVERIFIED: test in game (not in the references)
 Targets:RegisterEvent("UNIT_TARGET")
 Targets:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 Targets:RegisterEvent("PLAYER_TARGET_CHANGED")

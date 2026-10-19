@@ -299,10 +299,6 @@ local function GetDistance(unit)
 
     -- 3. UnitXP Native Yard Engine (Rule B8)
     if unit and UnitXP then
-        local ok, dist = pcall(UnitXP, "distance", unit)
-        if ok and type(dist) == "number" and dist >= 0 and dist < 9999 then
-            return math.floor(dist + 0.5)
-        end
         local ok2, dist2 = pcall(UnitXP, "distanceBetween", "player", unit)
         if ok2 and type(dist2) == "number" and dist2 >= 0 and dist2 < 9999 then
             return math.floor(dist2 + 0.5)
@@ -347,13 +343,6 @@ local function ScanCarrier(carrierName, frame, flagType)
             frame.carrierGuid = (UnitGUID and UnitGUID(u)) or nil
             local hp = UnitHealth(u) or 0
             local maxHp = UnitHealthMax(u) or 100
-            local rawHp, rawMax = nil, nil
-            if UnitXP then
-                local ok1, val1 = pcall(UnitXP, "health", u)
-                if ok1 and type(val1) == "number" and val1 > 0 then rawHp = val1 end
-                local ok2, val2 = pcall(UnitXP, "maxhealth", u)
-                if ok2 and type(val2) == "number" and val2 > 0 then rawMax = val2 end
-            end
 
             if maxHp > 0 then
                 local pct = math.floor((hp / maxHp) * 100)
@@ -362,7 +351,7 @@ local function ScanCarrier(carrierName, frame, flagType)
                     frame.healthBar:SetStatusBarColor(pct < 30 and 0.95 or (pct < 60 and 0.95 or 0.1), pct < 30 and 0.15 or (pct < 60 and 0.8 or 0.85), 0.1)
                     frame.displayHealth = pct
                 end
-                SetCarrierText(frame, "displayHP", frame.hpText, (rawHp and rawMax and rawMax > 100 and (rawHp .. " (" .. pct .. "%)")) or (pct .. "%"))
+                SetCarrierText(frame, "displayHP", frame.hpText, pct .. "%")
             end
 
             -- GetAuraSlots returns a continuation token, not a table.

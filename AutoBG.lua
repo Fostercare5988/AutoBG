@@ -476,6 +476,8 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
     end
     if CloseDropDownMenus then CloseDropDownMenus() end
 
+    -- UNVERIFIED: test in game. JoinBattlegroundQueue is not in the references;
+    -- without it the minimap dropdown path below is used.
     if queueName and JoinBattlegroundQueue then
         local ok, err = pcall(JoinBattlegroundQueue, queueName)
         if not ok then
