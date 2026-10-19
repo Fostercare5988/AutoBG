@@ -336,13 +336,22 @@ local function SetCarrierText(frame, field, widget, value)
     if frame[field] ~= value then widget:SetText(value); frame[field] = value end
 end
 
+-- NamPower GetUnitField reads the unit's health fields directly and falls back to
+-- party/raid data for unloaded group members (Emyrk/nampower SCRIPTS.md).
+local function ReadCarrierHealth(unit)
+    if GetUnitField then
+        local hp, maxHp = GetUnitField(unit, "health"), GetUnitField(unit, "maxHealth")
+        if hp and maxHp and maxHp > 0 then return hp, maxHp end
+    end
+    return UnitHealth(unit) or 0, UnitHealthMax(unit) or 100
+end
+
 local function ScanCarrier(carrierName, frame, flagType)
     if not carrierName or carrierName == "" then return end
     local u = ResolveCarrierUnit(carrierName, frame.carrierGuid)
     if u then
             frame.carrierGuid = (UnitGUID and UnitGUID(u)) or nil
-            local hp = UnitHealth(u) or 0
-            local maxHp = UnitHealthMax(u) or 100
+            local hp, maxHp = ReadCarrierHealth(u)
 
             if maxHp > 0 then
                 local pct = math.floor((hp / maxHp) * 100)
@@ -351,7 +360,10 @@ local function ScanCarrier(carrierName, frame, flagType)
                     frame.healthBar:SetStatusBarColor(pct < 30 and 0.95 or (pct < 60 and 0.95 or 0.1), pct < 30 and 0.15 or (pct < 60 and 0.8 or 0.85), 0.1)
                     frame.displayHealth = pct
                 end
-                SetCarrierText(frame, "displayHP", frame.hpText, pct .. "%")
+                -- Real values when the client holds them, otherwise 0-100.
+                -- UNVERIFIED: test in game which form OctoWoW sends for enemy players.
+                local hpLabel = (maxHp > 100) and (hp .. " / " .. maxHp) or (pct .. "%")
+                SetCarrierText(frame, "displayHP", frame.hpText, hpLabel)
             end
 
             -- GetAuraSlots returns a continuation token, not a table.
