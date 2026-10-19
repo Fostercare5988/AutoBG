@@ -113,6 +113,7 @@ local enemyCount = 0
 
 -- Runtime lookup/telemetry caches
 local nameToRow = {}
+local unknownGUIDs = {} -- GUIDs already checked against the current roster
 local nameToGUID = {}
 local guidToName = {}
 local shortNameToFull = {}
@@ -187,10 +188,15 @@ local STEALTH_NAMES = {
 	["Smoke Cloud"]         = { name = "Smoke Cloud",         texture = "Interface\\Icons\\Ability_Stealth", duration = 30 },
 }
 
+-- Buff events arrive for every unit nearby; classify each spell ID once.
+local stealthBySpell = {}
 local function CheckIsStealthSpell(spellId)
 	if not spellId then return false end
-	local def = STEALTH_SPELLS[spellId]
-	if not def and SpellInfo then def = STEALTH_NAMES[SpellInfo(spellId)] end
+	local def = stealthBySpell[spellId]
+	if def == nil then
+		def = STEALTH_SPELLS[spellId] or (SpellInfo and STEALTH_NAMES[SpellInfo(spellId) or ""]) or false
+		stealthBySpell[spellId] = def
+	end
 	if def then return true, def.name, def.texture, def.duration end
 	return false
 end
@@ -1177,6 +1183,7 @@ end
 local function RenderRoster()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	wipe(nameToRow)
+	wipe(unknownGUIDs)
 	wipe(shortNameToFull)
 
 	local displayCount = math.min(enemyCount, currentSize)
@@ -1267,6 +1274,7 @@ function Targets:BattlefieldScoreUpdate(force)
 		enemyCount = 0
 		ClearAllStealth()
 		wipe(guidToName)
+		wipe(unknownGUIDs)
 		wipe(nameToGUID)
 		wipe(nameToRow)
 		wipe(shortNameToFull)
@@ -1356,6 +1364,21 @@ local function SetObservedHealth(name, curHp, maxHp, dead)
 	if row and Targets.MainFrame:IsShown() then
 		RenderHealthForRow(row, name)
 	end
+end
+
+-- Learn an enemy from its GUID alone (SuperWoW GUID units), once per roster.
+local function RosterNameForGUID(guid)
+	if not guid then return nil end
+	local name = guidToName[guid]
+	if name or unknownGUIDs[guid] then return name end
+	-- Player GUIDs start with 0x0000; creatures and pets never match the roster.
+	local rawName = string.sub(guid, 1, 6) == "0x0000" and UnitName(guid)
+	name = rawName and ResolveRosterName(rawName, guid)
+	if not name then unknownGUIDs[guid] = true; return nil end
+	guidToName[guid], nameToGUID[name] = name, guid
+	local row = nameToRow[name]
+	if row and Targets.TargetButton[row] then Targets.TargetButton[row].targetGUID = guid end
+	return name
 end
 
 local function ObserveUnit(unit, scanAuras)
@@ -1604,19 +1627,19 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 
 	elseif ev == "UNIT_HEALTH_GUID" then
 		-- arg1 = guid. Fires for every unit the client tracks; only roster GUIDs matter.
-		local name = a1 and guidToName[a1]
+		local name = RosterNameForGUID(a1)
 		if name and nameToRow[name] then
 			local curHp, maxHp = ReadHealth(a1)
 			SetObservedHealth(name, curHp, maxHp, (curHp or 0) <= 0)
 		end
 
 	elseif ev == "UNIT_DIED" then
-		local name = a1 and guidToName[a1]
+		local name = RosterNameForGUID(a1)
 		if name and nameToRow[name] then SetObservedHealth(name, 0, 100, true) end
 
 	elseif ev == "BUFF_ADDED_OTHER" or ev == "BUFF_REMOVED_OTHER" then
 		-- arg1 = guid, arg3 = spell ID. The aura itself is authoritative, so no settling wait.
-		local name = a1 and guidToName[a1]
+		local name = RosterNameForGUID(a1)
 		if not name then return end
 		-- PvP trinkets apply their immunity aura on use ("X gains Immune ..." in the combat log).
 		if ev == "BUFF_ADDED_OTHER" and IsTrinketSpell(a3) then TriggerTrinketCooldown(name) end

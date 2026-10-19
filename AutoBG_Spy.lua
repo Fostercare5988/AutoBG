@@ -1187,7 +1187,11 @@ OnSpyTick = function()
 	while i <= activeEnemyCount do
 		local e = trackedEnemies[i]
 		-- A loaded, visible enemy is still nearby even when it raises no new events.
-		if e.guid and not e.dead and UnitExists(e.guid) and UnitIsVisible(e.guid) then e.lastSeen = now end
+		if e.guid and UnitExists(e.guid) and UnitIsVisible(e.guid) then
+			-- A visible, living unit was resurrected; a corpse keeps its death time.
+			if e.dead and not UnitIsDead(e.guid) then e.dead = nil end
+			if not e.dead then e.lastSeen = now end
+		end
 		if (now - e.lastSeen) > timeout then
 			nameToTrackIndex[e.name] = nil
 			if e.guid and guidToName[e.guid] == e.name then guidToName[e.guid] = nil end

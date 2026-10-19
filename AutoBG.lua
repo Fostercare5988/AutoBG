@@ -233,13 +233,9 @@ function AutoBG_CancelAllQueues()
     end
 end
 
-local playerIsAFK = false
-
+-- ClassicAPI UnitIsAFK reads the player's AFK flag directly; no chat parsing needed.
 function AutoBG_IsPlayerAFK()
-    if UnitIsAFK and UnitIsAFK("player") then
-        return true
-    end
-    return playerIsAFK
+    return UnitIsAFK("player") and true or false
 end
 
 function AutoBG_Print(msg, force)
@@ -356,22 +352,15 @@ local function FormatDeserterRemaining(sec)
 end
 
 function AutoBG_HasDeserter()
-    -- Structured aura identity avoids false matches from shared icon textures.
-    if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
-        for i = 1, 32 do
-            local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HARMFUL")
-            if not aura then break end
-            if aura.name == "Deserter" or aura.spellId == 26013 then
-                local remaining = 0
-                if aura.expirationTime and aura.expirationTime > 0 then
-                    remaining = math.max(0, math.floor(aura.expirationTime - GetTime()))
-                end
-                return true, remaining
-            end
-        end
+    -- One ClassicAPI lookup by name, then by spell ID, instead of building every aura.
+    local aura = C_UnitAuras.GetAuraDataBySpellName("player", "Deserter", "HARMFUL")
+        or C_UnitAuras.GetPlayerAuraBySpellID(26013)
+    if not aura then return false, 0 end
+    local remaining = 0
+    if aura.expirationTime and aura.expirationTime > 0 then
+        remaining = math.max(0, math.floor(aura.expirationTime - GetTime()))
     end
-
-    return false, 0
+    return true, remaining
 end
 
 -- Battlefield window suppression belongs to the active queue request.
@@ -808,7 +797,6 @@ local frame = CreateFrame("Frame", "AutoBGFrame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 frame:RegisterEvent("BATTLEFIELDS_SHOW")
-frame:RegisterEvent("PLAYER_FLAGS_CHANGED")
 frame:RegisterEvent("PLAYER_DEAD")
 frame:RegisterEvent("PLAYER_ALIVE")
 frame:RegisterEvent("PLAYER_UNGHOST")
@@ -821,7 +809,6 @@ frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
 frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_ALLIANCE")
 frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 frame:RegisterEvent("CHAT_MSG_SYSTEM")
-frame:RegisterEvent("PLAYER_AURAS_CHANGED")
 frame:RegisterEvent("UNIT_AURA")
 
 local function ProcessBattlefieldQueue(id)
@@ -922,15 +909,6 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         UpdateZoneCache()
         AutoBG_Print("v1.0.0 loaded. Type |cFFFFFF00/abg|r or |cFFFFFF00/bgt|r for options.", true)
 
-    elseif ev == "PLAYER_FLAGS_CHANGED" then
-        if not a1 or a1 == "player" then
-            if UnitIsAFK and UnitIsAFK("player") then
-                playerIsAFK = true
-            else
-                playerIsAFK = false
-            end
-        end
-
     elseif ev == "PLAYER_LEAVING_WORLD" then
         rejoinWorldReady = false
         if rejoinRequest then
@@ -943,7 +921,6 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
         local wasInBattleground = currentZonePVP
         UpdateZoneCache()
-        if UnitIsAFK and UnitIsAFK("player") then playerIsAFK = true else playerIsAFK = false end
 
         if currentZonePVP then
             if currentZoneText ~= "" then
@@ -1053,13 +1030,6 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         end
 
     elseif ev == "CHAT_MSG_BG_SYSTEM_NEUTRAL" or ev == "CHAT_MSG_BG_SYSTEM_ALLIANCE" or ev == "CHAT_MSG_BG_SYSTEM_HORDE" or ev == "CHAT_MSG_SYSTEM" then
-        if ev == "CHAT_MSG_SYSTEM" and a1 then
-            if (MARKED_AFK_MESSAGE and a1 == MARKED_AFK_MESSAGE) or string.find(a1, "You are now AFK") then
-                playerIsAFK = true
-            elseif (CLEARED_AFK and a1 == CLEARED_AFK) or string.find(a1, "You are no longer AFK") then
-                playerIsAFK = false
-            end
-        end
         if currentZonePVP and GetBattlefieldWinner() then HandleMatchEnd() end
 
     elseif ev == "UPDATE_BATTLEFIELD_STATUS" then
@@ -1106,7 +1076,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             end
         end
 
-    elseif ev == "PLAYER_AURAS_CHANGED" or (ev == "UNIT_AURA" and (not a1 or a1 == "player")) then
+    elseif ev == "UNIT_AURA" and (not a1 or a1 == "player") then
         local hasDes, rem = AutoBG_HasDeserter()
         if hasDes then
             if not hadDeserterDebuff then
