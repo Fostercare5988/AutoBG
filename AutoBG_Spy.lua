@@ -22,6 +22,9 @@ BattlegroundTargets.Spy = AutoBG_Spy
 
 local MAX_SPY_ENEMIES = 20
 local MAX_SPY_ROWS = 20
+-- Spy's Nearby model: unseen enemies dim first and are removed only after the timeout.
+local ACTIVE_WINDOW = 5
+local SPY_WIDTH = 190
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
@@ -453,6 +456,7 @@ local function ResetEnemyEntry(e)
 	e.wasStealthedAlerted = false
 	e.observedGUID = nil
 	e.pendingUntil = nil
+	e.inactive = false
 end
 
 function Spy:PruneGroupMembers()
@@ -613,6 +617,7 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	end
 	if healthPct then e.healthPct = healthPct end
 	e.lastSeen = now
+	e.inactive = false
 	if observedUnit and guid and UnitGUID(observedUnit) == guid then e.observedGUID = guid end
 
 	if isStealth == false and observedUnit and e.pendingUntil and now < e.pendingUntil then isStealth = nil end
@@ -682,6 +687,16 @@ end
 -- -------------------------------------------------------------------------- --
 -- Spy Frame Creation & Interactions                                          --
 -- -------------------------------------------------------------------------- --
+-- Store the window by its top-left corner so a growing list never moves its top edge.
+local function AnchorSpyTopLeft(frame)
+	local left, top = frame:GetLeft(), frame:GetTop()
+	if not left or not top or not AutoBG_Settings then return end
+	frame:ClearAllPoints()
+	frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+	AutoBG_Settings.Positions = AutoBG_Settings.Positions or {}
+	AutoBG_Settings.Positions["AutoBG_SpyFrame"] = { point = "TOPLEFT", relPoint = "BOTTOMLEFT", x = left, y = top }
+end
+
 local function SpyFrame_OnDragStart(self)
 	local f = self or this or (Spy and Spy.Frame)
 	if f and f.StartMoving then f:StartMoving() end
@@ -690,7 +705,7 @@ end
 local function SpyFrame_OnDragStop(self)
 	local f = self or this or (Spy and Spy.Frame)
 	if f and f.StopMovingOrSizing then f:StopMovingOrSizing() end
-	Spy:SavePosition()
+	if f then AnchorSpyTopLeft(f) end
 end
 
 local function SpyClearBtn_OnClick(self)
@@ -1016,6 +1031,9 @@ function Spy:ApplyPosition()
 	if not Spy.Frame then return end
 	if AutoBG_LoadPosition then
 		AutoBG_LoadPosition(Spy.Frame, "AutoBG_SpyFrame", "TOPLEFT", 100, -200, "TOPLEFT")
+		-- Older saves may use a center or bottom anchor; convert them once.
+		local pos = AutoBG_Settings and AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_SpyFrame"]
+		if pos and pos.point ~= "TOPLEFT" then AnchorSpyTopLeft(Spy.Frame) end
 	else
 		Spy.Frame:ClearAllPoints()
 		Spy.Frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 100, -200)
@@ -1023,10 +1041,7 @@ function Spy:ApplyPosition()
 end
 
 function Spy:SavePosition()
-	if not Spy.Frame then return end
-	if AutoBG_SavePosition then
-		AutoBG_SavePosition(Spy.Frame, "AutoBG_SpyFrame")
-	end
+	if Spy.Frame then AnchorSpyTopLeft(Spy.Frame) end
 end
 
 function Spy:ResetPosition()
@@ -1076,7 +1091,8 @@ function Spy:RenderRows()
 	local title = count == 0 and "Spy (0)" or tostring(count) .. (count == 1 and " enemy" or " enemies")
 	if count > visibleCount then title = title .. " (" .. visibleCount .. " shown)" end
 	if f.Title:GetText() ~= title then f.Title:SetText(title) end
-	local width, height = count == 0 and 96 or 190, count == 0 and 24 or 25 + visibleCount * 16
+	-- Fixed width; the top edge is anchored, so only the bottom edge moves.
+	local width, height = SPY_WIDTH, count == 0 and 24 or 25 + visibleCount * 16
 	if f:GetWidth() ~= width then f:SetWidth(width) end
 	if f:GetHeight() ~= height then f:SetHeight(height) end
 
@@ -1092,6 +1108,11 @@ function Spy:RenderRows()
 		row.targetLevel, row.targetHealth = data.level, data.healthPct
 		row.targetStealth, row.targetStealthSpell = data.isStealthed, data.stealthSpell
 		row.targetLastSeen = data.lastSeen
+		local inactive = data.inactive and true or false
+		if row.inactive ~= inactive then
+			row.inactive = inactive
+			row:SetAlpha(inactive and 0.45 or 1)
+		end
 
 		if classChanged then
 			local color = Targets.GetClassColor(data.classToken)
@@ -1146,6 +1167,8 @@ OnSpyTick = function()
 	local i = 1
 	while i <= activeEnemyCount do
 		local e = trackedEnemies[i]
+		-- A loaded, visible enemy is still nearby even when it raises no new events.
+		if e.guid and UnitExists(e.guid) and UnitIsVisible(e.guid) then e.lastSeen = now end
 		if (now - e.lastSeen) > timeout then
 			nameToTrackIndex[e.name] = nil
 			if e.guid and guidToName[e.guid] == e.name then guidToName[e.guid] = nil end
@@ -1157,6 +1180,8 @@ OnSpyTick = function()
 			activeEnemyCount = activeEnemyCount - 1
 			changed = true
 		else
+			local inactive = (now - e.lastSeen) > ACTIVE_WINDOW
+			if e.inactive ~= inactive then e.inactive = inactive; changed = true end
 			if e.pendingUntil and now >= e.pendingUntil then
 				e.pendingUntil = nil
 				local found, spell = Spy:CheckUnitStealth(e.guid)
