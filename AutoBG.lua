@@ -221,7 +221,8 @@ function AutoBG_CancelAllQueues()
         invitedMaps[i] = nil
         local status = GetBattlefieldStatus(i)
         if status and status ~= "none" and status ~= "active" then
-            AcceptBattlefieldPort(i, 0)
+            -- Blizzard's Leave Queue passes nil; 0 is true in Lua.
+            AcceptBattlefieldPort(i)
             cancelled = cancelled + 1
         end
     end
