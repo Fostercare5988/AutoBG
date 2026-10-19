@@ -17,7 +17,7 @@ enemy alerts for World of Warcraft 1.12.1, build 5875.
 
 ## Requirements
 
-- [ClassicAPI v1.15.15+](https://github.com/brues-code/ClassicAPI)
+- [ClassicAPI v1.16.0+](https://github.com/brues-code/ClassicAPI)
 - [SuperWoW v2.2+](https://github.com/balakethelock/SuperWoW)
 - Optional: [UnitXP SP3](https://codeberg.org/konaka/UnitXP_SP3) for supported
   carrier health and distance telemetry.
