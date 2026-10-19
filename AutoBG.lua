@@ -248,6 +248,13 @@ function AutoBG_Print(msg, force)
     end
 end
 
+-- UnitXP SP3 provides the verified taskbar notification; FlashClientIcon is not established.
+local function FlashTaskbar()
+    if not (AutoBG_Settings and AutoBG_Settings.FlashTaskbar) then return end
+    if UnitXP and pcall(UnitXP, "notify", "taskbarIcon") then return end
+    if FlashClientIcon then FlashClientIcon() end
+end
+
 -- Canonical Class Colors (Rule B7: Shaman Blue 0x00, 0x70, 0xDE)
 AutoBG_CLASS_COLORS = {
     HUNTER  = { r = 0.67, g = 0.83, b = 0.45, hex = "|cffabd473" },
@@ -681,9 +688,7 @@ local function HandleMatchEnd()
     end
     BeginRejoin(lastPlayedBG)
 
-    if AutoBG_Settings and AutoBG_Settings.FlashTaskbar and FlashClientIcon then
-        FlashClientIcon()
-    end
+    FlashTaskbar()
 
     if AutoBG_Settings and AutoBG_Settings.AutoLeave then
         if UnitExists("player") then PrepareBattlefieldExit() end
@@ -833,7 +838,7 @@ local function ProcessBattlefieldQueue(id)
                 if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
                     AutoBG_Print("Queue popped for |cFFFFFF00" .. (mapName or "Battleground") .. "|r, but Auto-Enter is paused because you are |cFFFF5555AFK|r!")
                     if AutoBG_Settings.NotifySound then AutoBG_PlayNotificationSound(true) end
-                    if AutoBG_Settings.FlashTaskbar and FlashClientIcon then FlashClientIcon() end
+                    FlashTaskbar()
                     return
                 end
                 local delay = AutoBG_Settings.AutoAcceptDelay or 0
@@ -863,7 +868,7 @@ local function ProcessBattlefieldQueue(id)
                 end
             end
             if AutoBG_Settings.NotifySound then AutoBG_PlayNotificationSound(true) end
-            if AutoBG_Settings.FlashTaskbar and FlashClientIcon then FlashClientIcon() end
+            FlashTaskbar()
             if not AutoBG_Settings.AutoAccept then
                 AutoBG_Print("Queue is ready for |cFFFFFF00" .. (mapName or "Battleground") .. "|r! (Queue #" .. id .. ")")
             end
@@ -1112,9 +1117,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             if AutoBG_Settings and AutoBG_Settings.NotifySound then
                 PlaySound("ReadyCheck")
             end
-            if AutoBG_Settings and AutoBG_Settings.FlashTaskbar and FlashClientIcon then
-                FlashClientIcon()
-            end
+            FlashTaskbar()
         end
     end
 end)
@@ -1131,7 +1134,8 @@ hooksecurefunc("WorldStateScoreFrame_Update", function()
     for i = 1, maxButtons do
         local name, _, _, _, _, faction, _, _, class, classToken = GetBattlefieldScore(offset + i)
         if name and name ~= "" then
-            local nameText = _G["WorldStateScoreButton" .. i .. "NameText"] or _G["WorldStateScoreButton" .. i .. "Name"]
+            -- WorldStateScoreTemplate: $parentNameButton > $parentName.
+            local nameText = _G["WorldStateScoreButton" .. i .. "NameButtonName"]
             if nameText then
                 local clean = string.gsub(string.gsub(name, "-.*$", ""), "^%s*(.-)%s*$", "%1")
                 local color = AutoBG_GetClassColor(classToken or class)
