@@ -1387,11 +1387,6 @@ eventFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 eventFrame:RegisterEvent("PLAYER_FOCUS_CHANGED")
 eventFrame:RegisterEvent("UNIT_AURA")
-eventFrame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS")
-eventFrame:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF")
-eventFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
-eventFrame:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
-eventFrame:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
 -- NamPower: exact stealth gain/loss and deaths by GUID (Emyrk/nampower EVENTS.md).
 eventFrame:RegisterEvent("BUFF_ADDED_OTHER")
 eventFrame:RegisterEvent("BUFF_REMOVED_OTHER")
@@ -1516,65 +1511,6 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 
 	elseif event == "UNIT_AURA" then
 		QueueObservation(arg1)
-
-	elseif event == "CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF" then
-		if arg1 then
-			local _, _, enemyName, spellName = string.find(arg1, "^(.-) casts (.-)%.$")
-			if not enemyName then
-				_, _, enemyName, spellName = string.find(arg1, "^(.-) performs (.-)%.$")
-			end
-			if enemyName and spellName and not IsGroupMember(enemyName) then
-				SetHostility(enemyName, nil, true)
-				local isStealth, canonicalName = Targets.CheckIsStealthName(spellName)
-				local detectedRace = RACIAL_SPELL_NAMES[spellName]
-				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or nil, canonicalName or spellName, detectedRace)
-			end
-		end
-
-	elseif event == "CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS" then
-		if arg1 then
-			local _, _, enemyName, buffName = string.find(arg1, "^(.-) gains (.-)%.$")
-			if enemyName and buffName and not IsGroupMember(enemyName) then
-				SetHostility(enemyName, nil, true)
-				local isStealth, canonicalName = Targets.CheckIsStealthName(buffName)
-				local detectedRace = RACIAL_SPELL_NAMES[buffName]
-				Spy:RecordEnemy(enemyName, nil, nil, nil, nil, isStealth and true or nil, canonicalName or buffName, detectedRace)
-			end
-		end
-
-	elseif event == "CHAT_MSG_SPELL_AURA_GONE_OTHER" then
-		if arg1 then
-			local _, _, buffName, enemyName = string.find(arg1, "^(.-) fades from (.-)%.$")
-			local isStealth, canonicalName = Targets.CheckIsStealthName(buffName)
-			if enemyName and isStealth and not IsGroupMember(enemyName) then
-				local idx = nameToTrackIndex[enemyName]
-				if idx and trackedEnemies[idx].stealthSpell == canonicalName then
-					Spy:SetUnitStealthState(enemyName, false)
-				end
-			end
-		end
-
-	elseif event == "CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE" then
-		if arg1 then
-			local _, _, enemyName = string.find(arg1, "^(.-)'s ")
-			if enemyName and not IsGroupMember(enemyName) then
-				SetHostility(enemyName, nil, true)
-				Spy:RecordEnemy(enemyName)
-			end
-		end
-
-	elseif event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS" then
-		if arg1 then
-			local _, _, enemyName = string.find(arg1, "^(.-) hits ")
-			if not enemyName then _, _, enemyName = string.find(arg1, "^(.-) crits ") end
-			if not enemyName then _, _, enemyName = string.find(arg1, "^(.-) misses ") end
-			if not enemyName then _, _, enemyName = string.find(arg1, "^(.-) attacks%.") end
-			if enemyName and not IsGroupMember(enemyName) then
-				SetHostility(enemyName, nil, true)
-				Spy:RecordEnemy(enemyName)
-				Spy:SetUnitStealthState(enemyName, false)
-			end
-		end
 	end
 end
 eventFrame:SetScript("OnEvent", Spy_OnEvent)

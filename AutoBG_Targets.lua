@@ -750,7 +750,7 @@ end
 local function TriggerTrinketCooldown(name)
 	if not name then return end
 	local now = GetTime()
-	-- CAST and combat-log observations describe the same use.
+	-- CAST and BUFF_ADDED_OTHER observations describe the same use.
 	if trinketCooldown[name] and trinketCooldown[name] > now then return end
 	trinketCooldown[name] = now + TRINKET_COOLDOWN
 	local row = nameToRow[name]
@@ -1554,10 +1554,6 @@ Targets:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 Targets:RegisterEvent("UNIT_NAME_UPDATE")
 Targets:RegisterEvent("UNIT_CASTEVENT")
 Targets:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-Targets:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS")
-Targets:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF")
-Targets:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER")
-Targets:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
 -- NamPower GUID events: health, death and buffs for every loaded enemy, not only
 -- those on a target/mouseover/nameplate token (Emyrk/nampower EVENTS.md).
 Targets:RegisterEvent("UNIT_HEALTH_GUID")
@@ -1685,72 +1681,6 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 		elseif eventType == "MAINHAND" or eventType == "OFFHAND" then
 			if stealthedState[name] then
 				SetUnitStealth(name, false)
-			end
-		end
-
-	elseif ev == "CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS" then
-		if a1 then
-			local _, _, enemyName, buffName = string.find(a1, "^(.-) gains (.-)%.$")
-			if enemyName and buffName then
-				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
-				if name then
-					local tDur = TRINKET_SPELL_NAMES[buffName]
-					if tDur then
-						TriggerTrinketCooldown(name)
-					else
-						local found, stealthName, texture, duration = CheckIsStealthName(buffName)
-						if found then SetUnitStealth(name, true, stealthName, texture, duration) end
-					end
-				end
-			end
-		end
-
-	elseif ev == "CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF" then
-		if a1 then
-			local _, _, enemyName, spellName = string.find(a1, "^(.-) casts (.-)%.$")
-			if not enemyName then
-				_, _, enemyName, spellName = string.find(a1, "^(.-) performs (.-)%.$")
-			end
-			if not enemyName then
-				_, _, enemyName, spellName = string.find(a1, "^(.-) uses (.-)%.$")
-			end
-			if enemyName and spellName then
-				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
-				if name then
-					local tDur = TRINKET_SPELL_NAMES[spellName]
-					if tDur then
-						TriggerTrinketCooldown(name)
-					else
-						local found, stealthName, texture, duration = CheckIsStealthName(spellName)
-						if found then SetUnitStealth(name, true, stealthName, texture, duration) end
-					end
-				end
-			end
-		end
-
-	elseif ev == "CHAT_MSG_SPELL_AURA_GONE_OTHER" then
-		if a1 then
-			local _, _, buffName, enemyName = string.find(a1, "^(.-) fades from (.-)%.$")
-			local found, stealthName = CheckIsStealthName(buffName)
-			if enemyName and found then
-				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
-				if name and stealthedState[name] and stealthedState[name].spellName == stealthName then
-					SetUnitStealth(name, false)
-				end
-			end
-		end
-
-	elseif ev == "CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS" then
-		if a1 then
-			local _, _, enemyName = string.find(a1, "^(.-) hits ")
-			if not enemyName then _, _, enemyName = string.find(a1, "^(.-) crits ") end
-			if not enemyName then _, _, enemyName = string.find(a1, "^(.-) misses ") end
-			if not enemyName then _, _, enemyName = string.find(a1, "^(.-) attacks%.") end
-			if enemyName then
-				local name = nameToRow[enemyName] and enemyName or shortNameToFull[enemyName]
-				if name and stealthedState[name] then
-					SetUnitStealth(name, false)
-				end
 			end
 		end
 	end
