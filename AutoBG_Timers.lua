@@ -448,7 +448,7 @@ local WSGFlagFrame = CreateBarTimerFrame("AutoBG_WSGFlagFrame", "Warsong Gulch",
 -- =========================================================
 -- Arathi Basin Score Projection Frame (Sleek 2-Row Dual-Column Layout)
 -- =========================================================
-local AB_PROJ_WIDTH = 156
+local AB_PROJ_WIDTH = 164
 local AB_PROJ_HEIGHT = 38
 
 local function CreateABProjectionFrame(name)
@@ -497,14 +497,14 @@ local function CreateABProjectionFrame(name)
     -- Row 1: Alliance Row (y = +8 from center)
     local r1Status = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     r1Status:SetPoint("LEFT", frame, "LEFT", 6, 8)
-    r1Status:SetPoint("RIGHT", frame, "RIGHT", -52, 8)
+    r1Status:SetPoint("RIGHT", frame, "RIGHT", -60, 8)
     r1Status:SetJustifyH("RIGHT")
     r1Status:SetText("")
     frame.r1Status = r1Status
 
     local r1Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     r1Score:SetPoint("RIGHT", frame, "RIGHT", -6, 8)
-    r1Score:SetWidth(44)
+    r1Score:SetWidth(52)
     r1Score:SetJustifyH("RIGHT")
     r1Score:SetTextColor(0.38, 0.69, 1.00) -- Alliance Blue
     r1Score:SetText("")
@@ -513,7 +513,7 @@ local function CreateABProjectionFrame(name)
     -- Row 2: Horde Row (y = -8 from center)
     local r2Bases = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     r2Bases:SetPoint("LEFT", frame, "LEFT", 6, -8)
-    r2Bases:SetPoint("RIGHT", frame, "RIGHT", -52, -8)
+    r2Bases:SetPoint("RIGHT", frame, "RIGHT", -60, -8)
     r2Bases:SetJustifyH("RIGHT")
     r2Bases:SetTextColor(1.00, 0.82, 0.00) -- Gold
     r2Bases:SetText("")
@@ -521,7 +521,7 @@ local function CreateABProjectionFrame(name)
 
     local r2Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     r2Score:SetPoint("RIGHT", frame, "RIGHT", -6, -8)
-    r2Score:SetWidth(44)
+    r2Score:SetWidth(52)
     r2Score:SetJustifyH("RIGHT")
     r2Score:SetTextColor(1.00, 0.38, 0.38) -- Horde Red
     r2Score:SetText("")
@@ -865,12 +865,14 @@ local function ProjectWithCaps(aRes, hRes, aBases, hBases, caps)
             h = h + hr * dt
         end
         t = cap.time
+        -- A contested node earns for nobody: the defender's count already
+        -- dropped at the assault, and a neutral claim never had an owner, so
+        -- completion only adds the capturer's base.
+        -- UNVERIFIED: test in game that "Bases:" drops when a node is assaulted.
         if cap.faction == "Alliance" then
-            ab = math.min(5, ab + 1)
-            hb = math.max(0, hb - 1)
+            ab = math.min(5 - hb, ab + 1)
         else
-            hb = math.min(5, hb + 1)
-            ab = math.max(0, ab - 1)
+            hb = math.min(5 - ab, hb + 1)
         end
     end
 
@@ -883,29 +885,28 @@ local function ProjectWithCaps(aRes, hRes, aBases, hBases, caps)
     return t + aPT, t + hPT, aAtHWin, hAtAWin
 end
 
-local function BasesNeededToWin(aRes, hRes)
-    local faction = UnitFactionGroup("player")
-    if not faction then return nil end
+-- The fewest bases that win outright while the enemy holds the rest. A side
+-- already winning is told what it must hold; anyone else what it needs.
+local function BasesToWin(aRes, hRes, faction, winning)
     local myRes, theirRes
     if faction == "Alliance" then
         myRes = aRes; theirRes = hRes
     else
         myRes = hRes; theirRes = aRes
     end
+    local verb = winning and "Hold" or "Need"
     for b = 1, 5 do
         local myRate = AB_RPS[b] or 0
         local theirRate = AB_RPS[5 - b] or 0
         local myTime = myRate > 0 and (AB_MAX_RESOURCES - myRes) / myRate or 999999
         local theirTime = theirRate > 0 and (AB_MAX_RESOURCES - theirRes) / theirRate or 999999
         if myTime < theirTime then
-            local word = (b == 1) and "Base" or "Bases"
-            return string.format("Need %d %s", b, word)
+            return string.format("%s %d %s", verb, b, (b == 1) and "Base" or "Bases")
         end
     end
-    return "Need 5 Bases"
+    return verb .. " 5 Bases"
 end
 
-local lastProjWinner = nil
 local function CalculateABProjection(aRes, hRes, aBases, hBases)
     if not aRes or not hRes then return nil end
     local aRate = AB_RPS[aBases] or 0
@@ -920,17 +921,11 @@ local function CalculateABProjection(aRes, hRes, aBases, hBases)
         hTime = (hRate > 0) and (AB_MAX_RESOURCES - hRes) / hRate or 999999
     end
 
+    -- Finishes this close are decided by tick timing, so call them a tie
+    -- rather than repeating an earlier verdict.
     local DEAD_HEAT = 12
-    local timeDiff = aTime - hTime
-    local winner
-    if math.abs(timeDiff) > DEAD_HEAT or aTime >= 999999 or hTime >= 999999 then
-        winner = (aTime <= hTime) and "Alliance" or "Horde"
-    elseif lastProjWinner then
-        winner = lastProjWinner
-    else
-        winner = (aRes >= hRes) and "Alliance" or "Horde"
-    end
-    lastProjWinner = winner
+    local tie = aTime < 999999 and hTime < 999999 and math.abs(aTime - hTime) <= DEAD_HEAT
+    local winner = (aTime <= hTime) and "Alliance" or "Horde"
 
     local aFinal, hFinal, eta
     if winner == "Alliance" then
@@ -946,9 +941,10 @@ local function CalculateABProjection(aRes, hRes, aBases, hBases)
     end
 
     local myFaction = UnitFactionGroup("player") or "Alliance"
-    local playerWins = (winner == myFaction)
+    local playerWins = not tie and winner == myFaction
     local etaStr, announceStr
-    local etaColor = playerWins and "|cFF00FF00" or "|cFFFF5555"
+    local verdict = tie and "Tie" or (playerWins and "Win" or "Loss")
+    local etaColor = tie and "|cFFFFD100" or (playerWins and "|cFF00FF00" or "|cFFFF5555")
 
     if eta >= 999999 then
         etaStr = "--:--"
@@ -958,11 +954,12 @@ local function CalculateABProjection(aRes, hRes, aBases, hBases)
         local totSec = math.floor(math.max(0, eta) + 0.05)
         local mins = math.floor(totSec / 60)
         local secs = totSec - mins * 60
-        etaStr = string.format("%s %02d:%02d", (playerWins and "Win" or "Loss"), mins, secs)
-        announceStr = string.format("%s in %02d:%02d", (playerWins and "Win" or "Loss"), mins, secs)
+        etaStr = string.format("%s %02d:%02d", verdict, mins, secs)
+        announceStr = tie and string.format("Too close to call at %02d:%02d", mins, secs)
+            or string.format("%s in %02d:%02d", verdict, mins, secs)
     end
 
-    local basesNeeded = BasesNeededToWin(aRes, hRes) or "Need 3 Bases"
+    local basesNeeded = BasesToWin(aRes, hRes, myFaction, playerWins)
 
     return aFinal, hFinal, etaStr, etaColor, basesNeeded, announceStr
 end
@@ -983,9 +980,9 @@ local function UpdateABProjection(isTestAll, isAB)
 
     if isTestAll then
         local r1Stat = "|cFF00FF00Win 03:45|r"
-        local r1Sc   = "1450"
-        local r2Base = "|cFFFFD100Need 3 Bases|r"
-        local r2Sc   = "1280"
+        local r1Sc   = "A 1450"
+        local r2Base = "|cFFFFD100Hold 3 Bases|r"
+        local r2Sc   = "H 1280"
 
         if lastR1Status ~= r1Stat then ABProjectionFrame.r1Status:SetText(r1Stat); lastR1Status = r1Stat end
         if lastR1Score ~= r1Sc then ABProjectionFrame.r1Score:SetText(r1Sc); lastR1Score = r1Sc end
@@ -1065,9 +1062,9 @@ local function UpdateABProjection(isTestAll, isAB)
     end
 
     local r1Stat = (etaColor or "|cFFFFFFFF") .. (etaStr or "") .. "|r"
-    local r1Sc   = tostring(aFinal)
+    local r1Sc   = "A " .. aFinal
     local r2Base = "|cFFFFD100" .. (basesNeeded or "") .. "|r"
-    local r2Sc   = tostring(hFinal)
+    local r2Sc   = "H " .. hFinal
 
     if lastR1Status ~= r1Stat then ABProjectionFrame.r1Status:SetText(r1Stat); lastR1Status = r1Stat end
     if lastR1Score ~= r1Sc then ABProjectionFrame.r1Score:SetText(r1Sc); lastR1Score = r1Sc end
@@ -1436,7 +1433,6 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             if StartTimerFrame and StartTimerFrame:IsShown() then StartTimerFrame:Hide() end
             lastR1Status, lastR1Score = "", ""
             lastR2Bases, lastR2Score = "", ""
-            lastProjWinner = nil
             lastRecordedARes, lastRecordedHRes = nil, nil
             interpolatedARes, interpolatedHRes = nil, nil
             lastRecordedABases, lastRecordedHBases = nil, nil
