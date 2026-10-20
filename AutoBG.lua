@@ -174,7 +174,7 @@ local defaultSettings = {
     TestAllTimers = false, LastPlayedBG = nil,
     Positions = {}, SkipIfAFK = true,
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
-    AutoQueue_BR = false, ABProjection = true, StartTimer = true,
+    ABProjection = true, StartTimer = true,
 }
 
 -- Battleground Icons
@@ -183,12 +183,10 @@ local BG_ICONS = {
     ["Arathi Basin"]   = "Interface\\Icons\\INV_Jewelry_Amulet_07",
     ["Alterac Valley"] = "Interface\\Icons\\INV_Jewelry_Necklace_21",
     ["Thorn Gorge"]    = "Interface\\Icons\\INV_Jewelry_Talisman_04",
-    ["Blood Ring"]     = "Interface\\Icons\\INV_Jewelry_Talisman_05",
     ["wsg"]            = "Interface\\Icons\\INV_Misc_Rune_07",
     ["ab"]             = "Interface\\Icons\\INV_Jewelry_Amulet_07",
     ["av"]             = "Interface\\Icons\\INV_Jewelry_Necklace_21",
     ["tg"]             = "Interface\\Icons\\INV_Jewelry_Talisman_04",
-    ["br"]             = "Interface\\Icons\\INV_Jewelry_Talisman_05",
 }
 
 function AutoBG_GetBGIcon(keyOrName)
@@ -199,7 +197,6 @@ function AutoBG_GetBGIcon(keyOrName)
     elseif string.find(lower, "arathi") or lower == "ab" then return BG_ICONS["ab"]
     elseif string.find(lower, "alterac") or lower == "av" then return BG_ICONS["av"]
     elseif string.find(lower, "thorn") or string.find(lower, "gorge") or lower == "tg" then return BG_ICONS["tg"]
-    elseif string.find(lower, "blood") or string.find(lower, "ring") or lower == "br" then return BG_ICONS["br"]
     end
     return nil
 end
@@ -419,7 +416,6 @@ local function GetBGButtonIndex(bgName)
     if string.find(lower, "arathi") or string.find(lower, "ab") then return 5, "Arathi Basin", "Arathi"
     elseif string.find(lower, "alterac") or string.find(lower, "av") then return 7, "Alterac Valley", "Alterac"
     elseif string.find(lower, "thorn") or string.find(lower, "gorge") or string.find(lower, "tg") then return 6, "Thorn Gorge", "ThornGorge"
-    elseif string.find(lower, "arena") then return 3, "Arena"
     elseif string.find(lower, "warsong") or lower == "wsg" then return 4, "Warsong Gulch", "Warsong"
     else return 0, bgName end
 end
@@ -519,7 +515,6 @@ function AutoBG_GetSelectedBGs()
         if AutoBG_Settings.AutoQueue_WSG ~= false then table.insert(list, "Warsong Gulch") end
         if AutoBG_Settings.AutoQueue_AB ~= false then table.insert(list, "Arathi Basin") end
         if AutoBG_Settings.AutoQueue_AV ~= false then table.insert(list, "Alterac Valley") end
-        if AutoBG_Settings.AutoQueue_BR then table.insert(list, "Blood Ring") end
     end
     return list
 end
@@ -870,6 +865,8 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 if AutoBG_Settings[k] == nil then AutoBG_Settings[k] = v end
             end
         end
+        -- Blood Ring was removed: OctoWoW has no queue type for it.
+        AutoBG_Settings.AutoQueue_BR = nil
         -- Older/manual SavedVariables must not break queue comparisons or sliders.
         local delay = tonumber(AutoBG_Settings.AutoAcceptDelay) or 0
         if delay ~= delay then delay = 0 end

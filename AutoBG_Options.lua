@@ -398,15 +398,10 @@ local cbQueueAV = CreateBGCheckButton("AutoBG_Opt_QueueAV", panelGeneral, "Alter
 end)
 cbQueueAV:SetPoint("TOPLEFT", cbQueueAB, "BOTTOMLEFT", 0, -4)
 
-local cbQueueBR = CreateBGCheckButton("AutoBG_Opt_QueueBR", panelGeneral, "Blood Ring (Arena)", "Interface\\Icons\\INV_Jewelry_Talisman_05", "Include Blood Ring in Auto Queue.", function()
-	if AutoBG_Settings then AutoBG_Settings.AutoQueue_BR = this:GetChecked() and true or false end
-end)
-cbQueueBR:SetPoint("TOPLEFT", cbQueueAV, "BOTTOMLEFT", 0, -4)
-
 local cbAutoQueue = CreateCheckButton("AutoBG_Opt_AutoQueue", panelGeneral, "Auto-Queue on Login", "Automatically queue for selected battlegrounds upon logging in or reloading.", function()
 	if AutoBG_Settings then AutoBG_Settings.AutoQueueLogin = this:GetChecked() and true or false end
 end)
-cbAutoQueue:SetPoint("TOPLEFT", cbQueueBR, "BOTTOMLEFT", 0, -10)
+cbAutoQueue:SetPoint("TOPLEFT", cbQueueAV, "BOTTOMLEFT", 0, -10)
 
 local btnQueueAll = CreateFrame("Button", "AutoBG_BtnQueueAll", panelGeneral, "UIPanelButtonTemplate")
 btnQueueAll:SetWidth(102)
@@ -955,7 +950,6 @@ SelectTab = function(tabId, startPreview)
 			cbQueueWSG:SetChecked((AutoBG_Settings.AutoQueue_WSG ~= false) and 1 or nil)
 			cbQueueAB:SetChecked((AutoBG_Settings.AutoQueue_AB ~= false) and 1 or nil)
 			cbQueueAV:SetChecked((AutoBG_Settings.AutoQueue_AV ~= false) and 1 or nil)
-			cbQueueBR:SetChecked(AutoBG_Settings.AutoQueue_BR and 1 or nil)
 			cbAutoQueue:SetChecked(AutoBG_Settings.AutoQueueLogin and 1 or nil)
 		end
 	elseif tabId == 2 then
