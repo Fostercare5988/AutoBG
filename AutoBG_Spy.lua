@@ -15,6 +15,8 @@ end
 AutoBG_Spy = AutoBG_Spy or {}
 local Spy = AutoBG_Spy
 local Targets = AutoBG_Targets
+local _, ns = ...
+local UI = ns.UI
 
 -- Backwards-compatibility aliases
 if not BattlegroundTargets then BattlegroundTargets = AutoBG_Targets or {} end
@@ -890,6 +892,16 @@ function Spy:CreateFrames()
 	Spy:ApplyScale()
 end
 
+-- Alert rim per stealth type; shapes repaint by table, so these stay fixed.
+local ALERT_EDGE = {
+	Stealth = { 0.2, 0.8, 1.0, 0.95 },
+	Prowl = { 1.0, 0.5, 0.0, 0.95 },
+	Shadowmeld = { 0.7, 0.4, 0.9, 0.95 },
+	Vanish = { 0.3, 0.9, 1.0, 0.95 },
+	Invisibility = { 0.5, 0.8, 1.0, 0.95 },
+	Cloaking = { 0.9, 0.9, 0.2, 0.95 },
+}
+
 function Spy:CreateAlertWindow()
 	if Spy.AlertWindow then return end
 
@@ -901,14 +913,10 @@ function Spy:CreateAlertWindow()
 	f:SetClampedToScreen(true)
 	f:Hide()
 
-	f:SetBackdrop({
-		bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-		tile = true, tileSize = 12, edgeSize = 12,
-		insets = { left = 3, right = 3, top = 3, bottom = 3 }
-	})
-	f:SetBackdropColor(0.06, 0.06, 0.10, 0.90)
-	f:SetBackdropBorderColor(0.2, 0.8, 1.0, 0.95)
+	-- ForgeUI card: soft shadow, a rim tinted by stealth type, the Ember surface.
+	UI.Rounded(f, "BACKGROUND", 20, UI.shadowColor, 12, UI.shadow, -3)
+	f.edge = UI.Rounded(f, "BORDER", 10, ALERT_EDGE.Stealth)
+	UI.Rounded(f, "ARTWORK", 9, UI.surface, -1)
 
 	f:RegisterForDrag("LeftButton")
 	f:SetScript("OnDragStart", function()
@@ -934,8 +942,8 @@ function Spy:CreateAlertWindow()
 		Targets.SelectEnemy(tName, tGUID, "LeftButton")
 	end)
 
-	-- Icon
-	local icon = f:CreateTexture(nil, "ARTWORK")
+	-- Icon (OVERLAY: the card surface fills ARTWORK)
+	local icon = f:CreateTexture(nil, "OVERLAY")
 	icon:SetWidth(30)
 	icon:SetHeight(30)
 	icon:SetPoint("LEFT", f, "LEFT", 6, 0)
@@ -999,28 +1007,28 @@ function Spy:ShowAlert(spellName, enemyName, classToken, guid)
 	local sName = spellName or "Stealth"
 	local tex = "Interface\\Icons\\Ability_Stealth"
 	local titleText = "|cff00ffffStealth Detected!|r"
-	local borderR, borderG, borderB = 0.2, 0.8, 1.0
+	local edge = ALERT_EDGE.Stealth
 
 	if sName == "Prowl" then
 		tex = PROWL_TEXTURE or "Interface\\Icons\\Ability_Druid_Prowl"
 		titleText = "|cffff9900Prowl Detected!|r"
-		borderR, borderG, borderB = 1.0, 0.5, 0.0
+		edge = ALERT_EDGE.Prowl
 	elseif sName == "Shadowmeld" then
 		tex = "Interface\\Icons\\Ability_Racial_ShadowMeld"
 		titleText = "|cffbb88ffShadowmeld Detected!|r"
-		borderR, borderG, borderB = 0.7, 0.4, 0.9
+		edge = ALERT_EDGE.Shadowmeld
 	elseif sName == "Vanish" then
 		tex = "Interface\\Icons\\Ability_Stealth"
 		titleText = "|cff00ffffVanish Detected!|r"
-		borderR, borderG, borderB = 0.3, 0.9, 1.0
+		edge = ALERT_EDGE.Vanish
 	elseif string.find(sName, "Invis") then
 		tex = "Interface\\Icons\\Spell_Nature_Invisibilty"
 		titleText = "|cff88ccffInvisibility Detected!|r"
-		borderR, borderG, borderB = 0.5, 0.8, 1.0
+		edge = ALERT_EDGE.Invisibility
 	elseif sName == "Cloaking" then
 		tex = "Interface\\Icons\\INV_Misc_EngGizmos_04"
 		titleText = "|cffffff00Cloaking Detected!|r"
-		borderR, borderG, borderB = 0.9, 0.9, 0.2
+		edge = ALERT_EDGE.Cloaking
 	end
 
 	w.Icon:SetTexture(tex)
@@ -1032,7 +1040,7 @@ function Spy:ShowAlert(spellName, enemyName, classToken, guid)
 	w.Name:SetText(enemyName or "Unknown")
 	w.Name:SetTextColor(color.r, color.g, color.b)
 
-	w:SetBackdropBorderColor(borderR, borderG, borderB, 0.95)
+	UI.Paint(w.edge, edge)
 
 	local titleW = (w.Title.GetStringWidth and w.Title:GetStringWidth()) or 100
 	local nameW = (w.Name.GetStringWidth and w.Name:GetStringWidth()) or 80
@@ -1276,6 +1284,8 @@ function Spy:EnableTestMode()
 	end
 
 	Spy:RenderRows()
+	-- Preview the warning as it plays outside BGs, sound included.
+	if GetSpySettings().SoundAlert then Spy:PlayStealthDetectedSound() end
 	Spy:ShowAlert("Stealth", "Shadowstalker-Realm", "ROGUE", nil)
 end
 

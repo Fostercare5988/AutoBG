@@ -11,6 +11,7 @@
 ## X-Category: Battlegrounds & PvP
 ## X-Website: https://github.com/Fostercare5988
 
+ForgeUI.lua
 AutoBG.lua
 AutoBG_Timers.lua
 AutoBG_FC.lua
