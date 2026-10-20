@@ -20,6 +20,11 @@ local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
 local HORDE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\HordeFlag"
 local ALLIANCE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\AllianceFlag"
+local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
+local CAST_WIDTH = 120
+-- Most ranged spells and heals reach 40 yards; farther enemies fade.
+local RANGE_SQUARED = 40 * 40
+local OUT_OF_RANGE_ALPHA = 0.4
 local ALLIANCE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 
@@ -52,6 +57,8 @@ end
 
 AutoBG_Targets = CreateFrame("Frame", "AutoBG_TargetsCoreFrame", UIParent)
 local Targets = AutoBG_Targets
+local _, ns = ...
+local UI = ns.UI
 BattlegroundTargets = AutoBG_Targets -- Backwards-compatibility alias
 
 Targets.currentSize = 10
@@ -357,6 +364,10 @@ function Targets:EnsureOptions()
 	o.ShowTrinket = o.ShowTrinket or {}
 	if o.StealthAlert == nil then o.StealthAlert = true end
 	if o.TrinketPos == nil then o.TrinketPos = "RIGHT" end
+	if o.ShowCastBars == nil then o.ShowCastBars = true end
+	if o.FadeOutOfRange == nil then o.FadeOutOfRange = true end
+	if o.ShowRaidIcons == nil then o.ShowRaidIcons = true end
+	if o.ShowTargetCount == nil then o.ShowTargetCount = true end
 
 	-- Migrate old default dimensions once; preserve custom layouts and positions.
 	if not o.ReadabilityVersion then
@@ -472,7 +483,16 @@ local function UpdateRowStealthVisual(index, name)
 			btn.StealthIconBg:Hide()
 		end
 	end
+	-- Stealth icon at the left edge, then the raid icon, then the name.
 	local inset = tex and (height + 1) or 4
+	if btn.raidIndex then
+		if btn.raidInset ~= inset then
+			btn.raidInset = inset
+			btn.RaidIcon:ClearAllPoints()
+			btn.RaidIcon:SetPoint("LEFT", btn, "LEFT", inset, 0)
+		end
+		inset = inset + height - 4
+	end
 	if btn.nameInset ~= inset then
 		btn.nameInset = inset
 		btn.Name:SetPoint("LEFT", btn, "LEFT", inset, 0)
@@ -486,6 +506,7 @@ local function UpdateRowStealthVisual(index, name)
 	else
 		alpha = 1.0
 	end
+	if btn.outOfRange and not dead then alpha = math.min(alpha, OUT_OF_RANGE_ALPHA) end
 	if btn.visualAlpha ~= alpha then btn.visualAlpha = alpha; btn:SetAlpha(alpha) end
 
 	local text, showText
@@ -685,9 +706,199 @@ local function UpdateRowTrinketVisual(index, name)
 	end
 end
 
+-- -------------------------------------------------------------------------- --
+-- Enemy cast bars                                                            --
+-- -------------------------------------------------------------------------- --
+local CAST_COLOR = { 1.0, 0.70, 0.0 }
+local CHANNEL_COLOR = { 0.40, 0.75, 1.0 }
+local LOCKED_COLOR = { 0.60, 0.60, 0.60 }
+
+local function StopCast(btn)
+	local cast = btn and btn.Cast
+	if not cast or not cast.active then return end
+	cast.active, cast.guid, cast.spell, cast.preview, cast.fromEvent = nil, nil, nil, nil, nil
+	cast:Hide()
+end
+
+-- ClassicAPI times remote casts from the server's cast packet and clears them
+-- on interrupt, so it is the authority; the cast event is only the cue to ask.
+local function ReadCast(guid)
+	local name, _, texture, startMs, endMs, _, _, locked = C_Spell.UnitCastingInfo(guid)
+	if name then return name, texture, startMs, endMs, false, locked end
+	name, _, texture, startMs, endMs, _, locked = C_Spell.UnitChannelInfo(guid)
+	if name then return name, texture, startMs, endMs, true, locked end
+end
+
+local function ShowCast(btn, guid, spell, texture, startMs, endMs, channel, locked)
+	local cast = btn.Cast
+	cast.active, cast.guid = true, guid
+	cast.startMs, cast.endMs, cast.channel = startMs, endMs, channel
+	cast.nextCheck = GetTime() + 0.2
+	if cast.spell ~= spell then
+		cast.spell = spell
+		cast.Text:SetText(spell)
+	end
+	cast.Icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
+	local c = locked and LOCKED_COLOR or (channel and CHANNEL_COLOR) or CAST_COLOR
+	cast.Bar:SetVertexColor(c[1], c[2], c[3], 1)
+	cast:Show()
+end
+
+-- fallbackSpell/fallbackMs come from UNIT_CASTEVENT (duration in ms) in case
+-- the event arrives before ClassicAPI has cached the cast.
+local function RefreshCast(row, fallbackSpell, fallbackMs, fallbackChannel)
+	local btn = Targets.TargetButton and Targets.TargetButton[row]
+	if not btn or not btn:IsShown() then return end
+	local o = AutoBG_Settings and AutoBG_Settings.Targets
+	local guid = btn.targetName and nameToGUID[btn.targetName]
+	if (o and o.ShowCastBars == false) or not guid then StopCast(btn); return end
+	local spell, texture, startMs, endMs, channel, locked = ReadCast(guid)
+	local fromEvent
+	if not spell and fallbackSpell and fallbackMs and fallbackMs > 0 then
+		local name, _, icon = SpellInfo(fallbackSpell)
+		if name then
+			spell, texture, channel, fromEvent = name, icon, fallbackChannel, true
+			startMs = GetTime() * 1000
+			endMs = startMs + fallbackMs
+		end
+	end
+	if spell and endMs and endMs > GetTime() * 1000 then
+		ShowCast(btn, guid, spell, texture, startMs, endMs, channel, locked)
+		btn.Cast.fromEvent = fromEvent
+	else
+		StopCast(btn)
+	end
+end
+
+-- Animation only: the bar moves every frame while a cast is showing.
+local function Cast_OnUpdate(self)
+	local cast = self or this
+	local btn = cast.owner
+	local now = GetTime()
+	local nowMs = now * 1000
+	if cast.preview then
+		if nowMs >= cast.endMs then
+			local span = cast.endMs - cast.startMs
+			cast.startMs, cast.endMs = nowMs, nowMs + span
+		end
+	elseif now >= cast.nextCheck then
+		cast.nextCheck = now + 0.2
+		local guid = btn.targetName and nameToGUID[btn.targetName]
+		if guid ~= cast.guid then StopCast(btn); return end
+		local spell, texture, startMs, endMs, channel, locked = ReadCast(guid)
+		if spell then
+			if spell ~= cast.spell or startMs ~= cast.startMs then
+				ShowCast(btn, guid, spell, texture, startMs, endMs, channel, locked)
+			end
+			cast.endMs, cast.fromEvent = endMs, nil -- pushback moves the end
+		elseif not cast.fromEvent then
+			StopCast(btn)
+			return
+		end
+	end
+	if nowMs >= cast.endMs then StopCast(btn); return end
+	local span = cast.endMs - cast.startMs
+	local pct = span > 0 and (nowMs - cast.startMs) / span or 1
+	if cast.channel then pct = 1 - pct end
+	if pct < 0 then pct = 0 elseif pct > 1 then pct = 1 end
+	local width = math.max(1, math.floor((cast.barMax or 1) * pct + 0.5))
+	if cast.barWidth ~= width then
+		cast.barWidth = width
+		cast.Bar:SetWidth(width)
+	end
+end
+
+local function ClearAllCasts()
+	if not Targets.TargetButton then return end
+	for i = 1, MAX_ENEMIES do StopCast(Targets.TargetButton[i]) end
+end
+
+-- -------------------------------------------------------------------------- --
+-- Range, raid icons and group targets                                        --
+-- -------------------------------------------------------------------------- --
+local previewStatus = {} -- row -> { far, raid, count } while previewing
+local RAID_TARGET_TOKENS, PARTY_TARGET_TOKENS = {}, {}
+for i = 1, 40 do RAID_TARGET_TOKENS[i] = "raid" .. i .. "target" end
+for i = 1, 4 do PARTY_TARGET_TOKENS[i] = "party" .. i .. "target" end
+local groupTargets = {}
+
+local function CountTarget(token)
+	local guid = UnitGUID(token)
+	if guid then groupTargets[guid] = (groupTargets[guid] or 0) + 1 end
+end
+
+-- How many of your group (you included) target each enemy GUID.
+local function CountGroupTargets()
+	wipe(groupTargets)
+	local raid = GetNumRaidMembers()
+	if raid > 0 then
+		for i = 1, raid do CountTarget(RAID_TARGET_TOKENS[i]) end
+	else
+		CountTarget("target")
+		for i = 1, GetNumPartyMembers() do CountTarget(PARTY_TARGET_TOKENS[i]) end
+	end
+end
+
+-- Runs on the half-second ticker and when targets or raid icons change.
+local function UpdateRowStatus()
+	if not Targets.TargetButton or not Targets.MainFrame:IsShown() then return end
+	local o = AutoBG_Settings and AutoBG_Settings.Targets
+	local fade = not o or o.FadeOutOfRange ~= false
+	local icons = not o or o.ShowRaidIcons ~= false
+	local counts = not o or o.ShowTargetCount ~= false
+	if counts and not Targets.isConfig then CountGroupTargets() end
+	for i = 1, math.min(enemyCount, currentSize) do
+		local btn = Targets.TargetButton[i]
+		local name = btn.targetName
+		if name and btn:IsShown() then
+			local far, raidIndex, count
+			if Targets.isConfig then
+				local sample = previewStatus[i]
+				if sample then far, raidIndex, count = sample.far, sample.raid, sample.count end
+			else
+				local guid = nameToGUID[name]
+				if guid then
+					local distanceSquared, checked = UnitDistanceSquared(guid)
+					far = not (checked and distanceSquared <= RANGE_SQUARED)
+					raidIndex = GetRaidTargetIndex(guid)
+					count = groupTargets[guid]
+				else
+					far = true -- not seen near you this match
+				end
+			end
+			far = (fade and far) and true or nil
+			raidIndex = icons and raidIndex or nil
+			count = counts and count or nil
+			local changed = false
+			if btn.raidIndex ~= raidIndex then
+				btn.raidIndex = raidIndex
+				if raidIndex then
+					SetRaidTargetIconTexture(btn.RaidIcon, raidIndex)
+					btn.RaidIcon:Show()
+				else
+					btn.RaidIcon:Hide()
+				end
+				btn.nameInset, btn.raidInset = nil, nil
+				changed = true
+			end
+			if btn.outOfRange ~= far then
+				btn.outOfRange = far
+				changed = true
+			end
+			if changed then UpdateRowStealthVisual(i, name) end
+			if btn.targetCount ~= count then
+				btn.targetCount = count
+				btn.TargetCount:SetText(count and tostring(count) or "")
+			end
+		end
+	end
+end
+Targets.UpdateRowStatus = UpdateRowStatus
+
 local function UpdateObservedTimers()
 	if not (activeBG or Targets.isConfig) then return end
 	if not Targets.TargetButton then return end
+	UpdateRowStatus()
 	if not next(stealthedState) and not next(trinketCooldown) then return end
 	local now = GetTime()
 	for i = 1, math.min(enemyCount, currentSize) do
@@ -907,17 +1118,16 @@ function Targets:CreateFrames()
 	header:SetPoint("TOPLEFT", main, "TOPLEFT", 0, 0)
 	header:SetPoint("TOPRIGHT", main, "TOPRIGHT", 0, 0)
 	header:SetHeight(DRAG_HEADER_HEIGHT)
-	header:EnableMouse(true)
+	-- UpdateHeader enables dragging only while previewing.
+	header:EnableMouse(false)
 	header:RegisterForDrag("LeftButton")
 	header:SetScript("OnDragStart", MainFrame_OnMouseDown)
 	header:SetScript("OnDragStop", MainFrame_OnMouseUp)
 	local background = header:CreateTexture(nil, "BACKGROUND")
 	background:SetAllPoints(header)
-	background:SetTexture(0.12, 0.16, 0.22, 0.95)
+	background:SetTexture(UI.track[1], UI.track[2], UI.track[3], 0.95)
 	main.MoveText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	main.MoveText:SetPoint("CENTER", header, "CENTER", 0, 0)
-	main.MoveText:SetText("Drag to move")
-	main.MoveText:SetTextColor(1, 1, 1, 1)
 	header:Show()
 
 	Targets.TargetButton = {}
@@ -970,6 +1180,32 @@ function Targets:CreateFrames()
 		btn.FlagIcon:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
 		btn.FlagIcon:Hide()
 
+		btn.RaidIcon = btn:CreateTexture(nil, "OVERLAY")
+		btn.RaidIcon:SetTexture(RAID_ICON_TEXTURE)
+		btn.RaidIcon:Hide()
+
+		-- Cast bar beside the row, on the side away from the trinket.
+		local cast = CreateFrame("Frame", "AutoBG_TargetCast" .. i, btn)
+		btn.Cast = cast
+		cast.owner = btn
+		cast:SetFrameLevel(btn:GetFrameLevel() + 3)
+		cast:Hide()
+		cast.Bg = cast:CreateTexture(nil, "BACKGROUND")
+		cast.Bg:SetAllPoints(cast)
+		cast.Bg:SetTexture(0, 0, 0, 0.75)
+		cast.Icon = cast:CreateTexture(nil, "ARTWORK")
+		cast.Icon:SetPoint("TOPLEFT", cast, "TOPLEFT", 1, -1)
+		cast.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+		cast.Bar = cast:CreateTexture(nil, "ARTWORK")
+		cast.Bar:SetPoint("TOPLEFT", cast.Icon, "TOPRIGHT", 1, 0)
+		cast.Bar:SetPoint("BOTTOMLEFT", cast.Icon, "BOTTOMRIGHT", 1, 0)
+		cast.Bar:SetTexture(BAR_TEXTURE)
+		cast.Text = cast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		cast.Text:SetPoint("LEFT", cast.Icon, "RIGHT", 3, 0)
+		cast.Text:SetPoint("RIGHT", cast, "RIGHT", -2, 0)
+		cast.Text:SetJustifyH("LEFT")
+		cast:SetScript("OnUpdate", Cast_OnUpdate)
+
 		-- PvP Trinket Frame
 		local trinket = CreateFrame("Frame", "AutoBG_TargetTrinket" .. i, btn)
 		btn.Trinket = trinket
@@ -1006,7 +1242,12 @@ function Targets:CreateFrames()
 		btn.HealthText:SetFont(FONT, 10, "OUTLINE")
 		btn.HealthText:SetTextColor(1, 1, 1, 0.90)
 
-		btn.Name:SetPoint("RIGHT", btn.HealthText, "LEFT", -4, 0)
+		-- How many of your group target this enemy, just left of the health text.
+		btn.TargetCount = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		btn.TargetCount:SetPoint("RIGHT", btn.HealthText, "LEFT", -3, 0)
+		btn.TargetCount:SetTextColor(UI.heading[1], UI.heading[2], UI.heading[3])
+
+		btn.Name:SetPoint("RIGHT", btn.TargetCount, "LEFT", -3, 0)
 
 		btn.BorderTop = CreateLine(btn, "OVERLAY")
 		btn.BorderTop:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
@@ -1126,6 +1367,24 @@ function Targets:SetupButtonLayout(size)
 			btn.Trinket.Text:SetFont(FONT, tFontSize, "OUTLINE")
 			btn.Trinket.Icon:SetTexture(GetEnemyTrinketTexture())
 		end
+		btn.RaidIcon:SetWidth(height - 6)
+		btn.RaidIcon:SetHeight(height - 6)
+		btn.nameInset, btn.raidInset = nil, nil
+		btn.TargetCount:SetFont(FONT, fontSize, "OUTLINE")
+		local cast = btn.Cast
+		cast:ClearAllPoints()
+		if ((o and o.TrinketPos) or "RIGHT") == "LEFT" then
+			cast:SetPoint("LEFT", btn, "RIGHT", 3, 0)
+		else
+			cast:SetPoint("RIGHT", btn, "LEFT", -3, 0)
+		end
+		cast:SetWidth(CAST_WIDTH)
+		cast:SetHeight(height)
+		cast.Icon:SetWidth(height - 2)
+		cast.Icon:SetHeight(height - 2)
+		cast.barMax = CAST_WIDTH - (height - 2) - 3
+		cast.barWidth = nil
+		cast.Text:SetFont(FONT, math.max(8, fontSize - 2), "OUTLINE")
 		btn.HealthBar:SetTexture(BAR_TEXTURE)
 	end
 
@@ -1155,6 +1414,28 @@ local function DetectBattleground()
 	return false, nil
 end
 
+-- In a match the header counts living enemies and ignores the mouse, so a
+-- misclick cannot drag the list mid-fight. Preview frames shows the drag hint.
+local function UpdateHeader()
+	local main = Targets.MainFrame
+	if not main then return end
+	local text, color
+	if Targets.isConfig then
+		text, color = "Drag to move", UI.heading
+	else
+		local total, alive = math.min(enemyCount, currentSize), 0
+		for i = 1, total do
+			if not deadState[roster[i].name] then alive = alive + 1 end
+		end
+		text, color = "Enemies " .. alive .. "/" .. total, UI.hint
+	end
+	if main.headerText == text then return end
+	main.headerText = text
+	main.DragHeader:EnableMouse(Targets.isConfig and true or false)
+	main.MoveText:SetText(text)
+	main.MoveText:SetTextColor(color[1], color[2], color[3])
+end
+
 local function RenderHealthForRow(index, name)
 	local btn = Targets.TargetButton[index]
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
@@ -1178,6 +1459,7 @@ local function RenderHealthForRow(index, name)
 
 	UpdateRowStealthVisual(index, name)
 	UpdateRowFlagVisual(index, name)
+	UpdateHeader()
 end
 
 local function RenderRoster()
@@ -1233,6 +1515,11 @@ local function RenderRoster()
 			btn.HealthBar:SetVertexColor(color.r, color.g, color.b, 1)
 
 			btn.Name:SetText((o and o.ButtonHideRealm and o.ButtonHideRealm[currentSize]) and StripRealm(name) or name)
+			-- A row that now shows a different enemy drops the old enemy's cast.
+			if btn.castOwner ~= name then
+				btn.castOwner = name
+				StopCast(btn)
+			end
 			btn:Show()
 			RenderHealthForRow(i, name)
 			UpdateRowTrinketVisual(i, name)
@@ -1246,6 +1533,8 @@ local function RenderRoster()
 			if btn.FlagIcon then btn.FlagIcon:Hide() end
 			if btn.Trinket then btn.Trinket:Hide() end
 			btn.trinketShown = false
+			btn.castOwner = nil
+			StopCast(btn)
 			btn:Hide()
 		end
 	end
@@ -1253,6 +1542,8 @@ local function RenderRoster()
 	UpdateAllSelectionVisuals()
 	Targets.MainFrame:EnableMouse(false)
 	Targets.MainFrame.DragHeader:Show()
+	UpdateHeader()
+	UpdateRowStatus()
 end
 Targets.RenderRoster = RenderRoster
 
@@ -1270,6 +1561,7 @@ function Targets:BattlefieldScoreUpdate(force)
 		end
 		if not wasActive and enemyCount == 0 then Targets.MainFrame:Hide(); return end
 		ClearAllTrinkets()
+		ClearAllCasts()
 		prevEnemyCount = -1
 		enemyCount = 0
 		ClearAllStealth()
@@ -1460,7 +1752,35 @@ function Targets:EnableConfigMode(size)
 		e.classToken = nil
 		e.guid = nil
 	end
+	-- Sample row status: a skull three of you are on, a marked mage, two far away.
+	wipe(previewStatus)
+	previewStatus[1] = { raid = 8, count = 3 }
+	previewStatus[2] = { count = 1 }
+	previewStatus[3] = { raid = 7 }
+	previewStatus[6] = { far = true }
+	previewStatus[7] = { far = true }
 	RenderRoster()
+	-- Sample casts that loop: the priest's heal and the mage's channel.
+	local o = AutoBG_Settings and AutoBG_Settings.Targets
+	if not (o and o.ShowCastBars == false) then
+		local nowMs = GetTime() * 1000
+		local heal, channel = Targets.TargetButton[2], Targets.TargetButton[3]
+		ShowCast(heal, nil, "Flash Heal", "Interface\\Icons\\Spell_Holy_FlashHeal", nowMs, nowMs + 1500, false, false)
+		heal.Cast.preview = true
+		ShowCast(channel, nil, "Arcane Missiles", "Interface\\Icons\\Spell_Nature_StarFall", nowMs, nowMs + 5000, true, false)
+		channel.Cast.preview = true
+	end
+end
+
+-- Re-applies the cast bar, range, raid icon and target count switches.
+function Targets:ApplyRowFeatures()
+	local o = AutoBG_Settings and AutoBG_Settings.Targets
+	if o and o.ShowCastBars == false then ClearAllCasts() end
+	if Targets.isConfig then
+		Targets:EnableConfigMode(currentSize)
+	else
+		UpdateRowStatus()
+	end
 end
 
 function Targets:DisableConfigMode()
@@ -1468,6 +1788,8 @@ function Targets:DisableConfigMode()
 	prevEnemyCount = -1
 	ClearAllStealth()
 	ClearAllTrinkets()
+	ClearAllCasts()
+	wipe(previewStatus)
 	for i = 1, MAX_ENEMIES do
 		local btn = Targets.TargetButton[i]
 		if btn then
@@ -1550,6 +1872,7 @@ Targets:RegisterEvent("UNIT_TARGET")
 Targets:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 Targets:RegisterEvent("PLAYER_TARGET_CHANGED")
 Targets:RegisterEvent("PLAYER_FOCUS_CHANGED")
+Targets:RegisterEvent("RAID_TARGET_UPDATE")
 Targets:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 Targets:RegisterEvent("UNIT_NAME_UPDATE")
 Targets:RegisterEvent("UNIT_CASTEVENT")
@@ -1569,14 +1892,14 @@ local TARGETS_LIFECYCLE_EVENTS = {
 	UPDATE_BATTLEFIELD_SCORE = true,
 }
 
-local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_param, arg6_param)
-	local ev, a1, a2, a3, a4
+local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_param, arg6_param, arg7_param)
+	local ev, a1, a2, a3, a4, a5
 	if type(arg1_param) == "string" then
-		ev, a1, a2, a3, a4 = arg1_param, arg2_param, arg3_param, arg4_param, arg5_param
+		ev, a1, a2, a3, a4, a5 = arg1_param, arg2_param, arg3_param, arg4_param, arg5_param, arg6_param
 	elseif type(arg2_param) == "string" then
-		ev, a1, a2, a3, a4 = arg2_param, arg3_param, arg4_param, arg5_param, arg6_param
+		ev, a1, a2, a3, a4, a5 = arg2_param, arg3_param, arg4_param, arg5_param, arg6_param, arg7_param
 	else
-		ev, a1, a2, a3, a4 = event, arg1, arg2, arg3, arg4
+		ev, a1, a2, a3, a4, a5 = event, arg1, arg2, arg3, arg4, arg5
 	end
 	if not (activeBG or Targets.isConfig) and not TARGETS_LIFECYCLE_EVENTS[ev] then
 		return
@@ -1614,6 +1937,10 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 	elseif ev == "PLAYER_TARGET_CHANGED" then
 		ObserveUnit("target")
 		UpdateAllSelectionVisuals()
+		UpdateRowStatus()
+
+	elseif ev == "RAID_TARGET_UPDATE" then
+		UpdateRowStatus()
 
 	elseif ev == "PLAYER_FOCUS_CHANGED" then
 		ObserveUnit("focus")
@@ -1681,6 +2008,18 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 		elseif eventType == "MAINHAND" or eventType == "OFFHAND" then
 			if stealthedState[name] then
 				SetUnitStealth(name, false)
+			end
+		end
+
+		-- Cast bars: START/CHANNEL begin a cast, CAST ends it, FAIL means it was
+		-- interrupted or cancelled. a5 is the cast duration in milliseconds.
+		if row and not modern then
+			if eventType == "FAIL" then
+				StopCast(Targets.TargetButton[row])
+			elseif eventType == "START" or eventType == "CHANNEL" then
+				RefreshCast(row, spellId, a5, eventType == "CHANNEL")
+			elseif eventType == "CAST" then
+				RefreshCast(row)
 			end
 		end
 	end

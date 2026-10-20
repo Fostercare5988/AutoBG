@@ -56,9 +56,25 @@ does not provide enough information.
 
 ## Enemy frames
 
-Open `/abg targets` or `/bgt`. Pick 10v10, 15v15 or 40v40, then edit that size's
-width, height, scale, text size, health text, realm suffix and stealth dimming.
-Picking a size outside a battleground previews it so you can move it. The trinket icon can sit on either side; its 180-second countdown
+Open `/abg targets` or `/bgt`. Pick 10v10, 15v15 or 40v40, then choose that size's
+health text, realm suffix, stealth dimming and trinket. **Frame size** offers
+Compact, Standard and Large; **Custom size** reveals text size, scale, width and
+height sliders. Picking a size outside a battleground previews it so you can move it.
+
+During a match the header shows how many enemies are alive and stays locked, so a
+stray click cannot move the list. Use **Preview frames** to drag it.
+
+**On each enemy** (shared by every size):
+
+- **Cast bars:** each enemy's cast or channel appears beside its row with the spell
+  icon and name, on the side away from the trinket. Orange is a cast, blue a
+  channel, grey cannot be interrupted. Interrupts clear the bar at once. Only casts
+  that start while the enemy is loaded near you can be seen.
+- **Fade when out of range:** enemies farther than 40 yards, or not seen near you
+  yet this match, fade so the reachable ones stand out.
+- **Raid icons:** skull, cross and the other raid icons your group sets.
+- **Who's on them:** an orange number beside the health shows how many of your
+  group, you included, target that enemy. The trinket icon can sit on either side; its 180-second countdown
 estimates cooldown from observed activations. Left-click targets; right-click
 focuses a verified loaded player.
 

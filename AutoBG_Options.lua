@@ -290,45 +290,108 @@ local cbTgtTrinketLeft = UI.Switch("AutoBG_Tgt_TrinketLeft", panelTargets, "Trin
 		Rerender()
 	end)
 
-UI.Heading(panelTargets, "Alerts", 28, -320)
+local sizeHint = Hint(panelTargets, "", 28, -316, 208)
+
+-- Frame size: three presets per battleground size; sliders only on request.
+-- Each preset is { width, height, text size }.
+local SIZE_PRESETS = {
+	[10] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
+	[15] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
+	[40] = { { 160, 16, 9 }, { 210, 20, 11 }, { 240, 24, 12 } },
+}
+local customSize = false
+local ApplyCustomSize -- forward declaration
+
+UI.Heading(panelTargets, "Frame size", 264, -98)
+local _, ShowPreset = UI.Segmented("AutoBG_Tgt_Preset", panelTargets, { "Compact", "Standard", "Large" }, 260, -114, 212,
+	function(index)
+		local o = TargetOptions()
+		if not (o and o.ButtonWidth and o.ButtonHeight and o.ButtonFontSize) then return end
+		local preset = SIZE_PRESETS[selectedBracket][index]
+		o.ButtonWidth[selectedBracket] = preset[1]
+		o.ButtonHeight[selectedBracket] = preset[2]
+		o.ButtonFontSize[selectedBracket] = preset[3]
+		Relayout()
+		Rerender()
+		UpdateTargetsWidgets(selectedBracket)
+	end, { height = 26 })
+local btnCustomSize = UI.Button("AutoBG_Tgt_CustomSize", panelTargets, "Custom size", 264, -150, 208, function()
+	customSize = not customSize
+	ApplyCustomSize()
+end, { height = 20 })
+UI.Tooltip(btnCustomSize, "Set text size, scale, width and height yourself.")
+
+-- Row features shared by every battleground size.
+local function RowFeature(name, text, tip, y, key)
+	return UI.Switch(name, panelTargets, text, tip, 264, y, function(value)
+		Targets:EnsureOptions()
+		AutoBG_Settings.Targets[key] = value
+		if Targets.ApplyRowFeatures then Targets:ApplyRowFeatures() end
+	end, 172)
+end
+
+UI.Heading(panelTargets, "On each enemy", 264, -186)
+local cbTgtCastBars = RowFeature("AutoBG_Tgt_CastBars", "Cast bars",
+	"Show each enemy's cast or channel beside the row, with the spell name. Grey means it cannot be interrupted.", -206, "ShowCastBars")
+local cbTgtRange = RowFeature("AutoBG_Tgt_FadeRange", "Fade when out of range",
+	"Fade enemies farther than 40 yards, or not seen near you yet, so you only read the ones you can reach.", -232, "FadeOutOfRange")
+local cbTgtRaidIcons = RowFeature("AutoBG_Tgt_RaidIcons", "Raid icons",
+	"Show the skull, cross and other raid icons your group puts on enemies.", -258, "ShowRaidIcons")
+local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
+	"Show how many of your group, you included, target each enemy, in orange beside the health.", -284, "ShowTargetCount")
+
+UI.Heading(panelTargets, "Alerts", 264, -320)
 local cbTgtStealthAlert = UI.Switch("AutoBG_Tgt_StealthAlert", panelTargets, "Stealth alerts in BGs",
-	"Warn with a sound for a confirmed stealth aura within 10 yards and clear line of sight. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Row indicators still update.", 28, -340, function(value)
+	"Warn with a sound for a confirmed stealth aura within 10 yards and clear line of sight. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Row indicators still update.", 264, -340, function(value)
 		Targets:EnsureOptions()
 		AutoBG_Settings.Targets.StealthAlert = value
-	end)
+	end, 172)
 
-local function TargetSlider(name, text, y, minValue, maxValue, step, store, rerender, format)
-	return UI.Slider(name, panelTargets, text, 264, y, 208, minValue, maxValue, step, function(value)
+local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, store, rerender, format)
+	return UI.Slider(name, panelTargets, text, x, y, width, minValue, maxValue, step, function(value)
 		local o = TargetOptions()
 		if not o then return end
 		if not store(o, value) then return end
 		Relayout()
 		if rerender then Rerender() end
+		UpdateTargetsWidgets(selectedBracket)
 	end, format)
 end
 
-UI.Heading(panelTargets, "Frame size", 264, -98)
-local sliderTgtFontSize = TargetSlider("AutoBG_Tgt_FontSize", "Text size", -118, 6, 20, 1, function(o, value)
+local sliderTgtFontSize = TargetSlider("AutoBG_Tgt_FontSize", "Text size", 28, -384, 200, 6, 20, 1, function(o, value)
 	if not o.ButtonFontSize then return end
 	o.ButtonFontSize[selectedBracket] = value
 	return true
 end, true)
-local sliderTgtScale = TargetSlider("AutoBG_Tgt_Scale", "Scale", -160, 50, 200, 5, function(o, value)
+local sliderTgtScale = TargetSlider("AutoBG_Tgt_Scale", "Scale", 264, -384, 208, 50, 200, 5, function(o, value)
 	if not o.ButtonScale then return end
 	o.ButtonScale[selectedBracket] = value / 100
 	return true
 end, false, Percent)
-local sliderTgtWidth = TargetSlider("AutoBG_Tgt_Width", "Width", -202, 60, 300, 5, function(o, value)
+local sliderTgtWidth = TargetSlider("AutoBG_Tgt_Width", "Width", 28, -426, 200, 60, 300, 5, function(o, value)
 	if not o.ButtonWidth then return end
 	o.ButtonWidth[selectedBracket] = value
 	return true
 end, true)
-local sliderTgtHeight = TargetSlider("AutoBG_Tgt_Height", "Height", -244, 10, 40, 1, function(o, value)
+local sliderTgtHeight = TargetSlider("AutoBG_Tgt_Height", "Height", 264, -426, 208, 10, 40, 1, function(o, value)
 	if not o.ButtonHeight then return end
 	o.ButtonHeight[selectedBracket] = value
 	return true
 end, true)
-Hint(panelTargets, "Everything except stealth alerts applies to the selected size.", 264, -296, 208)
+local sizeSliders = { sliderTgtFontSize, sliderTgtScale, sliderTgtWidth, sliderTgtHeight }
+
+ApplyCustomSize = function()
+	for _, slider in ipairs(sizeSliders) do
+		if customSize then
+			slider:Show(); slider.label:Show(); slider.valueText:Show()
+		else
+			slider:Hide(); slider.label:Hide(); slider.valueText:Hide()
+		end
+	end
+	btnCustomSize:SetText(customSize and "Hide custom size" or "Custom size")
+	UI.Select(btnCustomSize, customSize)
+	if selectedTab == 3 then panel:SetHeight(customSize and 524 or 424) end
+end
 
 UpdateTargetsWidgets = function(sz)
 	if Targets and Targets.EnsureOptions then Targets:EnsureOptions() end
@@ -337,7 +400,9 @@ UpdateTargetsWidgets = function(sz)
 	for i = 1, 3 do
 		if BRACKETS[i] == sz then ShowBracket(i) end
 	end
-	cbTgtEnable.label:SetText("Show frames in " .. sz .. "v" .. sz)
+	local label = sz .. "v" .. sz
+	cbTgtEnable.label:SetText("Show frames in " .. label)
+	sizeHint:SetText("The switches above and the frame size apply to " .. label .. " only.")
 	UI.Sync(cbTgtEnable, o.EnableBracket and o.EnableBracket[sz])
 	UI.Sync(cbTgtHideRealm, o.ButtonHideRealm and o.ButtonHideRealm[sz])
 	UI.Sync(cbTgtHealthText, o.ButtonShowHealthText and o.ButtonShowHealthText[sz])
@@ -345,11 +410,25 @@ UpdateTargetsWidgets = function(sz)
 	local trinket = o.ShowTrinket and o.ShowTrinket[sz]
 	UI.Sync(cbTgtTrinket, trinket)
 	UI.Sync(cbTgtTrinketLeft, o.TrinketPos == "LEFT", trinket and true or false)
+	UI.Sync(cbTgtCastBars, o.ShowCastBars ~= false)
+	UI.Sync(cbTgtRange, o.FadeOutOfRange ~= false)
+	UI.Sync(cbTgtRaidIcons, o.ShowRaidIcons ~= false)
+	UI.Sync(cbTgtTargetCount, o.ShowTargetCount ~= false)
 	UI.Sync(cbTgtStealthAlert, o.StealthAlert)
-	UI.SetSlider(sliderTgtFontSize, (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10)
+	local width = (o.ButtonWidth and o.ButtonWidth[sz]) or 150
+	local height = (o.ButtonHeight and o.ButtonHeight[sz]) or 20
+	local fontSize = (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10
+	-- A preset lights up only while the size matches it exactly.
+	local match = 0
+	for i, preset in ipairs(SIZE_PRESETS[sz] or {}) do
+		if preset[1] == width and preset[2] == height and preset[3] == fontSize then match = i end
+	end
+	ShowPreset(match)
+	UI.SetSlider(sliderTgtFontSize, fontSize)
 	UI.SetSlider(sliderTgtScale, math.floor(((o.ButtonScale and o.ButtonScale[sz]) or 1.0) * 100 + 0.5))
-	UI.SetSlider(sliderTgtWidth, (o.ButtonWidth and o.ButtonWidth[sz]) or 150)
-	UI.SetSlider(sliderTgtHeight, (o.ButtonHeight and o.ButtonHeight[sz]) or 20)
+	UI.SetSlider(sliderTgtWidth, width)
+	UI.SetSlider(sliderTgtHeight, height)
+	ApplyCustomSize()
 	RefreshTestCaption()
 end
 
