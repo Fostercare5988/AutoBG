@@ -1546,7 +1546,6 @@ Targets:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 Targets:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 Targets:RegisterEvent("UNIT_AURA")
 Targets:RegisterEvent("UNIT_HEALTH")
-Targets:RegisterEvent("UNIT_HEALTH_FREQUENT") -- UNVERIFIED: test in game (not in the references)
 Targets:RegisterEvent("UNIT_TARGET")
 Targets:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 Targets:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -1604,7 +1603,7 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 	elseif ev == "UPDATE_BATTLEFIELD_SCORE" then
 		Targets:BattlefieldScoreUpdate()
 
-	elseif ev == "UNIT_HEALTH" or ev == "UNIT_HEALTH_FREQUENT" then
+	elseif ev == "UNIT_HEALTH" then
 		ObserveUnit(a1, false)
 
 	elseif ev == "UNIT_AURA" then

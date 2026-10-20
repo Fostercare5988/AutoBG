@@ -241,11 +241,10 @@ function AutoBG_Print(msg, force)
     end
 end
 
--- UnitXP SP3 provides the verified taskbar notification; FlashClientIcon is not established.
+-- UnitXP SP3 flashes the taskbar icon (FlashClientIcon does not exist on this client).
 local function FlashTaskbar()
     if not (AutoBG_Settings and AutoBG_Settings.FlashTaskbar) then return end
-    if UnitXP and pcall(UnitXP, "notify", "taskbarIcon") then return end
-    if FlashClientIcon then FlashClientIcon() end
+    if UnitXP then pcall(UnitXP, "notify", "taskbarIcon") end
 end
 
 -- Canonical Class Colors (Rule B7: Shaman Blue 0x00, 0x70, 0xDE)
