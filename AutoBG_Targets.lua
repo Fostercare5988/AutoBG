@@ -1373,6 +1373,8 @@ local function RosterNameForGUID(guid)
 	if name or unknownGUIDs[guid] then return name end
 	-- Player GUIDs start with 0x0000; creatures and pets never match the roster.
 	local rawName = string.sub(guid, 1, 6) == "0x0000" and UnitName(guid)
+	-- An uncached name reads as UNKNOWNOBJECT; ask again on the next event instead of forgetting the GUID.
+	if rawName == UNKNOWNOBJECT or rawName == UKNOWNBEING then return nil end
 	name = rawName and ResolveRosterName(rawName, guid)
 	if not name then unknownGUIDs[guid] = true; return nil end
 	guidToName[guid], nameToGUID[name] = name, guid

@@ -212,6 +212,12 @@ end
 -- -------------------------------------------------------------------------- --
 -- Hostility & Entity Resolution Helpers                                      --
 -- -------------------------------------------------------------------------- --
+-- An uncached remote name reads as the client's placeholder (UNKNOWNOBJECT = "Unknown").
+-- Recording it would add a second row that the real name never replaces.
+local function IsPlaceholderName(name)
+	return name == UNKNOWNOBJECT or name == UKNOWNBEING
+end
+
 local function StripRealm(name)
 	if not name then return "" end
 	local p = string.find(name, "-", 1, true)
@@ -226,7 +232,7 @@ local function GetPlayerFaction()
 end
 
 local function SetHostility(name, guid, hostile)
-	if not name then return end
+	if not name or IsPlaceholderName(name) then return end
 	local contact = guid and contactByGUID[guid] or contactByName[name]
 	if contact and guid and contact.guid and contact.guid ~= guid then contact = nil end
 	if hostile then contact = GetContact(name, guid) end
@@ -542,7 +548,7 @@ Spy.UpdateGroupRoster = UpdateGroupRoster
 -- -------------------------------------------------------------------------- --
 function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, stealthSpell, race, observedUnit)
 	if Spy.isTestMode then return end
-	if not name or name == "" then return end
+	if not name or name == "" or IsPlaceholderName(name) then return end
 	if IsGroupMember(name, guid, observedUnit) then return end
 	if observedUnit and UnitIsFriend and UnitIsFriend("player", observedUnit) and not (UnitCanAttack and UnitCanAttack("player", observedUnit)) then
 		return
@@ -1309,7 +1315,7 @@ local function ObserveUnit(unit, expectedGUID)
 	if not UnitExists(unit) or UnitGUID(unit) ~= expectedGUID
 		or not UnitIsPlayer(unit) or not UnitCanAttack("player", unit) then return end
 	local name = UnitName(unit)
-	if not name or IsGroupMember(name, expectedGUID, unit) then return end
+	if not name or IsPlaceholderName(name) or IsGroupMember(name, expectedGUID, unit) then return end
 	SetHostility(name, expectedGUID, true)
 	local _, classToken = UnitClass(unit)
 	local hp, maxHp = UnitHealth(unit), UnitHealthMax(unit)
@@ -1438,7 +1444,8 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 		if not casterGUID then return end
 		if type(casterGUID) == "string" and string.sub(casterGUID, 1, 6) ~= "0x0000" then return end
 
-		local rawName = UnitName(casterGUID) or guidToName[casterGUID]
+		local rawName = guidToName[casterGUID] or UnitName(casterGUID)
+		if IsPlaceholderName(rawName) then return end
 		if not IsHostilePlayer(casterGUID, rawName) then return end
 		-- Both installed providers report successful casts. Preserve their coverage,
 		-- but do not reprocess the same GUID/spell through both in one frame.
@@ -1489,7 +1496,7 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 		local isStealth, sName = Targets.CheckIsStealthSpell(arg3)
 		if not isStealth or not arg1 then return end
 		local name = guidToName[arg1] or UnitName(arg1)
-		if not name then return end
+		if not name or IsPlaceholderName(name) then return end
 		if event == "BUFF_REMOVED_OTHER" then
 			Spy:SetUnitStealthState(name, false)
 		elseif IsHostilePlayer(arg1, name) then
