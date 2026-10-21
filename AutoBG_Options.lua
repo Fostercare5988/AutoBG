@@ -326,8 +326,8 @@ local cbTgtCastLeft = UI.Switch("AutoBG_Tgt_CastLeft", panelTargets, "Cast bars 
 		Relayout()
 		Rerender()
 	end, 156)
-local cbTgtRange = RowFeature("AutoBG_Tgt_FadeRange", "Grey names out of range",
-	"Show the name and health of enemies farther than 80 yards in grey, so the ones you can reach stand out in white. Bars keep their class color. Enemies you have not been near yet stay white.", -258, "FadeOutOfRange")
+local cbTgtRange = RowFeature("AutoBG_Tgt_FadeRange", "Mark enemies in range",
+	"A thin green stripe on the left of each enemy within 80 yards, so the ones you can reach stand out. Nothing else changes; enemies you have not been near yet get no stripe.", -258, "FadeOutOfRange")
 local cbTgtRaidIcons = RowFeature("AutoBG_Tgt_RaidIcons", "Raid icons",
 	"Show the skull, cross and other raid icons your group puts on enemies.", -284, "ShowRaidIcons")
 local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",

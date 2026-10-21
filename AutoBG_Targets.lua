@@ -14,17 +14,20 @@ end
 
 local MAX_ENEMIES = 40
 local BRACKETS = { 10, 15, 40 }
-local DRAG_HEADER_HEIGHT = 16
-local CARD_COLOR = { 0, 0, 0, 0.30 }
-local FONT = "Fonts\\FRIZQT__.TTF"
+local DRAG_HEADER_HEIGHT = 18
+-- Arial Narrow: the client's calm, plain sans; cast bars keep Friz Quadrata.
+local FONT = "Fonts\\ARIALN.TTF"
+local CAST_FONT = "Fonts\\FRIZQT__.TTF"
+local RANGE_MARK_COLOR = { 0.35, 1.00, 0.45, 0.95 }
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
+local ROUNDED_MASK = [[Interface\AddOns\AutoBG\Textures\RoundedMask]]
 local HORDE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\HordeFlag"
 local ALLIANCE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\AllianceFlag"
 local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local CAST_WIDTH = 120
--- Enemies within 80 yards count as near, close enough to reach soon. Bars keep
--- their class color; a farther enemy's name and health text turn grey.
+-- Enemies within 80 yards count as near, close enough to reach soon, and get a
+-- thin green stripe on the row's left edge. Nothing else changes with range.
 local RANGE_SQUARED = 80 * 80
 local ALLIANCE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
@@ -522,13 +525,10 @@ local function UpdateRowStealthVisual(index, name)
 	end
 	if btn.visualAlpha ~= alpha then btn.visualAlpha = alpha; btn:SetAlpha(alpha) end
 
-	-- In range: white text. Out of range: grey text on the same bright bar.
-	local far = (btn.outOfRange and not dead) and true or false
-	if btn.textFar ~= far then
-		btn.textFar = far
-		local shade = far and 0.6 or 1
-		btn.Name:SetTextColor(shade, shade, shade, 1)
-		btn.HealthText:SetTextColor(shade, shade, shade, 0.90)
+	local near = (btn.inRange and not dead) and true or false
+	if btn.markShown ~= near then
+		btn.markShown = near
+		if near then btn.RangeMark:Show() else btn.RangeMark:Hide() end
 	end
 
 	local text, showText
@@ -869,21 +869,22 @@ local function UpdateRowStatus()
 		local btn = Targets.TargetButton[i]
 		local name = btn.targetName
 		if name and btn:IsShown() then
-			local far, raidIndex, count
+			local near, raidIndex, count
 			if Targets.isConfig then
 				local sample = previewStatus[i]
-				if sample then far, raidIndex, count = sample.far, sample.raid, sample.count end
+				near = not (sample and sample.far)
+				if sample then raidIndex, count = sample.raid, sample.count end
 			else
 				local guid = nameToGUID[name]
 				if guid then
 					local distanceSquared, checked = UnitDistanceSquared(guid)
-					far = not (checked and distanceSquared <= RANGE_SQUARED)
+					near = checked and distanceSquared <= RANGE_SQUARED
 					raidIndex = GetRaidTargetIndex(guid)
 					count = groupTargets[guid]
 				end
-				-- An enemy not seen near you yet is unknown, not far: it stays bright.
+				-- An enemy not seen near you yet is unknown: no mark.
 			end
-			far = (fade and far) and true or nil
+			near = (fade and near) and true or nil
 			raidIndex = icons and raidIndex or nil
 			count = counts and count or nil
 			local changed = false
@@ -898,8 +899,8 @@ local function UpdateRowStatus()
 				btn.nameInset, btn.raidInset = nil, nil
 				changed = true
 			end
-			if btn.outOfRange ~= far then
-				btn.outOfRange = far
+			if btn.inRange ~= near then
+				btn.inRange = near
 				changed = true
 			end
 			if changed then UpdateRowStealthVisual(i, name) end
@@ -1150,12 +1151,10 @@ function Targets:CreateFrames()
 	header:RegisterForDrag("LeftButton")
 	header:SetScript("OnDragStart", MainFrame_OnMouseDown)
 	header:SetScript("OnDragStop", MainFrame_OnMouseUp)
-	-- One softly rounded card behind the header and every row; the header is
-	-- just a quiet label on it, not a bar of its own.
-	UI.Rounded(main, "BACKGROUND", 5, CARD_COLOR, 2)
+	-- No background: the header is just a label above the rows.
 	main.MoveText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	main.MoveText:SetPoint("CENTER", header, "CENTER", 0, 1)
-	main.MoveText:SetFont(FONT, 9, "OUTLINE")
+	main.MoveText:SetFont(FONT, 12, "OUTLINE")
 	header:Show()
 
 	Targets.TargetButton = {}
@@ -1193,6 +1192,14 @@ function Targets:CreateFrames()
 		btn.Selection:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
 		btn.Selection:SetTexture(1, 1, 1, 0.08)
 		btn.Selection:Hide()
+
+		-- In range (80 yards): a thin green stripe on the left edge.
+		btn.RangeMark = btn:CreateTexture(nil, "OVERLAY")
+		btn.RangeMark:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+		btn.RangeMark:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 1, 1)
+		btn.RangeMark:SetWidth(3)
+		btn.RangeMark:SetTexture(RANGE_MARK_COLOR[1], RANGE_MARK_COLOR[2], RANGE_MARK_COLOR[3], RANGE_MARK_COLOR[4])
+		btn.RangeMark:Hide()
 
 		btn.StealthIconBg = btn:CreateTexture(nil, "ARTWORK")
 		btn.StealthIconBg:SetPoint("LEFT", btn, "LEFT", 1, 0)
@@ -1247,16 +1254,12 @@ function Targets:CreateFrames()
 		trinket:SetHeight(20)
 		trinket:Hide()
 
-		trinket.Bg = trinket:CreateTexture(nil, "BACKGROUND")
-		trinket.Bg:SetPoint("TOPLEFT", trinket, "TOPLEFT", 0, 0)
-		trinket.Bg:SetPoint("BOTTOMRIGHT", trinket, "BOTTOMRIGHT", 0, 0)
-		trinket.Bg:SetTexture(0, 0, 0, 0.85)
-
+		-- ClassicAPI's mask clips the icon to a softly rounded square.
 		trinket.Icon = trinket:CreateTexture(nil, "ARTWORK")
-		trinket.Icon:SetPoint("TOPLEFT", trinket, "TOPLEFT", 1, -1)
-		trinket.Icon:SetPoint("BOTTOMRIGHT", trinket, "BOTTOMRIGHT", -1, 1)
+		trinket.Icon:SetAllPoints(trinket)
 		trinket.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 		trinket.Icon:SetTexture(GetEnemyTrinketTexture())
+		trinket.Icon:SetMask(ROUNDED_MASK)
 
 		trinket.Text = trinket:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		trinket.Text:SetPoint("CENTER", trinket, "CENTER", 0, 0)
@@ -1424,7 +1427,7 @@ function Targets:SetupButtonLayout(size)
 		cast.Icon:SetHeight(height - 2)
 		cast.barMax = CAST_WIDTH - (height - 2) - 3
 		cast.barWidth = nil
-		cast.Text:SetFont(FONT, math.max(8, fontSize - 2), "OUTLINE")
+		cast.Text:SetFont(CAST_FONT, math.max(8, fontSize - 2), "OUTLINE")
 		btn.HealthBar:SetTexture(BAR_TEXTURE)
 	end
 
