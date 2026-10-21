@@ -121,10 +121,10 @@ end
 -- Presentation settings affect objective groups only; stored anchors remain unchanged.
 local function ApplyObjectiveAppearance(frame)
     local settings = AutoBG_Settings or {}
-    local width = math.max(180, math.min(420, tonumber(settings.ObjectiveWidth) or 260))
-    local height = math.max(18, math.min(32, tonumber(settings.ObjectiveHeight) or 22))
+    local width = math.max(180, math.min(420, tonumber(settings.ObjectiveWidth) or 225))
+    local height = math.max(18, math.min(32, tonumber(settings.ObjectiveHeight) or 25))
     local scale = math.max(0.60, math.min(1.50, tonumber(settings.ObjectiveScale) or 1))
-    local opacity = math.max(0.20, math.min(1, tonumber(settings.ObjectiveOpacity) or 0.95))
+    local opacity = math.max(0.20, math.min(1, tonumber(settings.ObjectiveOpacity) or 0.9))
     if frame.appearanceWidth ~= width or frame.rowHeight ~= height then
         frame:SetWidth(width)
         frame.rowHeight = height
