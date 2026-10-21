@@ -13,6 +13,18 @@ end
 local timers = { AB = {}, AV = {}, WSG = {}, Global = {} }
 local spiritHealerSyncTime = 0
 local spiritHealerSynced = false
+-- Raid members seen as ghosts. A ghost comes back only through a spirit
+-- healer's wave, so the moment one turns alive is a wave.
+local raidGhosts = {}
+local nextGhostScan = 0
+
+-- Assumes one 30s wave for the whole battleground, as on MaNGOS-based cores.
+-- UNVERIFIED on OctoWoW: test in game that a teammate's ghost revival and your
+-- own countdown hit 0:00 together.
+local function SyncSpiritWave(at)
+    spiritHealerSyncTime = at
+    spiritHealerSynced = true
+end
 local updateTicker = nil
 local SyncUpdateTicker
 local queuedBattlegrounds = {}
@@ -494,38 +506,45 @@ local function CreateABProjectionFrame(name)
     end)
     frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- Row 1: Alliance Row (y = +8 from center)
+    -- Two rows: verdict and bases needed on the left, both starting at the same
+    -- edge; final scores right-aligned in their own column.
     local r1Status = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    r1Status:SetPoint("LEFT", frame, "LEFT", 6, 8)
-    r1Status:SetPoint("RIGHT", frame, "RIGHT", -60, 8)
-    r1Status:SetJustifyH("RIGHT")
+    r1Status:SetPoint("LEFT", frame, "LEFT", 9, 8)
+    r1Status:SetPoint("RIGHT", frame, "RIGHT", -62, 8)
+    r1Status:SetJustifyH("LEFT")
     r1Status:SetText("")
     frame.r1Status = r1Status
 
     local r1Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    r1Score:SetPoint("RIGHT", frame, "RIGHT", -6, 8)
+    r1Score:SetPoint("RIGHT", frame, "RIGHT", -9, 8)
     r1Score:SetWidth(52)
     r1Score:SetJustifyH("RIGHT")
     r1Score:SetTextColor(0.38, 0.69, 1.00) -- Alliance Blue
     r1Score:SetText("")
     frame.r1Score = r1Score
 
-    -- Row 2: Horde Row (y = -8 from center)
     local r2Bases = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    r2Bases:SetPoint("LEFT", frame, "LEFT", 6, -8)
-    r2Bases:SetPoint("RIGHT", frame, "RIGHT", -60, -8)
-    r2Bases:SetJustifyH("RIGHT")
+    r2Bases:SetPoint("LEFT", frame, "LEFT", 9, -8)
+    r2Bases:SetPoint("RIGHT", frame, "RIGHT", -62, -8)
+    r2Bases:SetJustifyH("LEFT")
     r2Bases:SetTextColor(1.00, 0.82, 0.00) -- Gold
     r2Bases:SetText("")
     frame.r2Bases = r2Bases
 
     local r2Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    r2Score:SetPoint("RIGHT", frame, "RIGHT", -6, -8)
+    r2Score:SetPoint("RIGHT", frame, "RIGHT", -9, -8)
     r2Score:SetWidth(52)
     r2Score:SetJustifyH("RIGHT")
     r2Score:SetTextColor(1.00, 0.38, 0.38) -- Horde Red
     r2Score:SetText("")
     frame.r2Score = r2Score
+
+    -- A faint rule between the two columns.
+    local divider = frame:CreateTexture(nil, "ARTWORK")
+    divider:SetTexture(1, 1, 1, 0.12)
+    divider:SetWidth(1)
+    divider:SetPoint("TOP", frame, "TOPRIGHT", -58, -7)
+    divider:SetPoint("BOTTOM", frame, "BOTTOMRIGHT", -58, 7)
 
     frame:Hide()
     return frame
@@ -1104,11 +1123,16 @@ local function UpdateAllTimers()
     -- 4. Respawn Timer (Spirit Healer 30s Wave)
     if inPVP and AutoBG_Settings.RessTimer then
         local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
-        if healerTime > 0 then
-            spiritHealerSyncTime = now - (30 - healerTime)
-            spiritHealerSynced = true
-        end
+        if healerTime > 0 then SyncSpiritWave(now - (30 - healerTime)) end
         if spiritHealerSyncTime == 0 then spiritHealerSyncTime = now end
+        -- Learn who is a ghost once a second; UNIT_HEALTH times their revival.
+        if now >= nextGhostScan then
+            nextGhostScan = now + 1
+            for i = 1, GetNumRaidMembers() do
+                local unit = RAID_UNITS[i]
+                if UnitIsGhost(unit) then raidGhosts[unit] = true end
+            end
+        end
 
         local elapsed      = now - spiritHealerSyncTime
         local remaining    = 30 - (elapsed % 30)
@@ -1383,7 +1407,7 @@ EventFrame:RegisterEvent("ADDON_LOADED")
 EventFrame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 EventFrame:RegisterEvent("UPDATE_WORLD_STATES")
 EventFrame:RegisterEvent("PLAYER_UNGHOST")
-EventFrame:RegisterEvent("PLAYER_ALIVE")
+EventFrame:RegisterEvent("UNIT_HEALTH")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 EventFrame:RegisterEvent("ZONE_CHANGED")
 EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
@@ -1391,6 +1415,13 @@ EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     local ev  = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
     local msg = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
+    if ev == "UNIT_HEALTH" then
+        if raidGhosts[msg] and not UnitIsDeadOrGhost(msg) then
+            raidGhosts[msg] = nil
+            if inPVP then SyncSpiritWave(GetTime()) end
+        end
+        return
+    end
     if ev == "ADDON_LOADED" then
         if msg ~= "AutoBG" then return end
         RefreshQueuedBattlegrounds()
@@ -1437,13 +1468,12 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             lastATickTime, lastHTickTime = nil, nil
             spiritHealerSyncTime = GetTime()
             spiritHealerSynced   = false
+            table.wipe(raidGhosts)
         end
-    elseif ev == "PLAYER_UNGHOST" or ev == "PLAYER_ALIVE" then
-        if inPVP then
-            local healerTime     = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
-            spiritHealerSyncTime = (healerTime > 0) and (GetTime() - (30 - healerTime)) or GetTime()
-            spiritHealerSynced   = healerTime > 0
-        end
+    elseif ev == "PLAYER_UNGHOST" then
+        -- Coming back from a ghost in a battleground is the spirit healer's wave.
+        -- (PLAYER_ALIVE also fires on release, so it cannot time a wave.)
+        if inPVP then SyncSpiritWave(GetTime()) end
     elseif ev ~= "ADDON_LOADED" and ev ~= "UPDATE_BATTLEFIELD_STATUS" and ev ~= "UPDATE_WORLD_STATES" then
         if not inPVP then return end
         ParseCombatMessage(msg or arg1, ev)
