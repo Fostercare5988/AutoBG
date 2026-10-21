@@ -922,7 +922,10 @@ function Spy:CreateAlertWindow()
 	-- Title
 	local title = content:CreateFontString(nil, "OVERLAY")
 	title:SetFont(FONT, 10, "OUTLINE")
+	-- Both lines are centered in the space right of the icon.
 	title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -2)
+	title:SetPoint("TOPRIGHT", f, "TOPRIGHT", -10, -8)
+	title:SetJustifyH("CENTER")
 	title:SetText("|cff00ffffStealth Detected!|r")
 	f.Title = title
 
@@ -930,6 +933,8 @@ function Spy:CreateAlertWindow()
 	local nameText = content:CreateFontString(nil, "OVERLAY")
 	nameText:SetFont(FONT, 12, "OUTLINE")
 	nameText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
+	nameText:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 9)
+	nameText:SetJustifyH("CENTER")
 	nameText:SetText("Unknown")
 	f.Name = nameText
 

@@ -59,11 +59,11 @@ does not provide enough information.
 
 Open `/abg targets` or `/bgt`. Pick 10v10, 15v15 or 40v40, then choose that size's
 health text, realm suffix, stealth dimming and trinket. **Frame size** offers
-Compact, Standard and Large; **Custom size** reveals text size, scale, width and
-height sliders. Picking a size outside a battleground previews it so you can move it.
+Compact, Standard and Large; the **Custom size** sliders below set text size,
+scale, width and height for anything in between. Picking a size outside a battleground previews it so you can move it.
 
-During a match the header shows how many enemies are alive and stays locked, so a
-stray click cannot move the list. Use **Preview frames** to drag it.
+During a match the header shows how many enemies are alive. Drag it to move the
+list out of combat; in combat it stays locked, so a stray click cannot move it.
 
 **On each enemy** (shared by every size):
 
@@ -82,7 +82,7 @@ stray click cannot move the list. Use **Preview frames** to drag it.
 estimates cooldown from observed activations. Left-click targets; right-click
 focuses a verified loaded player.
 
-**Stealth alerts in BGs** controls nearby confirmed warnings. Duplicate casts,
+**Stealth warnings in BGs**, on the Spy tab, controls nearby confirmed warnings. Duplicate casts,
 aura updates and immediate stealth re-entry do not restart warning sounds.
 Different enemies share an eight-second warning limit; the same enemy has a
 60-second stealth quiet period while retained in recent-contact history.
