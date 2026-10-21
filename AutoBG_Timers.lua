@@ -269,14 +269,6 @@ local function CreateRespawnFrame(name, xOffset, yOffset)
     frame:SetWidth(110)
     frame:SetHeight(38)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
-    frame:SetBackdrop({
-        bgFile  = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 }
-    })
-    frame:SetBackdropColor(0, 0, 0, 0.80)
-    frame:SetBackdropBorderColor(0.35, 0.10, 0.10, 0.90)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
@@ -339,14 +331,6 @@ local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minW
     frame:SetWidth(minWidth or 130)
     frame:SetHeight(30)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
-    frame:SetBackdrop({
-        bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile     = true, tileSize = 16, edgeSize = 16,
-        insets   = { left = 4, right = 4, top = 4, bottom = 4 }
-    })
-    frame:SetBackdropColor(0, 0, 0, 0.75)
-    frame:SetBackdropBorderColor(0.35, 0.10, 0.10, 0.90)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
@@ -474,14 +458,6 @@ local function CreateABProjectionFrame(name)
     frame:RegisterForClicks("LeftButtonUp")
     frame:RegisterForDrag("LeftButton")
 
-    frame:SetBackdrop({
-        bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile     = true, tileSize = 16, edgeSize = 12,
-        insets   = { left = 3, right = 3, top = 3, bottom = 3 }
-    })
-    frame:SetBackdropColor(0, 0, 0, 0.65)
-    frame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
 
     frame:SetScript("OnDragStart", function()
         this:StartMoving()
@@ -563,18 +539,12 @@ function AutoBG_LoadTimerPositions()
 
         if AutoBG_Settings and AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] then
             AutoBG_LoadPosition(ABProjectionFrame, "AutoBG_ABProjectionFrame", "TOP", -160, -25)
-            ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
-            ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
         elseif AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
             ABProjectionFrame:ClearAllPoints()
             ABProjectionFrame:SetPoint("TOPRIGHT", AlwaysUpFrame1, "TOPLEFT", -6, 2)
-            ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.35)
-            ABProjectionFrame:SetBackdropBorderColor(0, 0, 0, 0)
         else
             ABProjectionFrame:ClearAllPoints()
             ABProjectionFrame:SetPoint("TOP", UIParent, "TOP", -160, -25)
-            ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
-            ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
         end
     end
 end
@@ -600,12 +570,8 @@ function AutoBG_ResetTimerPositions()
     ABProjectionFrame:ClearAllPoints()
     if AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
         ABProjectionFrame:SetPoint("TOPRIGHT", AlwaysUpFrame1, "TOPLEFT", -6, 2)
-        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.35)
-        ABProjectionFrame:SetBackdropBorderColor(0, 0, 0, 0)
     else
         ABProjectionFrame:SetPoint("TOP", UIParent, "TOP", -160, -25)
-        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
-        ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
     end
 end
 
