@@ -73,8 +73,8 @@ BattlegroundTargets_OptionsFrame = panel -- Backwards compatibility alias
 local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", {
 	{ label = "General", height = 446 },
 	{ label = "Timers", height = 436 },
-	{ label = "Enemy frames", height = 444 },
-	{ label = "Spy", height = 336 },
+	{ label = "Enemy frames", height = 500 },
+	{ label = "Spy", height = 362 },
 }, function(index)
 	selectedTab = index
 	Refresh[index]()
@@ -283,16 +283,14 @@ local cbTgtTrinketLeft = UI.Switch("AutoBG_Tgt_TrinketLeft", panelTargets, "Trin
 
 local sizeHint = Hint(panelTargets, "", 28, -316, 208)
 
--- Frame size: three presets per battleground size; sliders only on request.
+-- Frame size: three presets per battleground size, and sliders below for
+-- anything in between.
 -- Each preset is { width, height, text size }.
 local SIZE_PRESETS = {
 	[10] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
 	[15] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
 	[40] = { { 160, 16, 9 }, { 210, 20, 11 }, { 240, 24, 12 } },
 }
-local customSize = false
-local ApplyCustomSize -- forward declaration
-
 UI.Heading(panelTargets, "Frame size", 264, -98)
 local _, ShowPreset = UI.Segmented("AutoBG_Tgt_Preset", panelTargets, { "Compact", "Standard", "Large" }, 260, -114, 212,
 	function(index)
@@ -306,11 +304,6 @@ local _, ShowPreset = UI.Segmented("AutoBG_Tgt_Preset", panelTargets, { "Compact
 		Rerender()
 		UpdateTargetsWidgets(selectedBracket)
 	end, { height = 26 })
-local btnCustomSize = UI.Button("AutoBG_Tgt_CustomSize", panelTargets, "Custom size", 264, -150, 208, function()
-	customSize = not customSize
-	ApplyCustomSize()
-end, { height = 20 })
-UI.Tooltip(btnCustomSize, "Set text size, scale, width and height yourself.")
 
 -- Row features shared by every battleground size.
 local function RowFeature(name, text, tip, y, key)
@@ -340,13 +333,6 @@ local cbTgtRaidIcons = RowFeature("AutoBG_Tgt_RaidIcons", "Raid icons",
 local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
 	"Show how many of your group, you included, target each enemy, in orange beside the health.", -310, "ShowTargetCount")
 
-UI.Heading(panelTargets, "Alerts", 264, -340)
-local cbTgtStealthAlert = UI.Switch("AutoBG_Tgt_StealthAlert", panelTargets, "Stealth alerts in BGs",
-	"Warn with a sound for a confirmed stealth aura within 10 yards and clear line of sight. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Row indicators still update.", 264, -360, function(value)
-		Targets:EnsureOptions()
-		AutoBG_Settings.Targets.StealthAlert = value
-	end, 172)
-
 local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, store, rerender, format)
 	return UI.Slider(name, panelTargets, text, x, y, width, minValue, maxValue, step, function(value)
 		local o = TargetOptions()
@@ -358,40 +344,27 @@ local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, s
 	end, format)
 end
 
-local sliderTgtFontSize = TargetSlider("AutoBG_Tgt_FontSize", "Text size", 28, -404, 200, 6, 20, 1, function(o, value)
+UI.Heading(panelTargets, "Custom size", 28, -340)
+local sliderTgtFontSize = TargetSlider("AutoBG_Tgt_FontSize", "Text size", 28, -360, 200, 6, 20, 1, function(o, value)
 	if not o.ButtonFontSize then return end
 	o.ButtonFontSize[selectedBracket] = value
 	return true
 end, true)
-local sliderTgtScale = TargetSlider("AutoBG_Tgt_Scale", "Scale", 264, -404, 208, 50, 200, 5, function(o, value)
+local sliderTgtScale = TargetSlider("AutoBG_Tgt_Scale", "Scale", 264, -360, 208, 50, 200, 5, function(o, value)
 	if not o.ButtonScale then return end
 	o.ButtonScale[selectedBracket] = value / 100
 	return true
 end, false, Percent)
-local sliderTgtWidth = TargetSlider("AutoBG_Tgt_Width", "Width", 28, -446, 200, 60, 300, 5, function(o, value)
+local sliderTgtWidth = TargetSlider("AutoBG_Tgt_Width", "Width", 28, -402, 200, 60, 300, 5, function(o, value)
 	if not o.ButtonWidth then return end
 	o.ButtonWidth[selectedBracket] = value
 	return true
 end, true)
-local sliderTgtHeight = TargetSlider("AutoBG_Tgt_Height", "Height", 264, -446, 208, 10, 40, 1, function(o, value)
+local sliderTgtHeight = TargetSlider("AutoBG_Tgt_Height", "Height", 264, -402, 208, 10, 40, 1, function(o, value)
 	if not o.ButtonHeight then return end
 	o.ButtonHeight[selectedBracket] = value
 	return true
 end, true)
-local sizeSliders = { sliderTgtFontSize, sliderTgtScale, sliderTgtWidth, sliderTgtHeight }
-
-ApplyCustomSize = function()
-	for _, slider in ipairs(sizeSliders) do
-		if customSize then
-			slider:Show(); slider.label:Show(); slider.valueText:Show()
-		else
-			slider:Hide(); slider.label:Hide(); slider.valueText:Hide()
-		end
-	end
-	btnCustomSize:SetText(customSize and "Hide custom size" or "Custom size")
-	UI.Select(btnCustomSize, customSize)
-	if selectedTab == 3 then panel:SetHeight(customSize and 544 or 444) end
-end
 
 UpdateTargetsWidgets = function(sz)
 	if Targets and Targets.EnsureOptions then Targets:EnsureOptions() end
@@ -415,7 +388,6 @@ UpdateTargetsWidgets = function(sz)
 	UI.Sync(cbTgtRange, o.FadeOutOfRange ~= false)
 	UI.Sync(cbTgtRaidIcons, o.ShowRaidIcons ~= false)
 	UI.Sync(cbTgtTargetCount, o.ShowTargetCount ~= false)
-	UI.Sync(cbTgtStealthAlert, o.StealthAlert)
 	local width = (o.ButtonWidth and o.ButtonWidth[sz]) or 150
 	local height = (o.ButtonHeight and o.ButtonHeight[sz]) or 20
 	local fontSize = (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10
@@ -429,7 +401,6 @@ UpdateTargetsWidgets = function(sz)
 	UI.SetSlider(sliderTgtScale, math.floor(((o.ButtonScale and o.ButtonScale[sz]) or 1.0) * 100 + 0.5))
 	UI.SetSlider(sliderTgtWidth, width)
 	UI.SetSlider(sliderTgtHeight, height)
-	ApplyCustomSize()
 	RefreshTestCaption()
 end
 
@@ -466,6 +437,11 @@ local cbSpyStealth = SpySetting("AutoBG_Spy_StealthAlert", "Stealth warnings",
 	"Show a brief stealth warning outside BGs. Its sound follows Alert sounds. Repeated warnings for the same enemy stay quiet for 60 seconds. BG alerts have their own setting.", 28, -226, "StealthAlert", function() Refresh[4]() end)
 local cbSpyProximity = SpySetting("AutoBG_Spy_StealthProximityOnly", "Only within 10 yards",
 	"On (default): warn only after confirming a visible, hostile stealth aura within 10 yards and clear line of sight. Off: Spy-style warning on a received stealth cast, even if the enemy is distant or no longer targetable. BG alerts always use nearby confirmation.", 44, -252, "StealthProximityOnly")
+local cbSpyBGStealth = UI.Switch("AutoBG_Spy_BGStealthAlert", panelSpy, "Stealth warnings in BGs",
+	"In battlegrounds, warn with a sound for a confirmed stealth aura within 10 yards and clear line of sight. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Enemy frames still show who is hidden.", 28, -278, function(value)
+		Targets:EnsureOptions()
+		AutoBG_Settings.Targets.StealthAlert = value
+	end)
 
 UI.Heading(panelSpy, "List", 264, -98)
 local sliderSpyTimeout = UI.Slider("AutoBG_Spy_Timeout", panelSpy, "Forget after", 264, -118, 208, 10, 120, 5,
@@ -494,6 +470,8 @@ Refresh[4] = function()
 	UI.Sync(cbSpySound, opt.SoundAlert)
 	UI.Sync(cbSpyStealth, opt.StealthAlert)
 	UI.Sync(cbSpyProximity, opt.StealthProximityOnly ~= false, opt.StealthAlert and true or false)
+	if Targets and Targets.EnsureOptions then Targets:EnsureOptions() end
+	UI.Sync(cbSpyBGStealth, AutoBG_Settings.Targets and AutoBG_Settings.Targets.StealthAlert)
 	UI.SetSlider(sliderSpyTimeout, opt.Timeout or 30)
 	UI.SetSlider(sliderSpyMaxRows, opt.MaxRows or 5)
 	UI.SetSlider(sliderSpyScale, math.floor((opt.Scale or 1.0) * 100 + 0.5))
