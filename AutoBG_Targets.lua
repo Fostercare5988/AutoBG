@@ -28,26 +28,25 @@ local OUT_OF_RANGE_ALPHA = 0.7
 local ALLIANCE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 
--- Deployment policy: all supported PvP trinkets use a three-minute cooldown.
+-- Every PvP trinket shares a three-minute cooldown on OctoWoW (confirmed in play).
+-- Spell IDs and names checked on octowow.st/db, 2026-10-21.
 local TRINKET_COOLDOWN = 180
 local TRINKET_SPELL_IDS = {
-	[52317] = TRINKET_COOLDOWN,
-	[5579]  = TRINKET_COOLDOWN,
-	[23276] = TRINKET_COOLDOWN,
-	[23277] = TRINKET_COOLDOWN,
-	[23273] = TRINKET_COOLDOWN,
-	[23274] = TRINKET_COOLDOWN,
+	[52317] = true, -- Insignia (dispels all crowd control)
+	[5579]  = true, -- Immune Root/Snare/Stun
+	[23276] = true, -- Immune Fear/Polymorph/Stun
+	[23277] = true, -- Immune Charm/Fear/Stun
+	[23273] = true, -- Immune Charm/Fear/Polymorph
+	[23274] = true, -- Immune Fear/Polymorph/Snare
 }
 
 local TRINKET_SPELL_NAMES = {
-	["Immune Root/Snare/Stun"]      = TRINKET_COOLDOWN,
-	["Immune Fear/Polymorph/Stun"]  = TRINKET_COOLDOWN,
-	["Immune Charm/Fear/Stun"]      = TRINKET_COOLDOWN,
-	["Immune Charm/Fear/Polymorph"] = TRINKET_COOLDOWN,
-	["Immune Fear/Polymorph/Snare"] = TRINKET_COOLDOWN,
-	["PvP Trinket"]                 = TRINKET_COOLDOWN,
-	["Insignia of the Alliance"]    = TRINKET_COOLDOWN,
-	["Insignia of the Horde"]       = TRINKET_COOLDOWN,
+	["Insignia"]                    = true,
+	["Immune Root/Snare/Stun"]      = true,
+	["Immune Fear/Polymorph/Stun"]  = true,
+	["Immune Charm/Fear/Stun"]      = true,
+	["Immune Charm/Fear/Polymorph"] = true,
+	["Immune Fear/Polymorph/Snare"] = true,
 }
 
 local function GetEnemyTrinketTexture()
@@ -156,43 +155,42 @@ local function GetUnitTargetToken(unit)
 	return cached
 end
 
+-- Cast and aura IDs, checked on octowow.st/db, 2026-10-21. Duration 0 lasts
+-- until the aura is removed or the unit attacks.
 local STEALTH_SPELLS = {
-	-- Rogue Stealth
+	-- Rogue Stealth, ranks 1-4
 	[1784] = { name = "Stealth", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
 	[1785] = { name = "Stealth", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
 	[1786] = { name = "Stealth", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
 	[1787] = { name = "Stealth", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
-	-- Rogue Vanish
-	[1856] = { name = "Vanish",  texture = "Interface\\Icons\\Ability_Stealth",  duration = 0 },
-	[1857] = { name = "Vanish",  texture = "Interface\\Icons\\Ability_Stealth",  duration = 0 },
-	-- Druid Prowl
-	[5215] = { name = "Prowl",   texture = PROWL_TEXTURE, duration = 0 },
-	[6783] = { name = "Prowl",   texture = PROWL_TEXTURE, duration = 0 },
-	[9913] = { name = "Prowl",   texture = PROWL_TEXTURE, duration = 0 },
+	-- Rogue Vanish: casts 1856/1857 apply auras 11327/11329
+	[1856]  = { name = "Vanish", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
+	[1857]  = { name = "Vanish", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
+	[11327] = { name = "Vanish", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
+	[11329] = { name = "Vanish", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
+	-- Druid Prowl, ranks 1-3
+	[5215] = { name = "Prowl", texture = PROWL_TEXTURE, duration = 0 },
+	[6783] = { name = "Prowl", texture = PROWL_TEXTURE, duration = 0 },
+	[9913] = { name = "Prowl", texture = PROWL_TEXTURE, duration = 0 },
 	-- Night Elf Shadowmeld
 	[20580] = { name = "Shadowmeld", texture = "Interface\\Icons\\Ability_Racial_ShadowMeld", duration = 0 },
-	-- Invisibility Potions
+	-- Lesser Invisibility Potion, Invisibility Potion
 	[3680]  = { name = "Lesser Invisibility", texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 15 },
-	[11464] = { name = "Invisibility",        texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 18 },
+	[11392] = { name = "Invisibility",        texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 18 },
+	-- Lesser Invisibility (120 sec, may end early)
+	[66]    = { name = "Lesser Invisibility", texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 120 },
 	-- Gnomish Cloaking Device
-	[8342]  = { name = "Cloaking",            texture = "Interface\\Icons\\INV_Misc_EngGizmos_04",   duration = 60 },
-	-- Deepwood Pipe (Smoke Cloud)
-	[23133] = { name = "Smoke Cloud",         texture = "Interface\\Icons\\Ability_Stealth", duration = 30 },
-	[23134] = { name = "Smoke Cloud",         texture = "Interface\\Icons\\Ability_Stealth", duration = 30 },
-	-- Mage Invisibility (custom/Vanilla+)
-	[66]    = { name = "Invisibility",        texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 20 },
-	[32612] = { name = "Invisibility",        texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 20 },
+	[4079]  = { name = "Cloaking",            texture = "Interface\\Icons\\INV_Misc_EngGizmos_04",   duration = 10 },
 }
 
 local STEALTH_NAMES = {
-	["Stealth"]             = { name = "Stealth",             texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
-	["Prowl"]               = { name = "Prowl",               texture = PROWL_TEXTURE, duration = 0 },
-	["Vanish"]              = { name = "Vanish",              texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
-	["Shadowmeld"]          = { name = "Shadowmeld",          texture = "Interface\\Icons\\Ability_Racial_ShadowMeld", duration = 0 },
-	["Invisibility"]        = { name = "Invisibility",        texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 18 },
-	["Lesser Invisibility"] = { name = "Lesser Invisibility", texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 15 },
-	["Cloaking"]            = { name = "Cloaking",            texture = "Interface\\Icons\\INV_Misc_EngGizmos_04", duration = 60 },
-	["Smoke Cloud"]         = { name = "Smoke Cloud",         texture = "Interface\\Icons\\Ability_Stealth", duration = 30 },
+	["Stealth"]             = STEALTH_SPELLS[1784],
+	["Prowl"]               = STEALTH_SPELLS[5215],
+	["Vanish"]              = STEALTH_SPELLS[11327],
+	["Shadowmeld"]          = STEALTH_SPELLS[20580],
+	["Invisibility"]        = STEALTH_SPELLS[11392],
+	["Lesser Invisibility"] = STEALTH_SPELLS[3680],
+	["Cloaking"]            = STEALTH_SPELLS[4079],
 }
 
 -- Buff events arrive for every unit nearby; classify each spell ID once.

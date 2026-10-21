@@ -1333,7 +1333,7 @@ local function ParseCombatMessage(msg, ev)
     local lower = string.lower(msg)
     local faction = GetFactionFromMessage(msg, ev)
 
-    -- 1. AB Nodes (60s)
+    -- 1. AB Nodes: 60s on OctoWoW (confirmed in play, 2026-10-21)
     if AutoBG_Settings.ABTimers and isAB then
         local node = MatchNodeName(msg, AB_NODES)
         if node then
@@ -1349,6 +1349,7 @@ local function ParseCombatMessage(msg, ev)
     if AutoBG_Settings.AVTimers and isAV then
         local node = MatchNodeName(msg, AV_NODES)
         if node then
+            -- 5 min on OctoWoW (confirmed in play, 2026-10-21)
             if string.find(lower, "claims") or string.find(lower, "assaulted") or string.find(lower, "under attack") then
                 timers.AV[node] = { expire = GetTime() + 300, faction = faction }
             elseif string.find(lower, "taken") or string.find(lower, "defended") or string.find(lower, "destroyed") or string.find(lower, "captured") then
@@ -1384,7 +1385,7 @@ local function ParseCombatMessage(msg, ev)
         end
     end
 
-    -- 4. WSG Flag Respawns (23s)
+    -- 4. WSG Flag Respawns: 23s on OctoWoW (confirmed in play, 2026-10-21)
     if AutoBG_Settings.WSGTimers and isWSG then
         if     string.find(lower, "captured the alliance flag") then timers.WSG["Alliance Flag"] = GetTime() + 23
         elseif string.find(lower, "captured the horde flag")    then timers.WSG["Horde Flag"]    = GetTime() + 23
