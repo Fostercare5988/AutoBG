@@ -904,8 +904,14 @@ function Spy:CreateAlertWindow()
 		Targets.SelectEnemy(tName, tGUID, "LeftButton")
 	end)
 
-	-- Icon (OVERLAY: the card surface fills ARTWORK)
-	local icon = f:CreateTexture(nil, "OVERLAY")
+	-- Icon and text live on a child frame above the card, with their own font,
+	-- so neither the card's layers nor a changed shared font can hide them.
+	local content = CreateFrame("Frame", nil, f)
+	content:SetAllPoints(f)
+	content:SetFrameLevel(f:GetFrameLevel() + 2)
+	f.Content = content
+
+	local icon = content:CreateTexture(nil, "ARTWORK")
 	icon:SetWidth(30)
 	icon:SetHeight(30)
 	icon:SetPoint("LEFT", f, "LEFT", 6, 0)
@@ -914,13 +920,15 @@ function Spy:CreateAlertWindow()
 	f.Icon = icon
 
 	-- Title
-	local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	local title = content:CreateFontString(nil, "OVERLAY")
+	title:SetFont(FONT, 10, "OUTLINE")
 	title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -2)
 	title:SetText("|cff00ffffStealth Detected!|r")
 	f.Title = title
 
 	-- Name
-	local nameText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	local nameText = content:CreateFontString(nil, "OVERLAY")
+	nameText:SetFont(FONT, 12, "OUTLINE")
 	nameText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
 	nameText:SetText("Unknown")
 	f.Name = nameText
