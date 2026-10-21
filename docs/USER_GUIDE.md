@@ -68,11 +68,14 @@ stray click cannot move the list. Use **Preview frames** to drag it.
 **On each enemy** (shared by every size):
 
 - **Cast bars:** each enemy's cast or channel appears beside its row with the spell
-  icon and name, on the side away from the trinket. Orange is a cast, blue a
-  channel, grey cannot be interrupted. Interrupts clear the bar at once. Only casts
-  that start while the enemy is loaded near you can be seen.
-- **Fade when out of range:** enemies farther than 40 yards, or not seen near you
-  yet this match, fade so the reachable ones stand out.
+  icon and name. Orange is a cast, blue a channel, grey cannot be interrupted.
+  Interrupts clear the bar at once. Only casts that start while the enemy is
+  loaded near you can be seen. Left-click a cast bar to target the caster,
+  right-click to focus them. **Cast bars on the left** picks the side; on the
+  trinket's side the bar sits outside the trinket.
+- **Grey when out of range:** the health bar of an enemy farther than 40 yards
+  turns grey, so the ones you can reach stand out in full color. The name and
+  health stay readable. Enemies you have not been near yet keep their color.
 - **Raid icons:** skull, cross and the other raid icons your group sets.
 - **Who's on them:** an orange number beside the health shows how many of your
   group, you included, target that enemy. The trinket icon can sit on either side; its 180-second countdown

@@ -22,9 +22,10 @@ local HORDE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\HordeFlag"
 local ALLIANCE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\AllianceFlag"
 local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local CAST_WIDTH = 120
--- Most ranged spells and heals reach 40 yards; farther enemies fade.
+-- Most ranged spells and heals reach 40 yards; farther enemies' health bars
+-- turn a muted grey of their class color.
 local RANGE_SQUARED = 40 * 40
-local OUT_OF_RANGE_ALPHA = 0.7
+local function FarShade(c) return 0.22 + c * 0.25 end
 local ALLIANCE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 
@@ -382,6 +383,8 @@ function Targets:EnsureOptions()
 	if o.StealthAlert == nil then o.StealthAlert = true end
 	if o.TrinketPos == nil then o.TrinketPos = "RIGHT" end
 	if o.ShowCastBars == nil then o.ShowCastBars = true end
+	-- Cast bars started on the side away from the trinket; keep that for old saves.
+	if o.CastPos == nil then o.CastPos = (o.TrinketPos == "LEFT") and "RIGHT" or "LEFT" end
 	if o.FadeOutOfRange == nil then o.FadeOutOfRange = true end
 	if o.ShowRaidIcons == nil then o.ShowRaidIcons = true end
 	if o.ShowTargetCount == nil then o.ShowTargetCount = true end
@@ -516,8 +519,19 @@ local function UpdateRowStealthVisual(index, name)
 	else
 		alpha = 1.0
 	end
-	if btn.outOfRange and not dead then alpha = math.min(alpha, OUT_OF_RANGE_ALPHA) end
 	if btn.visualAlpha ~= alpha then btn.visualAlpha = alpha; btn:SetAlpha(alpha) end
+
+	-- Out of range greys the health bar only; name, health and icons stay readable.
+	local far = btn.outOfRange and not dead
+	local color = btn.classColor
+	if color and btn.fillFar ~= far then
+		btn.fillFar = far
+		if far then
+			btn.HealthBar:SetVertexColor(FarShade(color.r), FarShade(color.g), FarShade(color.b), 1)
+		else
+			btn.HealthBar:SetVertexColor(color.r, color.g, color.b, 1)
+		end
+	end
 
 	local text, showText
 	if stealth and not dead then
@@ -1105,6 +1119,16 @@ local function TargetButton_OnLeave(self)
 	end
 end
 
+local function Cast_OnClick(self, button)
+	local c = self or this
+	TargetButton_OnClick(c.owner, button or arg1)
+end
+
+local function Cast_OnEnter(self)
+	local c = self or this
+	TargetButton_OnEnter(c.owner)
+end
+
 function Targets:CreateFrames()
 	if Targets.MainFrame then return end
 
@@ -1189,8 +1213,8 @@ function Targets:CreateFrames()
 		btn.RaidIcon:SetTexture(RAID_ICON_TEXTURE)
 		btn.RaidIcon:Hide()
 
-		-- Cast bar beside the row, on the side away from the trinket.
-		local cast = CreateFrame("Frame", "AutoBG_TargetCast" .. i, btn)
+		-- Cast bar beside the row; clicking it selects the caster like the row does.
+		local cast = CreateFrame("Button", "AutoBG_TargetCast" .. i, btn)
 		btn.Cast = cast
 		cast.owner = btn
 		cast:SetFrameLevel(btn:GetFrameLevel() + 3)
@@ -1210,6 +1234,11 @@ function Targets:CreateFrames()
 		cast.Text:SetPoint("RIGHT", cast, "RIGHT", -2, 0)
 		cast.Text:SetJustifyH("LEFT")
 		cast:SetScript("OnUpdate", Cast_OnUpdate)
+		cast:EnableMouse(true)
+		cast:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		cast:SetScript("OnClick", Cast_OnClick)
+		cast:SetScript("OnEnter", Cast_OnEnter)
+		cast:SetScript("OnLeave", TargetButton_OnLeave)
 
 		-- PvP Trinket Frame
 		local trinket = CreateFrame("Frame", "AutoBG_TargetTrinket" .. i, btn)
@@ -1378,10 +1407,16 @@ function Targets:SetupButtonLayout(size)
 		btn.TargetCount:SetFont(FONT, fontSize, "OUTLINE")
 		local cast = btn.Cast
 		cast:ClearAllPoints()
-		if ((o and o.TrinketPos) or "RIGHT") == "LEFT" then
-			cast:SetPoint("LEFT", btn, "RIGHT", 3, 0)
+		-- On the trinket's side, the cast bar sits just outside the trinket.
+		local castSide = (o and o.CastPos) or "LEFT"
+		local anchor = btn
+		if castSide == ((o and o.TrinketPos) or "RIGHT") and o and o.ShowTrinket and o.ShowTrinket[size] then
+			anchor = btn.Trinket
+		end
+		if castSide == "RIGHT" then
+			cast:SetPoint("LEFT", anchor, "RIGHT", 3, 0)
 		else
-			cast:SetPoint("RIGHT", btn, "LEFT", -3, 0)
+			cast:SetPoint("RIGHT", anchor, "LEFT", -3, 0)
 		end
 		cast:SetWidth(CAST_WIDTH)
 		cast:SetHeight(height)
@@ -1522,6 +1557,7 @@ local function RenderRoster()
 
 			btn.ClassBackground:SetTexture(0.12 + color.r * 0.30, 0.12 + color.g * 0.30, 0.12 + color.b * 0.30, 1)
 			btn.HealthBar:SetVertexColor(color.r, color.g, color.b, 1)
+			btn.classColor, btn.fillFar = color, nil
 
 			btn.Name:SetText((o and o.ButtonHideRealm and o.ButtonHideRealm[currentSize]) and StripRealm(name) or name)
 			-- A row that now shows a different enemy drops the old enemy's cast.
