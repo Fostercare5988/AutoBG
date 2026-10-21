@@ -89,7 +89,7 @@ local cbAutoAccept = Setting("AutoBG_Opt_AutoAccept", panelGeneral, "Accept queu
 	"Automatically accept battleground queue pops.", 28, -118, "AutoAccept")
 local cbSkipAFK = Setting("AutoBG_Opt_SkipAFK", panelGeneral, "Pause while AFK",
 	"Do not accept, queue or rejoin automatically while you are flagged AFK.", 28, -144, "SkipIfAFK")
-local sliderAcceptDelay = UI.Slider("AutoBG_Opt_AcceptDelay", panelGeneral, "Enter delay", 28, -176, 200, 0, 119, 1,
+local sliderAcceptDelay = UI.Slider("AutoBG_Opt_AcceptDelay", panelGeneral, "Enter delay", 28, -176, 200, 0, AutoBG_MAX_ENTER_DELAY, 1,
 	function(value)
 		if AutoBG_Settings then AutoBG_Settings.AutoAcceptDelay = value end
 	end, function(value) return value == 0 and "Instant" or (value .. "s") end)

@@ -24,7 +24,8 @@ Choose battlegrounds under General, then press **Queue now**.
 The available battleground list comes from the server.
 
 - **Accept queue pops:** enter when an invitation arrives. **Enter delay** waits
-  0 to 119 seconds first. **Pause while AFK** stops accepting, queueing and
+  0 to 75 seconds first; an invite runs out after about 80 seconds, and
+  AutoBG always enters before that. **Pause while AFK** stops accepting, queueing and
   rejoining while you are AFK.
 - **Leave when it ends:** leave a completed match. Current or queued casts and
   terrain targeting are stopped before departure. Turning it off cancels a
