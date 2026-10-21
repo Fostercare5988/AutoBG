@@ -791,6 +791,18 @@ frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 frame:RegisterEvent("CHAT_MSG_SYSTEM")
 frame:RegisterEvent("UNIT_AURA")
 
+-- An invite lasts about two minutes, but the delay timer starts only when the
+-- invite reaches us and the server may allow less, so a 119s delay can miss
+-- it. Enter at least INVITE_MARGIN seconds before the invite can run out; an
+-- invite that still expires teaches us the server's real window.
+local INVITE_MARGIN = 5
+local DEFAULT_INVITE_WINDOW = 120
+local inviteStart = {}
+
+local function InviteWindow()
+    return tonumber(AutoBG_Settings and AutoBG_Settings.InviteWindow) or DEFAULT_INVITE_WINDOW
+end
+
 local function ProcessBattlefieldQueue(id)
     local status, mapName = GetBattlefieldStatus(id)
     if status == "confirm" then
@@ -803,6 +815,7 @@ local function ProcessBattlefieldQueue(id)
             inviteGeneration[id] = (inviteGeneration[id] or 0) + 1
             local generation = inviteGeneration[id]
             notifiedQueues[id] = true
+            inviteStart[id] = GetTime()
             if AutoBG_Settings.AutoAccept then
                 if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
                     AutoBG_Print("Queue popped for |cFFFFFF00" .. (mapName or "Battleground") .. "|r, but Auto-Enter is paused because you are |cFFFF5555AFK|r!")
@@ -810,7 +823,8 @@ local function ProcessBattlefieldQueue(id)
                     FlashTaskbar()
                     return
                 end
-                local delay = AutoBG_Settings.AutoAcceptDelay or 0
+                local delay = math.min(AutoBG_Settings.AutoAcceptDelay or 0, InviteWindow() - INVITE_MARGIN)
+                if delay < 0 then delay = 0 end
                 local qId, bg = id, mapName or "Battleground"
                 if delay <= 0 then
                     notifiedQueues[qId] = "accepted"
@@ -843,6 +857,18 @@ local function ProcessBattlefieldQueue(id)
             end
         end
     else
+        -- An invite we never accepted that lasted this long ran out (or was
+        -- declined very late): remember the shorter window.
+        local started = inviteStart[id]
+        if started and notifiedQueues[id] == true and status ~= "active" then
+            local lasted = math.floor(GetTime() - started)
+            if lasted >= 30 and lasted < InviteWindow() then
+                AutoBG_Settings.InviteWindow = lasted
+                AutoBG_Print("The invite for |cFFFFFF00" .. (invitedMaps[id] or "Battleground") .. "|r ran out after |cFFFFFF00"
+                    .. lasted .. "s|r. Auto-Enter will now enter by |cFFFFFF00" .. (lasted - INVITE_MARGIN) .. "s|r at the latest.", true)
+            end
+        end
+        inviteStart[id] = nil
         inviteGeneration[id] = (inviteGeneration[id] or 0) + 1
         notifiedQueues[id] = false
         invitedMaps[id] = nil

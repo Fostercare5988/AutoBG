@@ -334,7 +334,7 @@ UI.Heading(panelTargets, "On each enemy", 264, -186)
 local cbTgtCastBars = RowFeature("AutoBG_Tgt_CastBars", "Cast bars",
 	"Show each enemy's cast or channel beside the row, with the spell name. Grey means it cannot be interrupted.", -206, "ShowCastBars")
 local cbTgtRange = RowFeature("AutoBG_Tgt_FadeRange", "Fade when out of range",
-	"Fade enemies farther than 40 yards, or not seen near you yet, so you only read the ones you can reach.", -232, "FadeOutOfRange")
+	"Dim enemies farther than 40 yards, so the ones you can reach stand out. Enemies you have not been near yet stay bright.", -232, "FadeOutOfRange")
 local cbTgtRaidIcons = RowFeature("AutoBG_Tgt_RaidIcons", "Raid icons",
 	"Show the skull, cross and other raid icons your group puts on enemies.", -258, "ShowRaidIcons")
 local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
@@ -433,6 +433,8 @@ UpdateTargetsWidgets = function(sz)
 end
 
 Refresh[3] = function()
+	-- In a match, edit and preview the frame you are actually looking at.
+	if Targets and Targets.activeBG and Targets.currentSize then selectedBracket = Targets.currentSize end
 	SelectBracket(selectedBracket, startPreview)
 end
 

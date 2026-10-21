@@ -24,7 +24,7 @@ local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local CAST_WIDTH = 120
 -- Most ranged spells and heals reach 40 yards; farther enemies fade.
 local RANGE_SQUARED = 40 * 40
-local OUT_OF_RANGE_ALPHA = 0.4
+local OUT_OF_RANGE_ALPHA = 0.7
 local ALLIANCE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 
@@ -864,9 +864,8 @@ local function UpdateRowStatus()
 					far = not (checked and distanceSquared <= RANGE_SQUARED)
 					raidIndex = GetRaidTargetIndex(guid)
 					count = groupTargets[guid]
-				else
-					far = true -- not seen near you this match
 				end
+				-- An enemy not seen near you yet is unknown, not far: it stays bright.
 			end
 			far = (fade and far) and true or nil
 			raidIndex = icons and raidIndex or nil
@@ -1120,7 +1119,7 @@ function Targets:CreateFrames()
 	header:SetPoint("TOPLEFT", main, "TOPLEFT", 0, 0)
 	header:SetPoint("TOPRIGHT", main, "TOPRIGHT", 0, 0)
 	header:SetHeight(DRAG_HEADER_HEIGHT)
-	-- UpdateHeader enables dragging only while previewing.
+	-- UpdateHeader enables dragging out of combat.
 	header:EnableMouse(false)
 	header:RegisterForDrag("LeftButton")
 	header:SetScript("OnDragStart", MainFrame_OnMouseDown)
@@ -1416,8 +1415,8 @@ local function DetectBattleground()
 	return false, nil
 end
 
--- In a match the header counts living enemies and ignores the mouse, so a
--- misclick cannot drag the list mid-fight. Preview frames shows the drag hint.
+-- In a match the header counts living enemies. It drags out of combat and
+-- locks in combat, so a misclick cannot move the list mid-fight.
 local function UpdateHeader()
 	local main = Targets.MainFrame
 	if not main then return end
@@ -1431,9 +1430,13 @@ local function UpdateHeader()
 		end
 		text, color = "Enemies " .. alive .. "/" .. total, UI.hint
 	end
+	local drag = (Targets.isConfig or not UnitAffectingCombat("player")) and true or false
+	if main.headerDrag ~= drag then
+		main.headerDrag = drag
+		main.DragHeader:EnableMouse(drag)
+	end
 	if main.headerText == text then return end
 	main.headerText = text
-	main.DragHeader:EnableMouse(Targets.isConfig and true or false)
 	main.MoveText:SetText(text)
 	main.MoveText:SetTextColor(color[1], color[2], color[3])
 end
@@ -1883,6 +1886,8 @@ Targets:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 -- those on a target/mouseover/nameplate token (Emyrk/nampower EVENTS.md).
 Targets:RegisterEvent("UNIT_HEALTH_GUID")
 Targets:RegisterEvent("UNIT_DIED")
+Targets:RegisterEvent("PLAYER_REGEN_DISABLED")
+Targets:RegisterEvent("PLAYER_REGEN_ENABLED")
 Targets:RegisterEvent("BUFF_ADDED_OTHER")
 Targets:RegisterEvent("BUFF_REMOVED_OTHER")
 
@@ -1920,6 +1925,9 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 		Targets:OnCarrierChanged()
 		RequestBattlefieldScoreData()
 		Targets:BattlefieldScoreUpdate()
+
+	elseif ev == "PLAYER_REGEN_DISABLED" or ev == "PLAYER_REGEN_ENABLED" then
+		UpdateHeader()
 
 	elseif ev == "UPDATE_BATTLEFIELD_SCORE" then
 		Targets:BattlefieldScoreUpdate()
