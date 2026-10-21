@@ -156,7 +156,8 @@ local function GetUnitTargetToken(unit)
 end
 
 -- Cast and aura IDs, checked on octowow.st/db, 2026-10-21. Duration 0 lasts
--- until the aura is removed or the unit attacks.
+-- until the aura is removed or the unit attacks. The frames show the spell's
+-- own icon from SpellInfo; these textures are the fallback.
 local STEALTH_SPELLS = {
 	-- Rogue Stealth, ranks 1-4
 	[1784] = { name = "Stealth", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
@@ -177,10 +178,19 @@ local STEALTH_SPELLS = {
 	-- Lesser Invisibility Potion, Invisibility Potion
 	[3680]  = { name = "Lesser Invisibility", texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 15 },
 	[11392] = { name = "Invisibility",        texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 18 },
-	-- Lesser Invisibility (120 sec, may end early)
-	[66]    = { name = "Lesser Invisibility", texture = "Interface\\Icons\\Spell_Nature_Invisibilty", duration = 120 },
 	-- Gnomish Cloaking Device
 	[4079]  = { name = "Cloaking",            texture = "Interface\\Icons\\INV_Misc_EngGizmos_04",   duration = 10 },
+}
+
+-- What the row shows instead of health while the enemy is hidden.
+local STEALTH_LABELS = {
+	["Stealth"]             = "|cffc7b5ffSTEALTH|r",
+	["Prowl"]               = "|cffd2c2ffPROWL|r",
+	["Vanish"]              = "|cffd2c2ffVANISH|r",
+	["Shadowmeld"]          = "|cffc7b5ffMELD|r",
+	["Invisibility"]        = "|cff00ffffINVIS POT|r",
+	["Lesser Invisibility"] = "|cff00ffffINVIS POT|r",
+	["Cloaking"]            = "|cff00ffffCLOAK|r",
 }
 
 local STEALTH_NAMES = {
@@ -199,7 +209,16 @@ local function CheckIsStealthSpell(spellId)
 	if not spellId then return false end
 	local def = stealthBySpell[spellId]
 	if def == nil then
-		def = STEALTH_SPELLS[spellId] or (SpellInfo and STEALTH_NAMES[SpellInfo(spellId) or ""]) or false
+		local spellName, _, icon
+		if SpellInfo then spellName, _, icon = SpellInfo(spellId) end
+		local base = STEALTH_SPELLS[spellId] or STEALTH_NAMES[spellName or ""]
+		def = false
+		if base then
+			-- Prowl keeps AutoBG's own art; everything else shows its real icon.
+			local texture = base.texture
+			if texture ~= PROWL_TEXTURE and icon and icon ~= "" then texture = icon end
+			def = { name = base.name, texture = texture, duration = base.duration }
+		end
 		stealthBySpell[spellId] = def
 	end
 	if def then return true, def.name, def.texture, def.duration end
@@ -458,15 +477,8 @@ local function UpdateRowStealthVisual(index, name)
 
 	local tex
 	if stealth and not dead then
-		local sName = stealth.spellName or "Stealth"
-		tex = stealth.texture
-		if sName == "Prowl" or string.find(tex or "", "prowl") or string.find(tex or "", "SupriseAttack") or string.find(tex or "", "Pet_Cat") or string.find(tex or "", "Ambush") or string.find(tex or "", "CatForm") then
-			tex = PROWL_TEXTURE
-		elseif sName == "Vanish" or sName == "Stealth" or string.find(tex or "", "Vanish") or string.find(tex or "", "Stealth") then
-			tex = "Interface\\Icons\\Ability_Stealth"
-		elseif not tex or tex == "" then
-			tex = "Interface\\Icons\\Ability_Stealth"
-		end
+		tex = (stealth.spellName == "Prowl" and PROWL_TEXTURE) or stealth.texture
+		if not tex or tex == "" then tex = "Interface\\Icons\\Ability_Stealth" end
 	end
 	tex = tex or false
 	if btn.stealthTexture ~= tex then
@@ -509,13 +521,7 @@ local function UpdateRowStealthVisual(index, name)
 
 	local text, showText
 	if stealth and not dead then
-		local sName = stealth.spellName or "Stealth"
-		text = (sName == "Prowl" and "|cffd2c2ffPROWL|r")
-			or (sName == "Vanish" and "|cffd2c2ffVANISH|r")
-			or (sName == "Shadowmeld" and "|cffc7b5ffMELD|r")
-			or (sName == "Cloaking" and "|cff00ffffCLOAK|r")
-			or (string.find(sName, "Invis") and "|cff00ffffINVIS|r")
-			or "|cffc7b5ffSTEALTH|r"
+		text = STEALTH_LABELS[stealth.spellName or ""] or STEALTH_LABELS.Stealth
 		showText = true
 	else
 		local pct = healthPct[name] or 100
@@ -1737,16 +1743,14 @@ function Targets:EnableConfigMode(size)
 		elseif i == 4 then
 			trinketCooldown[e.name] = now + 88  -- 1:28 preview
 		end
-		if e.classToken == "ROGUE" then
-			if i % 2 == 1 then
-				SetUnitStealth(e.name, true, "Stealth", "Interface\\Icons\\Ability_Stealth", 0)
-			else
-				SetUnitStealth(e.name, true, "Vanish", "Interface\\Icons\\Ability_Stealth", 0)
-			end
-		elseif e.classToken == "DRUID" and (i % 2 == 0) then
-			SetUnitStealth(e.name, true, "Prowl", PROWL_TEXTURE, 0)
-		elseif i == 3 then
-			SetUnitStealth(e.name, true, "Invisibility", "Interface\\Icons\\Spell_Nature_Invisibilty", 0)
+		-- Samples go through the same lookup as a real match: Stealth, Vanish,
+		-- Prowl, Invisibility Potion, Gnomish Cloaking Device.
+		local sample = (e.classToken == "ROGUE" and (i % 2 == 1 and 1787 or 1857))
+			or (e.classToken == "DRUID" and i % 2 == 0 and 9913)
+			or (i == 3 and 11392) or (i == 5 and 4079)
+		if sample then
+			local _, sName, sTex = CheckIsStealthSpell(sample)
+			SetUnitStealth(e.name, true, sName, sTex, 0)
 		end
 	end
 	for i = currentSize + 1, MAX_ENEMIES do
