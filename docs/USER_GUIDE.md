@@ -107,11 +107,12 @@ distinct contacts can recycle the oldest history entry; the global eight-second
 warning limit still applies.
 Suppressed warnings are discarded.
 
-**Stealth warnings** enables brief popups outside BGs. With **Only within 10
-yards** on, the enemy must be visible, attackable, within 10 yards, in clear
-line of sight and have a confirmed stealth aura. Turn it off to warn on a received
-stealth event even when the enemy is distant or unloaded. Battleground warnings
-always use nearby confirmation.
+**Stealth warnings** enables brief popups outside BGs. With **Only enemies I can
+see** on, you must actually see the stealthed, attackable enemy, at any distance
+your detection reaches, so detection gear and talents find them farther away.
+Turn it off to warn on a received stealth event even when you cannot see the
+enemy. Battleground warnings always need you to see them. Left-click a popup to
+target the enemy, right-click to focus them.
 
 The list contains client observations rather than a complete distance census.
 It cannot reveal players or actions that the server has not sent to your client.

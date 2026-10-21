@@ -105,7 +105,9 @@ local function ShowStealth(name, spell, classToken, guid, opt, inBattleground)
 	return true
 end
 
-local STEALTH_ALERT_DISTANCE_SQUARED = 10 * 10
+-- The server only shows you a stealthed enemy your detection reaches, so a
+-- loaded, visible, stealthed hostile is the warning at any distance: more
+-- detection (talents, gear, potions) simply finds them farther away.
 function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground, observedUnit)
 	if not name or name == "" then return false end
 	local opt = GetSpySettings()
@@ -132,9 +134,6 @@ function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground, observ
 	if not UnitExists(observedUnit) or not UnitIsVisible(observedUnit)
 		or not UnitIsPlayer(observedUnit) or not UnitCanAttack("player", observedUnit) then return false end
 	if UnitIsDead(observedUnit) or UnitIsGhost(observedUnit) then return false end
-	local distanceSquared, checked = UnitDistanceSquared(observedUnit)
-	if not checked or not distanceSquared or distanceSquared > STEALTH_ALERT_DISTANCE_SQUARED then return false end
-	if UnitInLineOfSight(observedUnit) ~= true then return false end
 	local stealthed, currentSpell = Targets.CheckUnitStealth(observedUnit)
 	if not stealthed then return false end
 	return ShowStealth(name, currentSpell or spell, classToken, guid, opt, inBattleground)
@@ -896,12 +895,12 @@ function Spy:CreateAlertWindow()
 			Spy:SaveAlertPosition()
 		end
 	end)
-	f:SetScript("OnClick", function()
-		local frame = this or self
-		if frame and frame.isMoving then return end
-		local tGUID = frame and frame.targetGUID
-		local tName = frame and frame.targetName
-		Targets.SelectEnemy(tName, tGUID, "LeftButton")
+	-- Left-click targets the stealthed enemy, right-click focuses them.
+	f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	f:SetScript("OnClick", function(self, button)
+		local frame = self or this
+		if frame.isMoving then return end
+		Targets.SelectEnemy(frame.targetName, frame.targetGUID, button or arg1)
 	end)
 
 	-- Icon and text live on a child frame above the card, with their own font,
@@ -1019,7 +1018,8 @@ function Spy:ShowAlert(spellName, enemyName, classToken, guid)
 
 	local titleW = (w.Title.GetStringWidth and w.Title:GetStringWidth()) or 100
 	local nameW = (w.Name.GetStringWidth and w.Name:GetStringWidth()) or 80
-	local neededW = math.max(190, math.max(titleW, nameW) + 52)
+	-- Just wide enough for the longer line beside the icon.
+	local neededW = math.max(titleW, nameW) + 56
 	w:SetWidth(neededW)
 
 	w:Show()
