@@ -22,9 +22,9 @@ local HORDE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\HordeFlag"
 local ALLIANCE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\AllianceFlag"
 local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local CAST_WIDTH = 120
--- Most ranged spells and heals reach 40 yards. Bars always keep their class
--- color; a farther enemy's name and health text turn grey instead.
-local RANGE_SQUARED = 40 * 40
+-- Enemies within 80 yards count as near, close enough to reach soon. Bars keep
+-- their class color; a farther enemy's name and health text turn grey.
+local RANGE_SQUARED = 80 * 80
 local ALLIANCE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 
