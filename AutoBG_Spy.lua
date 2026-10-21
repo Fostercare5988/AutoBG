@@ -28,6 +28,9 @@ local MAX_SPY_ROWS = 20
 local ACTIVE_WINDOW = 5
 local SPY_WIDTH = 190
 local FONT = "Fonts\\FRIZQT__.TTF"
+-- The list uses the enemy frames' calm Arial Narrow; the stealth popup keeps FONT.
+local LIST_FONT = "Fonts\\ARIALN.TTF"
+local ROW_HEIGHT, ROW_STEP, LIST_TOP = 18, 19, 18
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
 -- Character-create atlas cells, inset to keep neighboring icons out of the crop.
@@ -762,22 +765,16 @@ function Spy:CreateFrames()
 	f:SetClampedToScreen(true)
 	f:Hide()
 
-	f:SetBackdrop({
-		bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-		tile = true, tileSize = 12, edgeSize = 12,
-		insets = { left = 3, right = 3, top = 3, bottom = 3 }
-	})
-	f:SetBackdropColor(0.04, 0.04, 0.06, 0.85)
-	f:SetBackdropBorderColor(0.3, 0.3, 0.4, 0.9)
-
+	-- Like the enemy frames: no box, just a label above bright class-colored rows.
 	f:RegisterForDrag("LeftButton")
 	f:SetScript("OnDragStart", SpyFrame_OnDragStart)
 	f:SetScript("OnDragStop", SpyFrame_OnDragStop)
 
 	-- Header Title
-	local title = f:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	title:SetPoint("TOP", f, "TOP", 0, -4)
+	local title = f:CreateFontString(nil, "ARTWORK")
+	title:SetFont(LIST_FONT, 12, "OUTLINE")
+	title:SetTextColor(UI.hint[1], UI.hint[2], UI.hint[3])
+	title:SetPoint("TOP", f, "TOP", 0, -2)
 	title:SetText("Spy (0)")
 	f.Title = title
 
@@ -785,8 +782,10 @@ function Spy:CreateFrames()
 	local clearBtn = CreateFrame("Button", nil, f)
 	clearBtn:SetWidth(14)
 	clearBtn:SetHeight(14)
-	clearBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -5, -4)
-	local clearText = clearBtn:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	clearBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -1)
+	local clearText = clearBtn:CreateFontString(nil, "ARTWORK")
+	clearText:SetFont(LIST_FONT, 12, "OUTLINE")
+	clearText:SetTextColor(UI.hint[1], UI.hint[2], UI.hint[3])
 	clearText:SetPoint("CENTER", 0, 0)
 	clearText:SetText("x")
 	clearBtn:SetScript("OnClick", SpyClearBtn_OnClick)
@@ -797,13 +796,13 @@ function Spy:CreateFrames()
 		local btn = CreateFrame("Button", "AutoBG_SpyRow" .. i, f)
 		_G["BattlegroundTargets_SpyRow" .. i] = btn -- Compatibility alias
 		btn:SetWidth(182)
-		btn:SetHeight(15)
-		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -21 - (i - 1) * 16)
+		btn:SetHeight(ROW_HEIGHT)
+		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -LIST_TOP - (i - 1) * ROW_STEP)
 
-		-- Row Background
+		-- A thin dark edge, like an enemy-frame row; the bar fills the rest.
 		local bg = btn:CreateTexture(nil, "BACKGROUND")
 		bg:SetAllPoints()
-		bg:SetTexture(0, 0, 0, 0.6)
+		bg:SetTexture(0, 0, 0, 0.8)
 		btn.Bg = bg
 
 		-- Status Bar (Class Colored)
@@ -815,8 +814,8 @@ function Spy:CreateFrames()
 
 		-- Icon (Class or Stealth)
 		local icon = btn:CreateTexture(nil, "ARTWORK")
-		icon:SetWidth(13)
-		icon:SetHeight(13)
+		icon:SetWidth(ROW_HEIGHT - 2)
+		icon:SetHeight(ROW_HEIGHT - 2)
 		icon:SetPoint("LEFT", btn, "LEFT", 2, 0)
 		icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 		btn.Icon = icon
@@ -824,14 +823,14 @@ function Spy:CreateFrames()
 		-- Name and level/class are the two columns. Health, race, stealth name
 		-- and observation age remain in the tooltip, rather than crowding rows.
 		local details = btn:CreateFontString(nil, "OVERLAY")
-		details:SetFont(FONT, 10, "OUTLINE")
+		details:SetFont(LIST_FONT, 12, "OUTLINE")
 		details:SetPoint("RIGHT", btn, "RIGHT", -3, 0)
 		details:SetWidth(65)
 		details:SetJustifyH("RIGHT")
 		btn.Details = details
 
 		local nameText = btn:CreateFontString(nil, "OVERLAY")
-		nameText:SetFont(FONT, 11, "OUTLINE")
+		nameText:SetFont(LIST_FONT, 13, "OUTLINE")
 		nameText:SetPoint("LEFT", icon, "RIGHT", 3, 0)
 		nameText:SetPoint("RIGHT", details, "LEFT", -3, 0)
 		nameText:SetJustifyH("LEFT")
@@ -1099,7 +1098,7 @@ function Spy:RenderRows()
 	if count > visibleCount then title = title .. " (" .. visibleCount .. " shown)" end
 	if f.Title:GetText() ~= title then f.Title:SetText(title) end
 	-- Fixed width; the top edge is anchored, so only the bottom edge moves.
-	local width, height = SPY_WIDTH, count == 0 and 24 or 25 + visibleCount * 16
+	local width, height = SPY_WIDTH, count == 0 and LIST_TOP or LIST_TOP + visibleCount * ROW_STEP
 	if f:GetWidth() ~= width then f:SetWidth(width) end
 	if f:GetHeight() ~= height then f:SetHeight(height) end
 
@@ -1124,7 +1123,7 @@ function Spy:RenderRows()
 
 		if classChanged then
 			local color = Targets.GetClassColor(data.classToken)
-			row.StatusBar:SetVertexColor(color.r, color.g, color.b, 0.45)
+			row.StatusBar:SetVertexColor(color.r, color.g, color.b, 1)
 		end
 		if nameChanged then row.NameText:SetText(data.shortName or data.name) end
 		if levelChanged then
