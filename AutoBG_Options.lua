@@ -289,7 +289,7 @@ local sizeHint = Hint(panelTargets, "", 28, -316, 208)
 local SIZE_PRESETS = {
 	[10] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
 	[15] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
-	[40] = { { 160, 16, 9 }, { 210, 20, 11 }, { 240, 24, 12 } },
+	[40] = { { 160, 16, 10 }, { 210, 20, 11 }, { 240, 24, 12 } },
 }
 UI.Heading(panelTargets, "Frame size", 264, -98)
 local _, ShowPreset = UI.Segmented("AutoBG_Tgt_Preset", panelTargets, { "Compact", "Standard", "Large" }, 260, -114, 212,
@@ -345,9 +345,11 @@ local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, s
 end
 
 UI.Heading(panelTargets, "Custom size", 28, -340)
-local sliderTgtFontSize = TargetSlider("AutoBG_Tgt_FontSize", "Text size", 28, -360, 200, 6, 20, 1, function(o, value)
+-- Text size 0-20 on the slider is font size 10-30: smaller is unreadable.
+local TEXT_SIZE_BASE = 10
+local sliderTgtFontSize = TargetSlider("AutoBG_Tgt_FontSize", "Text size", 28, -360, 200, 0, 20, 1, function(o, value)
 	if not o.ButtonFontSize then return end
-	o.ButtonFontSize[selectedBracket] = value
+	o.ButtonFontSize[selectedBracket] = value + TEXT_SIZE_BASE
 	return true
 end, true)
 local sliderTgtScale = TargetSlider("AutoBG_Tgt_Scale", "Scale", 264, -360, 208, 50, 200, 5, function(o, value)
@@ -402,7 +404,7 @@ UpdateTargetsWidgets = function(sz)
 		if preset[1] == width and preset[2] == height and preset[3] == fontSize then match = i end
 	end
 	ShowPreset(match)
-	UI.SetSlider(sliderTgtFontSize, fontSize)
+	UI.SetSlider(sliderTgtFontSize, fontSize - TEXT_SIZE_BASE)
 	UI.SetSlider(sliderTgtScale, math.floor(((o.ButtonScale and o.ButtonScale[sz]) or 1.0) * 100 + 0.5))
 	UI.SetSlider(sliderTgtWidth, width)
 	UI.SetSlider(sliderTgtHeight, height)

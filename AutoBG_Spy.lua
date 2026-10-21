@@ -925,7 +925,7 @@ function Spy:CreateAlertWindow()
 	title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -2)
 	title:SetPoint("TOPRIGHT", f, "TOPRIGHT", -10, -8)
 	title:SetJustifyH("CENTER")
-	title:SetText("|cff00ffffStealth Detected!|r")
+	title:SetText("|cff00ffffStealth|r")
 	f.Title = title
 
 	-- Name
@@ -980,28 +980,28 @@ function Spy:ShowAlert(spellName, enemyName, classToken, guid)
 
 	local sName = spellName or "Stealth"
 	local tex = "Interface\\Icons\\Ability_Stealth"
-	local titleText = "|cff00ffffStealth Detected!|r"
+	local titleText = "|cff00ffffStealth|r"
 	local edge = ALERT_EDGE.Stealth
 
 	if sName == "Prowl" then
 		tex = PROWL_TEXTURE or "Interface\\Icons\\Ability_Druid_Prowl"
-		titleText = "|cffff9900Prowl Detected!|r"
+		titleText = "|cffff9900Prowl|r"
 		edge = ALERT_EDGE.Prowl
 	elseif sName == "Shadowmeld" then
 		tex = "Interface\\Icons\\Ability_Racial_ShadowMeld"
-		titleText = "|cffbb88ffShadowmeld Detected!|r"
+		titleText = "|cffbb88ffShadowmeld|r"
 		edge = ALERT_EDGE.Shadowmeld
 	elseif sName == "Vanish" then
 		tex = "Interface\\Icons\\Ability_Stealth"
-		titleText = "|cff00ffffVanish Detected!|r"
+		titleText = "|cff00ffffVanish|r"
 		edge = ALERT_EDGE.Vanish
 	elseif string.find(sName, "Invis") then
 		tex = "Interface\\Icons\\Spell_Nature_Invisibilty"
-		titleText = "|cff88ccffInvisibility Detected!|r"
+		titleText = "|cff88ccffInvisibility|r"
 		edge = ALERT_EDGE.Invisibility
 	elseif sName == "Cloaking" then
 		tex = "Interface\\Icons\\INV_Misc_EngGizmos_04"
-		titleText = "|cffffff00Cloaking Detected!|r"
+		titleText = "|cffffff00Cloaking|r"
 		edge = ALERT_EDGE.Cloaking
 	end
 
