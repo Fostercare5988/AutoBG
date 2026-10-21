@@ -386,10 +386,13 @@ function Targets:EnsureOptions()
 	o.ShowFlagCarrier = nil -- Permanent behavior; retire the saved toggle.
 	o.ShowTrinket = o.ShowTrinket or {}
 	if o.StealthAlert == nil then o.StealthAlert = true end
-	if o.TrinketPos == nil then o.TrinketPos = "RIGHT" end
+	-- New installs put the trinket and the cast bars on the left. Older saves
+	-- had cast bars on the side away from their trinket; keep that.
+	if o.CastPos == nil then
+		o.CastPos = (o.TrinketPos == nil or o.TrinketPos == "RIGHT") and "LEFT" or "RIGHT"
+	end
+	if o.TrinketPos == nil then o.TrinketPos = "LEFT" end
 	if o.ShowCastBars == nil then o.ShowCastBars = true end
-	-- Cast bars started on the side away from the trinket; keep that for old saves.
-	if o.CastPos == nil then o.CastPos = (o.TrinketPos == "LEFT") and "RIGHT" or "LEFT" end
 	if o.FadeOutOfRange == nil then o.FadeOutOfRange = true end
 	if o.ShowRaidIcons == nil then o.ShowRaidIcons = true end
 	if o.ShowTargetCount == nil then o.ShowTargetCount = true end
@@ -407,16 +410,17 @@ function Targets:EnsureOptions()
 	end
 	for _, size in ipairs(BRACKETS) do
 		if o.EnableBracket[size] == nil then o.EnableBracket[size] = true end
-		if o.ButtonFontSize[size] == nil then o.ButtonFontSize[size] = (size == 40 and 11) or 12 end
+		-- New-install look (chosen in play, 2026-10-21); 40v40 stays compact.
+		if o.ButtonFontSize[size] == nil then o.ButtonFontSize[size] = (size == 40 and 11) or 20 end
 		-- Below 10 the text is too small to read; the slider starts there now.
 		if o.ButtonFontSize[size] < 10 then o.ButtonFontSize[size] = 10 end
-		if o.ButtonScale[size] == nil then o.ButtonScale[size] = (size == 10 and 1.10) or (size == 15 and 1.00) or 0.90 end
-		if o.ButtonWidth[size] == nil then o.ButtonWidth[size] = 210 end
-		if o.ButtonHeight[size] == nil then o.ButtonHeight[size] = (size == 40 and 20) or 26 end
+		if o.ButtonScale[size] == nil then o.ButtonScale[size] = (size == 40 and 0.90) or 1.00 end
+		if o.ButtonWidth[size] == nil then o.ButtonWidth[size] = (size == 40 and 210) or 195 end
+		if o.ButtonHeight[size] == nil then o.ButtonHeight[size] = (size == 40 and 20) or 25 end
 		if o.ButtonShowHealthText[size] == nil then o.ButtonShowHealthText[size] = true end
-		if o.ButtonHideRealm[size] == nil then o.ButtonHideRealm[size] = false end
+		if o.ButtonHideRealm[size] == nil then o.ButtonHideRealm[size] = true end
 		if o.ButtonSortBy[size] == nil then o.ButtonSortBy[size] = 1 end
-		if o.DimStealthed[size] == nil then o.DimStealthed[size] = false end
+		if o.DimStealthed[size] == nil then o.DimStealthed[size] = true end
 		if o.ShowTrinket[size] == nil then o.ShowTrinket[size] = true end
 	end
 end
@@ -712,8 +716,9 @@ local function UpdateRowTrinketVisual(index, name)
 		end
 		if btn.trinketCooling ~= true then
 			btn.trinketCooling = true
-			btn.Trinket.Icon:SetVertexColor(0.35, 0.35, 0.35, 0.75)
-			btn.Trinket.Text:SetTextColor(1, 0.85, 0.20, 1)
+			-- A dark icon under a big, bright countdown reads at a glance.
+			btn.Trinket.Icon:SetVertexColor(0.25, 0.25, 0.25, 0.85)
+			btn.Trinket.Text:SetTextColor(1, 0.92, 0.35, 1)
 		end
 	else
 		if btn.trinketCooling ~= false then
@@ -1405,8 +1410,8 @@ function Targets:SetupButtonLayout(size)
 			end
 			btn.Trinket:SetWidth(height)
 			btn.Trinket:SetHeight(height)
-			local tFontSize = math.max(7, math.floor(height * 0.45))
-			btn.Trinket.Text:SetFont(FONT, tFontSize, "OUTLINE")
+			local tFontSize = math.max(9, math.floor(height * 0.6))
+			btn.Trinket.Text:SetFont(FONT, tFontSize, "THICKOUTLINE")
 			btn.Trinket.Icon:SetTexture(GetEnemyTrinketTexture())
 		end
 		btn.RaidIcon:SetWidth(height - 6)
