@@ -791,12 +791,12 @@ frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 frame:RegisterEvent("CHAT_MSG_SYSTEM")
 frame:RegisterEvent("UNIT_AURA")
 
--- An invite lasts about two minutes, but the delay timer starts only when the
--- invite reaches us and the server may allow less, so a 119s delay can miss
--- it. Enter at least INVITE_MARGIN seconds before the invite can run out; an
--- invite that still expires teaches us the server's real window.
+-- An OctoWoW invite runs out after about 80 seconds (measured in play:
+-- 79s, 2026-10-21). Enter at least INVITE_MARGIN seconds before it can run
+-- out; an invite that still expires teaches us a shorter window.
 local INVITE_MARGIN = 5
-local DEFAULT_INVITE_WINDOW = 120
+local DEFAULT_INVITE_WINDOW = 80
+AutoBG_MAX_ENTER_DELAY = DEFAULT_INVITE_WINDOW - INVITE_MARGIN
 local inviteStart = {}
 
 local function InviteWindow()
@@ -895,7 +895,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         -- Older/manual SavedVariables must not break queue comparisons or sliders.
         local delay = tonumber(AutoBG_Settings.AutoAcceptDelay) or 0
         if delay ~= delay then delay = 0 end
-        AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(119, math.floor(delay)))
+        AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(AutoBG_MAX_ENTER_DELAY, math.floor(delay)))
         -- Drop settings that now belong to FostercareTweaks.
         AutoBG_Settings.HideCastbar = nil
         AutoBG_Settings.HideStanceBar = nil
@@ -1246,7 +1246,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "delay" or cmd == "acceptdelay" then
         local val = tonumber(arg)
         if val then
-            AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(119, math.floor(val)))
+            AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(AutoBG_MAX_ENTER_DELAY, math.floor(val)))
             AutoBG_Print("Auto-Accept Enter Delay set to |cFFFFFF00" .. (AutoBG_Settings.AutoAcceptDelay == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r", true)
             if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
         else
