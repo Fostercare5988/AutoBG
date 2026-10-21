@@ -73,7 +73,7 @@ BattlegroundTargets_OptionsFrame = panel -- Backwards compatibility alias
 local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", {
 	{ label = "General", height = 446 },
 	{ label = "Timers", height = 436 },
-	{ label = "Enemy frames", height = 424 },
+	{ label = "Enemy frames", height = 444 },
 	{ label = "Spy", height = 336 },
 }, function(index)
 	selectedTab = index
@@ -318,22 +318,31 @@ local function RowFeature(name, text, tip, y, key)
 		Targets:EnsureOptions()
 		AutoBG_Settings.Targets[key] = value
 		if Targets.ApplyRowFeatures then Targets:ApplyRowFeatures() end
+		UpdateTargetsWidgets(selectedBracket)
 	end, 172)
 end
 
 UI.Heading(panelTargets, "On each enemy", 264, -186)
 local cbTgtCastBars = RowFeature("AutoBG_Tgt_CastBars", "Cast bars",
-	"Show each enemy's cast or channel beside the row, with the spell name. Grey means it cannot be interrupted.", -206, "ShowCastBars")
-local cbTgtRange = RowFeature("AutoBG_Tgt_FadeRange", "Fade when out of range",
-	"Dim enemies farther than 40 yards, so the ones you can reach stand out. Enemies you have not been near yet stay bright.", -232, "FadeOutOfRange")
+	"Show each enemy's cast or channel beside the row, with the spell name. Grey means it cannot be interrupted. Click a cast bar to target the caster.", -206, "ShowCastBars")
+local cbTgtCastLeft = UI.Switch("AutoBG_Tgt_CastLeft", panelTargets, "Cast bars on the left",
+	"Put cast bars on the left of the row instead of the right.", 280, -232, function(value)
+		local o = TargetOptions()
+		if not o then return end
+		o.CastPos = value and "LEFT" or "RIGHT"
+		Relayout()
+		Rerender()
+	end, 156)
+local cbTgtRange = RowFeature("AutoBG_Tgt_FadeRange", "Grey when out of range",
+	"Grey the health bar of enemies farther than 40 yards, so the ones you can reach stand out in full color. Names and health stay readable. Enemies you have not been near yet keep their color.", -258, "FadeOutOfRange")
 local cbTgtRaidIcons = RowFeature("AutoBG_Tgt_RaidIcons", "Raid icons",
-	"Show the skull, cross and other raid icons your group puts on enemies.", -258, "ShowRaidIcons")
+	"Show the skull, cross and other raid icons your group puts on enemies.", -284, "ShowRaidIcons")
 local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
-	"Show how many of your group, you included, target each enemy, in orange beside the health.", -284, "ShowTargetCount")
+	"Show how many of your group, you included, target each enemy, in orange beside the health.", -310, "ShowTargetCount")
 
-UI.Heading(panelTargets, "Alerts", 264, -320)
+UI.Heading(panelTargets, "Alerts", 264, -340)
 local cbTgtStealthAlert = UI.Switch("AutoBG_Tgt_StealthAlert", panelTargets, "Stealth alerts in BGs",
-	"Warn with a sound for a confirmed stealth aura within 10 yards and clear line of sight. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Row indicators still update.", 264, -340, function(value)
+	"Warn with a sound for a confirmed stealth aura within 10 yards and clear line of sight. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Row indicators still update.", 264, -360, function(value)
 		Targets:EnsureOptions()
 		AutoBG_Settings.Targets.StealthAlert = value
 	end, 172)
@@ -349,22 +358,22 @@ local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, s
 	end, format)
 end
 
-local sliderTgtFontSize = TargetSlider("AutoBG_Tgt_FontSize", "Text size", 28, -384, 200, 6, 20, 1, function(o, value)
+local sliderTgtFontSize = TargetSlider("AutoBG_Tgt_FontSize", "Text size", 28, -404, 200, 6, 20, 1, function(o, value)
 	if not o.ButtonFontSize then return end
 	o.ButtonFontSize[selectedBracket] = value
 	return true
 end, true)
-local sliderTgtScale = TargetSlider("AutoBG_Tgt_Scale", "Scale", 264, -384, 208, 50, 200, 5, function(o, value)
+local sliderTgtScale = TargetSlider("AutoBG_Tgt_Scale", "Scale", 264, -404, 208, 50, 200, 5, function(o, value)
 	if not o.ButtonScale then return end
 	o.ButtonScale[selectedBracket] = value / 100
 	return true
 end, false, Percent)
-local sliderTgtWidth = TargetSlider("AutoBG_Tgt_Width", "Width", 28, -426, 200, 60, 300, 5, function(o, value)
+local sliderTgtWidth = TargetSlider("AutoBG_Tgt_Width", "Width", 28, -446, 200, 60, 300, 5, function(o, value)
 	if not o.ButtonWidth then return end
 	o.ButtonWidth[selectedBracket] = value
 	return true
 end, true)
-local sliderTgtHeight = TargetSlider("AutoBG_Tgt_Height", "Height", 264, -426, 208, 10, 40, 1, function(o, value)
+local sliderTgtHeight = TargetSlider("AutoBG_Tgt_Height", "Height", 264, -446, 208, 10, 40, 1, function(o, value)
 	if not o.ButtonHeight then return end
 	o.ButtonHeight[selectedBracket] = value
 	return true
@@ -381,7 +390,7 @@ ApplyCustomSize = function()
 	end
 	btnCustomSize:SetText(customSize and "Hide custom size" or "Custom size")
 	UI.Select(btnCustomSize, customSize)
-	if selectedTab == 3 then panel:SetHeight(customSize and 524 or 424) end
+	if selectedTab == 3 then panel:SetHeight(customSize and 544 or 444) end
 end
 
 UpdateTargetsWidgets = function(sz)
@@ -402,6 +411,7 @@ UpdateTargetsWidgets = function(sz)
 	UI.Sync(cbTgtTrinket, trinket)
 	UI.Sync(cbTgtTrinketLeft, o.TrinketPos == "LEFT", trinket and true or false)
 	UI.Sync(cbTgtCastBars, o.ShowCastBars ~= false)
+	UI.Sync(cbTgtCastLeft, o.CastPos ~= "RIGHT", o.ShowCastBars ~= false)
 	UI.Sync(cbTgtRange, o.FadeOutOfRange ~= false)
 	UI.Sync(cbTgtRaidIcons, o.ShowRaidIcons ~= false)
 	UI.Sync(cbTgtTargetCount, o.ShowTargetCount ~= false)

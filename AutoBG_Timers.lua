@@ -460,8 +460,8 @@ local WSGFlagFrame = CreateBarTimerFrame("AutoBG_WSGFlagFrame", "Warsong Gulch",
 -- =========================================================
 -- Arathi Basin Score Projection Frame (Sleek 2-Row Dual-Column Layout)
 -- =========================================================
-local AB_PROJ_WIDTH = 164
-local AB_PROJ_HEIGHT = 38
+local AB_PROJ_WIDTH = 132
+local AB_PROJ_HEIGHT = 30
 
 local function CreateABProjectionFrame(name)
     local frame = CreateFrame("Button", name, UIParent)
@@ -509,31 +509,31 @@ local function CreateABProjectionFrame(name)
     -- Two rows: verdict and bases needed on the left, both starting at the same
     -- edge; final scores right-aligned in their own column.
     local r1Status = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    r1Status:SetPoint("LEFT", frame, "LEFT", 9, 8)
-    r1Status:SetPoint("RIGHT", frame, "RIGHT", -62, 8)
+    r1Status:SetPoint("LEFT", frame, "LEFT", 7, 6)
+    r1Status:SetPoint("RIGHT", frame, "RIGHT", -50, 6)
     r1Status:SetJustifyH("LEFT")
     r1Status:SetText("")
     frame.r1Status = r1Status
 
-    local r1Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    r1Score:SetPoint("RIGHT", frame, "RIGHT", -9, 8)
-    r1Score:SetWidth(52)
+    local r1Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    r1Score:SetPoint("RIGHT", frame, "RIGHT", -7, 6)
+    r1Score:SetWidth(40)
     r1Score:SetJustifyH("RIGHT")
     r1Score:SetTextColor(0.38, 0.69, 1.00) -- Alliance Blue
     r1Score:SetText("")
     frame.r1Score = r1Score
 
     local r2Bases = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    r2Bases:SetPoint("LEFT", frame, "LEFT", 9, -8)
-    r2Bases:SetPoint("RIGHT", frame, "RIGHT", -62, -8)
+    r2Bases:SetPoint("LEFT", frame, "LEFT", 7, -6)
+    r2Bases:SetPoint("RIGHT", frame, "RIGHT", -50, -6)
     r2Bases:SetJustifyH("LEFT")
     r2Bases:SetTextColor(1.00, 0.82, 0.00) -- Gold
     r2Bases:SetText("")
     frame.r2Bases = r2Bases
 
-    local r2Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    r2Score:SetPoint("RIGHT", frame, "RIGHT", -9, -8)
-    r2Score:SetWidth(52)
+    local r2Score = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    r2Score:SetPoint("RIGHT", frame, "RIGHT", -7, -6)
+    r2Score:SetWidth(40)
     r2Score:SetJustifyH("RIGHT")
     r2Score:SetTextColor(1.00, 0.38, 0.38) -- Horde Red
     r2Score:SetText("")
@@ -543,8 +543,8 @@ local function CreateABProjectionFrame(name)
     local divider = frame:CreateTexture(nil, "ARTWORK")
     divider:SetTexture(1, 1, 1, 0.12)
     divider:SetWidth(1)
-    divider:SetPoint("TOP", frame, "TOPRIGHT", -58, -7)
-    divider:SetPoint("BOTTOM", frame, "BOTTOMRIGHT", -58, 7)
+    divider:SetPoint("TOP", frame, "TOPRIGHT", -46, -6)
+    divider:SetPoint("BOTTOM", frame, "BOTTOMRIGHT", -46, 6)
 
     frame:Hide()
     return frame
