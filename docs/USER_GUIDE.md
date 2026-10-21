@@ -100,6 +100,15 @@ tracked; **Enemies shown** controls the visible portion.
 **Forget after** expires quiet rows. **Hide when empty** hides the
 empty list. **Clear list** clears observations without resetting recent alerts.
 
+Each row shows the enemy's health as its bar and, while you can see them, the
+distance in yards. **Shift-click** a name to put it on the kill-on-sight list:
+the name turns red, and whenever that enemy shows up again AutoBG plays a raid
+warning and says so in chat. **Ctrl-click** ignores an enemy for good; undo it
+with `/abg spy ignore <name>`. `/abg spy kos` and `/abg spy ignore` list both
+lists, and `/abg spy kos <name>` adds or removes a name by hand. AutoBG also
+counts how often you meet each enemy and where you saw them last: hover a row,
+or type `/abg spy stats` for the five you meet most. It keeps the latest 500.
+
 **Alert sounds** controls all open-world warning sounds and defaults to off.
 The list admits at most one alert per eight seconds. An enemy seen in the past
 two minutes does not produce another discovery sound after row expiry, clearing
