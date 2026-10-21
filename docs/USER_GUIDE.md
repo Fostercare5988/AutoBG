@@ -60,7 +60,7 @@ does not provide enough information.
 Open `/abg targets` or `/bgt`. Pick 10v10, 15v15 or 40v40, then choose that size's
 health text, realm suffix, stealth dimming and trinket. **Frame size** offers
 Compact, Standard and Large; the **Custom size** sliders below set text size,
-scale, width and height for anything in between. Picking a size outside a battleground previews it so you can move it.
+scale, width, height and opacity for anything in between. Picking a size outside a battleground previews it so you can move it.
 
 During a match the header shows how many enemies are alive. Drag it to move the
 list out of combat; in combat it stays locked, so a stray click cannot move it.

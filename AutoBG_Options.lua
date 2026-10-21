@@ -73,7 +73,7 @@ BattlegroundTargets_OptionsFrame = panel -- Backwards compatibility alias
 local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", {
 	{ label = "General", height = 446 },
 	{ label = "Timers", height = 436 },
-	{ label = "Enemy frames", height = 500 },
+	{ label = "Enemy frames", height = 542 },
 	{ label = "Spy", height = 362 },
 }, function(index)
 	selectedTab = index
@@ -365,6 +365,11 @@ local sliderTgtHeight = TargetSlider("AutoBG_Tgt_Height", "Height", 264, -402, 2
 	o.ButtonHeight[selectedBracket] = value
 	return true
 end, true)
+local sliderTgtOpacity = TargetSlider("AutoBG_Tgt_Opacity", "Opacity", 28, -444, 200, 20, 100, 5, function(o, value)
+	o.ButtonOpacity = o.ButtonOpacity or {}
+	o.ButtonOpacity[selectedBracket] = value / 100
+	return true
+end, false, Percent)
 
 UpdateTargetsWidgets = function(sz)
 	if Targets and Targets.EnsureOptions then Targets:EnsureOptions() end
@@ -401,6 +406,7 @@ UpdateTargetsWidgets = function(sz)
 	UI.SetSlider(sliderTgtScale, math.floor(((o.ButtonScale and o.ButtonScale[sz]) or 1.0) * 100 + 0.5))
 	UI.SetSlider(sliderTgtWidth, width)
 	UI.SetSlider(sliderTgtHeight, height)
+	UI.SetSlider(sliderTgtOpacity, math.floor(((o.ButtonOpacity and o.ButtonOpacity[sz]) or 1) * 100 + 0.5))
 	RefreshTestCaption()
 end
 

@@ -15,7 +15,7 @@ end
 local MAX_ENEMIES = 40
 local BRACKETS = { 10, 15, 40 }
 local DRAG_HEADER_HEIGHT = 16
-local CARD_COLOR = { 0.06, 0.06, 0.07, 0.82 }
+local CARD_COLOR = { 0, 0, 0, 0.30 }
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
@@ -369,6 +369,7 @@ function Targets:EnsureOptions()
 	o.IndependentPositioning = nil -- Permanent behavior; retire the saved toggle.
 	o.ButtonFontSize = o.ButtonFontSize or {}
 	o.ButtonScale = o.ButtonScale or {}
+	o.ButtonOpacity = o.ButtonOpacity or {}
 	o.ButtonWidth = o.ButtonWidth or {}
 	o.ButtonHeight = o.ButtonHeight or {}
 	o.ButtonShowHealthBar = nil -- Permanent behavior; retire the saved toggle.
@@ -1151,10 +1152,10 @@ function Targets:CreateFrames()
 	header:SetScript("OnDragStop", MainFrame_OnMouseUp)
 	-- One softly rounded card behind the header and every row; the header is
 	-- just a quiet label on it, not a bar of its own.
-	UI.Rounded(main, "BACKGROUND", 6, CARD_COLOR, 3)
+	UI.Rounded(main, "BACKGROUND", 5, CARD_COLOR, 2)
 	main.MoveText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	main.MoveText:SetPoint("CENTER", header, "CENTER", 0, 1)
-	main.MoveText:SetFont(FONT, 9, "")
+	main.MoveText:SetFont(FONT, 9, "OUTLINE")
 	header:Show()
 
 	Targets.TargetButton = {}
@@ -1365,6 +1366,7 @@ function Targets:SetupButtonLayout(size)
 	Targets.MainFrame:SetWidth(width)
 	Targets.MainFrame:SetHeight(DRAG_HEADER_HEIGHT + math.max(1, math.min(enemyCount, size)) * height)
 	Targets.MainFrame:SetScale(scale)
+	Targets.MainFrame:SetAlpha((o and o.ButtonOpacity and o.ButtonOpacity[size]) or 1)
 	Targets.MainFrame:EnableMouse(false)
 
 	for i = 1, MAX_ENEMIES do
@@ -1892,6 +1894,7 @@ function Targets:CopySettings(sourceSize, destinationSize)
 	if not o then return end
 	o.ButtonFontSize[destinationSize] = o.ButtonFontSize[sourceSize]
 	o.ButtonScale[destinationSize] = o.ButtonScale[sourceSize]
+	o.ButtonOpacity[destinationSize] = o.ButtonOpacity[sourceSize]
 	o.ButtonWidth[destinationSize] = o.ButtonWidth[sourceSize]
 	o.ButtonHeight[destinationSize] = o.ButtonHeight[sourceSize]
 	o.ButtonShowHealthText[destinationSize] = o.ButtonShowHealthText[sourceSize]
