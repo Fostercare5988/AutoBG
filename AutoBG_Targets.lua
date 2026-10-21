@@ -19,6 +19,7 @@ local DRAG_HEADER_HEIGHT = 18
 local FONT = "Fonts\\ARIALN.TTF"
 local CAST_FONT = "Fonts\\FRIZQT__.TTF"
 local RANGE_MARK_COLOR = { 0.35, 1.00, 0.45, 0.95 }
+local RANGE_MARK_TEXT = string.format("|cff%02x%02x%02x", RANGE_MARK_COLOR[1] * 255, RANGE_MARK_COLOR[2] * 255, RANGE_MARK_COLOR[3] * 255)
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
 local ROUNDED_MASK = [[Interface\AddOns\AutoBG\Textures\RoundedMask]]
@@ -407,6 +408,8 @@ function Targets:EnsureOptions()
 	for _, size in ipairs(BRACKETS) do
 		if o.EnableBracket[size] == nil then o.EnableBracket[size] = true end
 		if o.ButtonFontSize[size] == nil then o.ButtonFontSize[size] = (size == 40 and 11) or 12 end
+		-- Below 10 the text is too small to read; the slider starts there now.
+		if o.ButtonFontSize[size] < 10 then o.ButtonFontSize[size] = 10 end
 		if o.ButtonScale[size] == nil then o.ButtonScale[size] = (size == 10 and 1.10) or (size == 15 and 1.00) or 0.90 end
 		if o.ButtonWidth[size] == nil then o.ButtonWidth[size] = 210 end
 		if o.ButtonHeight[size] == nil then o.ButtonHeight[size] = (size == 40 and 20) or 26 end
@@ -865,6 +868,7 @@ local function UpdateRowStatus()
 	local icons = not o or o.ShowRaidIcons ~= false
 	local counts = not o or o.ShowTargetCount ~= false
 	if counts and not Targets.isConfig then CountGroupTargets() end
+	local rangeChanged = false
 	for i = 1, math.min(enemyCount, currentSize) do
 		local btn = Targets.TargetButton[i]
 		local name = btn.targetName
@@ -901,7 +905,7 @@ local function UpdateRowStatus()
 			end
 			if btn.inRange ~= near then
 				btn.inRange = near
-				changed = true
+				changed, rangeChanged = true, true
 			end
 			if changed then UpdateRowStealthVisual(i, name) end
 			if btn.targetCount ~= count then
@@ -910,6 +914,7 @@ local function UpdateRowStatus()
 			end
 		end
 	end
+	if rangeChanged and Targets.RefreshHeader then Targets.RefreshHeader() end
 end
 Targets.UpdateRowStatus = UpdateRowStatus
 
@@ -1458,20 +1463,27 @@ local function DetectBattleground()
 end
 
 -- In a match the header counts living enemies. It drags out of combat and
--- locks in combat, so a misclick cannot move the list mid-fight.
+-- locks in combat, so a misclick cannot move the list mid-fight. While any
+-- enemy is in range it also says how many, in the stripe's green, so the
+-- stripe explains itself.
 local function UpdateHeader()
 	local main = Targets.MainFrame
 	if not main then return end
 	local text, color
+	local total, alive, near = math.min(enemyCount, currentSize), 0, 0
+	for i = 1, total do
+		local btn = Targets.TargetButton and Targets.TargetButton[i]
+		if not deadState[roster[i].name] then
+			alive = alive + 1
+			if btn and btn.inRange then near = near + 1 end
+		end
+	end
 	if Targets.isConfig then
 		text, color = "Drag to move", UI.heading
 	else
-		local total, alive = math.min(enemyCount, currentSize), 0
-		for i = 1, total do
-			if not deadState[roster[i].name] then alive = alive + 1 end
-		end
 		text, color = "Enemies " .. alive .. "/" .. total, UI.hint
 	end
+	if near > 0 then text = text .. "  " .. RANGE_MARK_TEXT .. near .. " in range|r" end
 	local drag = (Targets.isConfig or not UnitAffectingCombat("player")) and true or false
 	if main.headerDrag ~= drag then
 		main.headerDrag = drag
@@ -1482,6 +1494,7 @@ local function UpdateHeader()
 	main.MoveText:SetText(text)
 	main.MoveText:SetTextColor(color[1], color[2], color[3])
 end
+Targets.RefreshHeader = UpdateHeader
 
 local function RenderHealthForRow(index, name)
 	local btn = Targets.TargetButton[index]

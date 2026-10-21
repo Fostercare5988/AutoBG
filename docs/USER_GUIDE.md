@@ -60,7 +60,8 @@ does not provide enough information.
 Open `/abg targets` or `/bgt`. Pick 10v10, 15v15 or 40v40, then choose that size's
 health text, realm suffix, stealth dimming and trinket. **Frame size** offers
 Compact, Standard and Large; the **Custom size** sliders below set text size,
-scale, width, height and opacity for anything in between. Picking a size outside a battleground previews it so you can move it.
+scale, width, height and opacity for anything in between. Text size runs 0 to 20,
+from small but readable to large. Picking a size outside a battleground previews it so you can move it.
 
 During a match the header shows how many enemies are alive. Drag it to move the
 list out of combat; in combat it stays locked, so a stray click cannot move it.
@@ -74,8 +75,9 @@ list out of combat; in combat it stays locked, so a stray click cannot move it.
   right-click to focus them. **Cast bars on the left** picks the side; on the
   trinket's side the bar sits outside the trinket.
 - **Mark enemies in range:** a thin green stripe on the left of each enemy
-  within 80 yards, so the ones you can reach stand out. Nothing else changes;
-  enemies you have not been near yet get no stripe.
+  within 80 yards, so the ones you can reach stand out. The header then adds how
+  many are in range, in the same green. Nothing else changes; enemies you have
+  not been near yet get no stripe.
 - **Raid icons:** skull, cross and the other raid icons your group sets.
 - **Who's on them:** an orange number beside the health shows how many of your
   group, you included, target that enemy. The trinket icon can sit on either side; its 180-second countdown
