@@ -73,8 +73,8 @@ stray click cannot move the list. Use **Preview frames** to drag it.
   loaded near you can be seen. Left-click a cast bar to target the caster,
   right-click to focus them. **Cast bars on the left** picks the side; on the
   trinket's side the bar sits outside the trinket.
-- **Grey when out of range:** the health bar of an enemy farther than 40 yards
-  turns grey, so the ones you can reach stand out in full color. The name and
+- **Darken when out of range:** the health bar of an enemy farther than 40 yards
+  turns a little darker, so the ones you can reach stand out in full color. The name and
   health stay readable. Enemies you have not been near yet keep their color.
 - **Raid icons:** skull, cross and the other raid icons your group sets.
 - **Who's on them:** an orange number beside the health shows how many of your

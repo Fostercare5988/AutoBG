@@ -22,10 +22,10 @@ local HORDE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\HordeFlag"
 local ALLIANCE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\AllianceFlag"
 local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local CAST_WIDTH = 120
--- Most ranged spells and heals reach 40 yards; farther enemies' health bars
--- turn a muted grey of their class color.
+-- Most ranged spells and heals reach 40 yards. Most enemies are farther most of
+-- the time, so their bars keep the class color, only a little darker.
 local RANGE_SQUARED = 40 * 40
-local function FarShade(c) return 0.22 + c * 0.25 end
+local function FarShade(c) return 0.08 + c * 0.65 end
 local ALLIANCE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 
