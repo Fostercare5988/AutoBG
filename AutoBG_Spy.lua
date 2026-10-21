@@ -26,7 +26,7 @@ local MAX_SPY_ENEMIES = 20
 local MAX_SPY_ROWS = 20
 -- Spy's Nearby model: unseen enemies dim first and are removed only after the timeout.
 local ACTIVE_WINDOW = 5
-local SPY_WIDTH = 190
+local SPY_WIDTH = 214
 local FONT = "Fonts\\FRIZQT__.TTF"
 -- The list uses the enemy frames' calm Arial Narrow; the stealth popup keeps FONT.
 local LIST_FONT = "Fonts\\ARIALN.TTF"
@@ -69,6 +69,60 @@ end
 
 function Spy:EnsureOptions()
 	return GetSpySettings()
+end
+
+-- Kill on sight, ignore and encounter statistics are saved account-wide, keyed
+-- by lower-case name. Per-name answers are cached; a list change clears them.
+local STATS_LIMIT, STATS_KEEP = 500, 400
+local function SavedList(key)
+	local opt = GetSpySettings()
+	opt[key] = opt[key] or {}
+	return opt[key]
+end
+local kosByName, ignoredByName = {}, {}
+local function InList(cache, key, name)
+	local hit = cache[name]
+	if hit == nil then
+		hit = SavedList(key)[string.lower(name)] ~= nil
+		cache[name] = hit
+	end
+	return hit
+end
+function Spy:IsKoS(name) return name ~= nil and InList(kosByName, "KoS", name) end
+function Spy:IsIgnored(name) return name ~= nil and InList(ignoredByName, "Ignore", name) end
+
+local statsSize
+local function NoteEncounter(name, classToken, level)
+	local stats, key = SavedList("Stats"), string.lower(name)
+	local entry = stats[key]
+	if not entry then
+		if not statsSize then
+			statsSize = 0
+			for _ in pairs(stats) do statsSize = statsSize + 1 end
+		end
+		entry = { first = time(), seen = 0 }
+		stats[key] = entry
+		statsSize = statsSize + 1
+	end
+	entry.name, entry.seen, entry.last, entry.zone = name, entry.seen + 1, time(), GetRealZoneText()
+	if classToken then entry.class = classToken end
+	if level and level > 0 then entry.level = level end
+	if statsSize > STATS_LIMIT then
+		-- Rare: drop the longest-unseen enemies, down to STATS_KEEP.
+		local order = {}
+		for k, v in pairs(stats) do table.insert(order, { key = k, last = v.last or 0 }) end
+		table.sort(order, function(a, b) return a.last < b.last end)
+		for i = 1, statsSize - STATS_KEEP do stats[order[i].key] = nil end
+		statsSize = STATS_KEEP
+	end
+	return entry
+end
+
+local function Ago(stamp)
+	local diff = math.max(0, time() - (stamp or 0))
+	if diff < 3600 then return math.floor(diff / 60) .. " min ago" end
+	if diff < 86400 then return math.floor(diff / 3600) .. " h ago" end
+	return math.floor(diff / 86400) .. " days ago"
 end
 
 -- A short, bounded session history outlives visible rows. Row expiry, eviction
@@ -430,6 +484,7 @@ local function ResetEnemyEntry(e)
 	e.wasStealthedAlerted = false
 	e.observedGUID = nil
 	e.pendingUntil = nil
+	e.yards = nil
 	e.inactive = false
 	e.dead = nil
 end
@@ -515,6 +570,7 @@ Spy.UpdateGroupRoster = UpdateGroupRoster
 function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, stealthSpell, race, observedUnit)
 	if Spy.isTestMode then return end
 	if not name or name == "" or IsPlaceholderName(name) then return end
+	if Spy:IsIgnored(name) then return end
 	if IsGroupMember(name, guid, observedUnit) then return end
 	if observedUnit and UnitIsFriend and UnitIsFriend("player", observedUnit) and not (UnitCanAttack and UnitCanAttack("player", observedUnit)) then
 		return
@@ -606,6 +662,15 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 		if not isStealth then e.wasStealthedAlerted = false end
 	end
 
+	if isNew and not recentlySeen then
+		NoteEncounter(name, e.classToken, e.level)
+		if Spy:IsKoS(name) then
+			-- Kill on sight always warns, whatever the sound settings.
+			PlaySound("RaidWarning")
+			AutoBG_Print("|cffff4040Kill on sight:|r " .. e.shortName .. " is nearby.", true)
+		end
+	end
+
 	-- Stealth takes precedence over the nearby sound, including immediately after login.
 	if opt.StealthAlert and e.isStealthed and not e.wasStealthedAlerted then
 		e.wasStealthedAlerted = Spy:NotifyStealth(e.name, e.stealthSpell, e.classToken, e.guid, false, e.observedGUID) and true or false
@@ -617,6 +682,64 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	end
 
 	Spy:RequestRender()
+end
+
+local function RemoveEnemyAt(i)
+	local e = trackedEnemies[i]
+	nameToTrackIndex[e.name] = nil
+	if e.guid and guidToName[e.guid] == e.name then guidToName[e.guid] = nil end
+	if e.name and nameToGUID[e.name] == e.guid then nameToGUID[e.name] = nil end
+	for k = i, activeEnemyCount - 1 do
+		trackedEnemies[k], trackedEnemies[k + 1] = trackedEnemies[k + 1], trackedEnemies[k]
+	end
+	ResetEnemyEntry(trackedEnemies[activeEnemyCount])
+	activeEnemyCount = activeEnemyCount - 1
+	for k = i, activeEnemyCount do nameToTrackIndex[trackedEnemies[k].name] = k end
+end
+
+-- Toggle a name on the KoS or Ignore list; returns whether it is now listed.
+function Spy:ToggleList(key, name)
+	if not name or name == "" then return end
+	local list, k = SavedList(key), string.lower(name)
+	if list[k] then list[k] = nil else list[k] = name end
+	table.wipe(kosByName)
+	table.wipe(ignoredByName)
+	local listed = list[k] ~= nil
+	if key == "Ignore" and listed and nameToTrackIndex[name] then RemoveEnemyAt(nameToTrackIndex[name]) end
+	Spy:RenderRows()
+	return listed
+end
+
+local function PrintList(key, title)
+	local names = {}
+	for _, display in pairs(SavedList(key)) do table.insert(names, display) end
+	table.sort(names)
+	AutoBG_Print(title .. " (" .. table.getn(names) .. "): " .. (table.getn(names) > 0 and table.concat(names, ", ") or "none"), true)
+end
+
+-- /abg spy kos|ignore [name], /abg spy stats
+function Spy:HandleCommand(text)
+	local space = string.find(text, " ")
+	local sub = string.lower(space and string.sub(text, 1, space - 1) or text)
+	local name = space and string.gsub(string.sub(text, space + 1), "^%s*(.-)%s*$", "%1") or ""
+	if sub == "kos" or sub == "ignore" then
+		local key, title = (sub == "kos") and "KoS" or "Ignore", (sub == "kos") and "Kill on sight" or "Ignored"
+		if name == "" then PrintList(key, title); return true end
+		local listed = Spy:ToggleList(key, name)
+		AutoBG_Print(name .. (listed and " added to " or " removed from ") .. string.lower(title) .. ".", true)
+		return true
+	elseif sub == "stats" then
+		local all, total = {}, 0
+		for _, v in pairs(SavedList("Stats")) do table.insert(all, v); total = total + (v.seen or 0) end
+		table.sort(all, function(a, b) return (a.seen or 0) > (b.seen or 0) end)
+		AutoBG_Print("Spy: " .. table.getn(all) .. " enemies met " .. total .. " times. Most often:", true)
+		for i = 1, math.min(5, table.getn(all)) do
+			local v = all[i]
+			AutoBG_Print("  " .. v.name .. " (" .. (v.level or "??") .. " " .. (FormatClass(v.class) or "?") .. "): " .. v.seen .. " times, last " .. Ago(v.last) .. (v.zone and (" in " .. v.zone) or ""), true)
+		end
+		return true
+	end
+	return false
 end
 
 function Spy:SetUnitStealthState(name, isStealthed, spellName)
@@ -702,7 +825,17 @@ end
 
 local function SpyRow_OnClick(self, button)
 	local b = self or this
-	Targets.SelectEnemy(b.targetName, b.targetGUID or nameToGUID[b.targetName], button or arg1)
+	if not b.targetName then return end
+	if IsShiftKeyDown() then
+		local listed = Spy:ToggleList("KoS", b.targetName)
+		AutoBG_Print(b.targetName .. (listed and " added to" or " removed from") .. " kill on sight.", true)
+	elseif IsControlKeyDown() then
+		local name = b.targetName
+		Spy:ToggleList("Ignore", name)
+		AutoBG_Print(name .. " ignored. Type |cFFFFFF00/abg spy ignore " .. name .. "|r to undo.", true)
+	else
+		Targets.SelectEnemy(b.targetName, b.targetGUID or nameToGUID[b.targetName], button or arg1)
+	end
 end
 
 local function SpyRow_OnEnter(self)
@@ -736,6 +869,16 @@ local function SpyRow_OnEnter(self)
 	if b.targetHealth then
 		GameTooltip:AddLine("Health: " .. b.targetHealth .. "%", 0.2, 1, 0.2)
 	end
+	if b.targetYards then
+		GameTooltip:AddLine("Distance: " .. b.targetYards .. " yards", 0.8, 0.8, 0.8)
+	end
+	if Spy:IsKoS(b.targetName) then
+		GameTooltip:AddLine("Kill on sight", 1, 0.25, 0.25)
+	end
+	local stat = SavedList("Stats")[string.lower(b.targetName)]
+	if stat and stat.seen then
+		GameTooltip:AddLine("Met " .. stat.seen .. (stat.seen == 1 and " time" or " times") .. ", first " .. Ago(stat.first), 0.7, 0.7, 0.7)
+	end
 	if b.targetDead then
 		GameTooltip:AddLine("State: Dead", 1, 0.3, 0.3)
 	elseif b.targetStealth then
@@ -745,7 +888,8 @@ local function SpyRow_OnEnter(self)
 		local diff = math.max(0, math.floor(GetTime() - b.targetLastSeen))
 		GameTooltip:AddLine("Last Seen: " .. (diff < 60 and (diff .. "s ago") or (math.floor(diff / 60) .. "m ago")), 0.7, 0.7, 0.7)
 	end
-	GameTooltip:AddLine("Left-Click: Target  |  Right-Click: Focus", 0.5, 0.5, 0.5)
+	GameTooltip:AddLine("Click: target  |  Right-click: focus", 0.5, 0.5, 0.5)
+	GameTooltip:AddLine("Shift-click: kill on sight  |  Ctrl-click: ignore", 0.5, 0.5, 0.5)
 	GameTooltip:Show()
 end
 
@@ -758,7 +902,7 @@ function Spy:CreateFrames()
 
 	local f = CreateFrame("Frame", "AutoBG_SpyFrame", UIParent)
 	BattlegroundTargets_SpyFrame = f -- Compatibility alias
-	f:SetWidth(190)
+	f:SetWidth(SPY_WIDTH)
 	f:SetHeight(40)
 	f:SetMovable(true)
 	f:EnableMouse(true)
@@ -795,20 +939,21 @@ function Spy:CreateFrames()
 	for i = 1, MAX_SPY_ROWS do
 		local btn = CreateFrame("Button", "AutoBG_SpyRow" .. i, f)
 		_G["BattlegroundTargets_SpyRow" .. i] = btn -- Compatibility alias
-		btn:SetWidth(182)
+		btn:SetWidth(SPY_WIDTH - 8)
 		btn:SetHeight(ROW_HEIGHT)
 		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -LIST_TOP - (i - 1) * ROW_STEP)
 
-		-- A thin dark edge, like an enemy-frame row; the bar fills the rest.
+		-- Missing health shows as a dim tint of the class color, like enemy frames.
 		local bg = btn:CreateTexture(nil, "BACKGROUND")
 		bg:SetAllPoints()
-		bg:SetTexture(0, 0, 0, 0.8)
+		bg:SetTexture(0.15, 0.15, 0.15, 1)
 		btn.Bg = bg
 
 		-- Status Bar (Class Colored)
 		local sb = btn:CreateTexture(nil, "BORDER")
-		sb:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
-		sb:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+		sb:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+		sb:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
+		sb:SetWidth(SPY_WIDTH - 8)
 		sb:SetTexture(BAR_TEXTURE)
 		btn.StatusBar = sb
 
@@ -829,10 +974,18 @@ function Spy:CreateFrames()
 		details:SetJustifyH("RIGHT")
 		btn.Details = details
 
+		local yards = btn:CreateFontString(nil, "OVERLAY")
+		yards:SetFont(LIST_FONT, 12, "OUTLINE")
+		yards:SetPoint("RIGHT", details, "LEFT", -4, 0)
+		yards:SetWidth(30)
+		yards:SetJustifyH("RIGHT")
+		yards:SetTextColor(0.85, 0.85, 0.85)
+		btn.Yards = yards
+
 		local nameText = btn:CreateFontString(nil, "OVERLAY")
 		nameText:SetFont(LIST_FONT, 13, "OUTLINE")
 		nameText:SetPoint("LEFT", icon, "RIGHT", 3, 0)
-		nameText:SetPoint("RIGHT", details, "LEFT", -3, 0)
+		nameText:SetPoint("RIGHT", yards, "LEFT", -3, 0)
 		nameText:SetJustifyH("LEFT")
 		btn.NameText = nameText
 
@@ -1124,8 +1277,22 @@ function Spy:RenderRows()
 		if classChanged then
 			local color = Targets.GetClassColor(data.classToken)
 			row.StatusBar:SetVertexColor(color.r, color.g, color.b, 1)
+			row.Bg:SetTexture(0.12 + color.r * 0.30, 0.12 + color.g * 0.30, 0.12 + color.b * 0.30, 1)
 		end
 		if nameChanged then row.NameText:SetText(data.shortName or data.name) end
+		local pct = data.dead and 0 or (data.healthPct or 100)
+		if row.barPct ~= pct then
+			row.barPct = pct
+			row.StatusBar:SetWidth(math.max(0.01, (SPY_WIDTH - 8) * pct / 100))
+		end
+		row.targetYards = data.yards
+		local yardsText = data.yards and (data.yards .. "y") or ""
+		if row.yardsText ~= yardsText then row.yardsText = yardsText; row.Yards:SetText(yardsText) end
+		local kos = Spy:IsKoS(data.name)
+		if row.kos ~= kos then
+			row.kos = kos
+			if kos then row.NameText:SetTextColor(1, 0.3, 0.3) else row.NameText:SetTextColor(1, 1, 1) end
+		end
 		if levelChanged then
 			local level = data.level and data.level > 0 and tostring(data.level) or "??"
 			row.Details:SetText(level .. " " .. (FormatClass(data.classToken) or ""))
@@ -1175,20 +1342,26 @@ OnSpyTick = function()
 	while i <= activeEnemyCount do
 		local e = trackedEnemies[i]
 		-- A loaded, visible enemy is still nearby even when it raises no new events.
-		if e.guid and UnitExists(e.guid) and UnitIsVisible(e.guid) then
+		local visible = e.guid and UnitExists(e.guid) and UnitIsVisible(e.guid)
+		if visible then
 			-- A visible, living unit was resurrected; a corpse keeps its death time.
 			if e.dead and not UnitIsDead(e.guid) then e.dead = nil end
 			if not e.dead then e.lastSeen = now end
-		end
-		if (now - e.lastSeen) > timeout then
-			nameToTrackIndex[e.name] = nil
-			if e.guid and guidToName[e.guid] == e.name then guidToName[e.guid] = nil end
-			if e.name and nameToGUID[e.name] == e.guid then nameToGUID[e.name] = nil end
-			for k = i, activeEnemyCount - 1 do
-				trackedEnemies[k], trackedEnemies[k + 1] = trackedEnemies[k + 1], trackedEnemies[k]
+			local hp, maxHp = UnitHealth(e.guid), UnitHealthMax(e.guid)
+			if maxHp and maxHp > 0 then
+				local pct = math.floor(hp / maxHp * 100 + 0.5)
+				if e.healthPct ~= pct then e.healthPct = pct; changed = true end
 			end
-			ResetEnemyEntry(trackedEnemies[activeEnemyCount])
-			activeEnemyCount = activeEnemyCount - 1
+		end
+		-- UnitXP distance; an enemy out of sight has no distance.
+		local yards
+		if visible and UnitDistanceSquared then
+			local d2, checked = UnitDistanceSquared(e.guid)
+			if checked and d2 then yards = math.floor(math.sqrt(d2) + 0.5) end
+		end
+		if e.yards ~= yards then e.yards = yards; changed = true end
+		if (now - e.lastSeen) > timeout then
+			RemoveEnemyAt(i)
 			changed = true
 		else
 			local inactive = e.dead or (now - e.lastSeen) > ACTIVE_WINDOW
@@ -1237,9 +1410,9 @@ function Spy:EnableTestMode()
 	local now = GetTime()
 
 	local mock = {
-		{ name = "Shadowstalker-Realm", classToken = "ROGUE", race = "Night Elf", level = 60, healthPct = 82, isStealthed = true, stealthSpell = "Stealth", lastSeen = now - 2 },
-		{ name = "Frostweaver-Realm", classToken = "MAGE", race = "Gnome", level = 60, healthPct = 100, isStealthed = false, lastSeen = now - 9 },
-		{ name = "Ironbreaker-Realm", classToken = "WARRIOR", race = "Dwarf", level = 58, healthPct = 65, isStealthed = false, lastSeen = now - 22 },
+		{ name = "Shadowstalker-Realm", classToken = "ROGUE", race = "Night Elf", level = 60, healthPct = 82, isStealthed = true, stealthSpell = "Stealth", lastSeen = now - 2, yards = 8 },
+		{ name = "Frostweaver-Realm", classToken = "MAGE", race = "Gnome", level = 60, healthPct = 100, isStealthed = false, lastSeen = now - 9, yards = 27 },
+		{ name = "Ironbreaker-Realm", classToken = "WARRIOR", race = "Dwarf", level = 58, healthPct = 65, isStealthed = false, lastSeen = now - 22, yards = 46 },
 	}
 
 	for i = 1, 3 do
@@ -1254,6 +1427,7 @@ function Spy:EnableTestMode()
 		e.isStealthed = m.isStealthed
 		e.stealthSpell = m.stealthSpell
 		e.lastSeen = m.lastSeen
+		e.yards = m.yards
 		e.guid = nil
 	end
 

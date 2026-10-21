@@ -1178,6 +1178,9 @@ SlashCmdList["AUTOBG"] = function(msg)
         if AutoBG_OpenOptions then AutoBG_OpenOptions("targets") end
         return
     elseif cmd == "spy" then
+        -- /abg spy kos|ignore [name], /abg spy stats; names keep their case.
+        local rest = space and string.gsub(string.sub(raw, space + 1), "^%s*(.-)%s*$", "%1") or ""
+        if rest ~= "" and AutoBG_Spy and AutoBG_Spy.HandleCommand and AutoBG_Spy:HandleCommand(rest) then return end
         if AutoBG_OpenOptions then AutoBG_OpenOptions("spy") end
         return
     elseif cmd == "timers" or cmd == "timer" or cmd == "fc" then
@@ -1263,7 +1266,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "reset" then
         AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg proj, /abg targets, /abg spy, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg proj, /abg targets, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
     else
         if AutoBG_OpenOptions then
             AutoBG_OpenOptions("general")

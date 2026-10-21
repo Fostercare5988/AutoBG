@@ -469,6 +469,7 @@ local btnSpyClear = UI.Button("AutoBG_BtnSpyClear", panelSpy, "Clear list", 264,
 	RefreshTestCaption()
 end)
 UI.Tooltip(btnSpyClear, "Remove everyone from the Spy list and forget recent contacts.")
+Hint(panelSpy, "Shift-click a name: kill on sight. Ctrl-click: ignore. /abg spy stats shows who you meet most.", 264, -278, 208)
 
 Refresh[4] = function()
 	local opt = AutoBG_Settings and AutoBG_Settings.Spy
