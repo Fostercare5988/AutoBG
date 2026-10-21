@@ -30,7 +30,7 @@ local SPY_WIDTH = 214
 local FONT = "Fonts\\FRIZQT__.TTF"
 -- The list uses the enemy frames' calm Arial Narrow; the stealth popup keeps FONT.
 local LIST_FONT = "Fonts\\ARIALN.TTF"
-local ROW_HEIGHT, ROW_STEP, LIST_TOP = 18, 19, 18
+local ROW_HEIGHT, ROW_STEP, TITLE_HEIGHT, LIST_TOP = 18, 19, 18, 19
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
 -- Character-create atlas cells, inset to keep neighboring icons out of the crop.
@@ -909,26 +909,37 @@ function Spy:CreateFrames()
 	f:SetClampedToScreen(true)
 	f:Hide()
 
-	-- Like the enemy frames: no box, just a label above bright class-colored rows.
+	-- Modern Spy layout: a solid title bar, class-colored rows straight under it.
 	f:RegisterForDrag("LeftButton")
 	f:SetScript("OnDragStart", SpyFrame_OnDragStart)
 	f:SetScript("OnDragStop", SpyFrame_OnDragStop)
 
-	-- Header Title
+	local titleBar = f:CreateTexture(nil, "BACKGROUND")
+	titleBar:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+	titleBar:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+	titleBar:SetHeight(TITLE_HEIGHT)
+	titleBar:SetTexture(UI.track[1], UI.track[2], UI.track[3], 0.95)
+	f.TitleBar = titleBar
+	local accent = f:CreateTexture(nil, "BORDER")
+	accent:SetPoint("BOTTOMLEFT", titleBar, "BOTTOMLEFT", 0, 0)
+	accent:SetPoint("BOTTOMRIGHT", titleBar, "BOTTOMRIGHT", 0, 0)
+	accent:SetHeight(1)
+	accent:SetTexture(UI.accent[1], UI.accent[2], UI.accent[3], 0.6)
+
 	local title = f:CreateFontString(nil, "ARTWORK")
-	title:SetFont(LIST_FONT, 12, "OUTLINE")
-	title:SetTextColor(UI.hint[1], UI.hint[2], UI.hint[3])
-	title:SetPoint("TOP", f, "TOP", 0, -2)
-	title:SetText("Spy (0)")
+	title:SetFont(LIST_FONT, 12, "")
+	title:SetTextColor(UI.heading[1], UI.heading[2], UI.heading[3])
+	title:SetPoint("LEFT", titleBar, "LEFT", 6, 0)
+	title:SetText("Nearby")
 	f.Title = title
 
 	-- Clear Button (X)
 	local clearBtn = CreateFrame("Button", nil, f)
 	clearBtn:SetWidth(14)
 	clearBtn:SetHeight(14)
-	clearBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -4, -1)
+	clearBtn:SetPoint("RIGHT", titleBar, "RIGHT", -3, 0)
 	local clearText = clearBtn:CreateFontString(nil, "ARTWORK")
-	clearText:SetFont(LIST_FONT, 12, "OUTLINE")
+	clearText:SetFont(LIST_FONT, 12, "")
 	clearText:SetTextColor(UI.hint[1], UI.hint[2], UI.hint[3])
 	clearText:SetPoint("CENTER", 0, 0)
 	clearText:SetText("x")
@@ -939,9 +950,9 @@ function Spy:CreateFrames()
 	for i = 1, MAX_SPY_ROWS do
 		local btn = CreateFrame("Button", "AutoBG_SpyRow" .. i, f)
 		_G["BattlegroundTargets_SpyRow" .. i] = btn -- Compatibility alias
-		btn:SetWidth(SPY_WIDTH - 8)
+		btn:SetWidth(SPY_WIDTH)
 		btn:SetHeight(ROW_HEIGHT)
-		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 4, -LIST_TOP - (i - 1) * ROW_STEP)
+		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -LIST_TOP - (i - 1) * ROW_STEP)
 
 		-- Missing health shows as a dim tint of the class color, like enemy frames.
 		local bg = btn:CreateTexture(nil, "BACKGROUND")
@@ -953,7 +964,7 @@ function Spy:CreateFrames()
 		local sb = btn:CreateTexture(nil, "BORDER")
 		sb:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
 		sb:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 0)
-		sb:SetWidth(SPY_WIDTH - 8)
+		sb:SetWidth(SPY_WIDTH)
 		sb:SetTexture(BAR_TEXTURE)
 		btn.StatusBar = sb
 
@@ -1247,11 +1258,11 @@ function Spy:RenderRows()
 	local count = Spy.isTestMode and 3 or activeEnemyCount
 	local maxRows = math.max(3, math.min(MAX_SPY_ROWS, math.floor(tonumber(opt.MaxRows) or 5)))
 	local visibleCount = math.min(count, maxRows)
-	local title = count == 0 and "Spy (0)" or tostring(count) .. (count == 1 and " enemy" or " enemies")
-	if count > visibleCount then title = title .. " (" .. visibleCount .. " shown)" end
+	local title = "Nearby  |cffffffff" .. count .. "|r"
+	if count > visibleCount then title = title .. "  |cff999999(" .. visibleCount .. " shown)|r" end
 	if f.Title:GetText() ~= title then f.Title:SetText(title) end
 	-- Fixed width; the top edge is anchored, so only the bottom edge moves.
-	local width, height = SPY_WIDTH, count == 0 and LIST_TOP or LIST_TOP + visibleCount * ROW_STEP
+	local width, height = SPY_WIDTH, count == 0 and TITLE_HEIGHT or LIST_TOP + visibleCount * ROW_STEP - 1
 	if f:GetWidth() ~= width then f:SetWidth(width) end
 	if f:GetHeight() ~= height then f:SetHeight(height) end
 
@@ -1283,7 +1294,7 @@ function Spy:RenderRows()
 		local pct = data.dead and 0 or (data.healthPct or 100)
 		if row.barPct ~= pct then
 			row.barPct = pct
-			row.StatusBar:SetWidth(math.max(0.01, (SPY_WIDTH - 8) * pct / 100))
+			row.StatusBar:SetWidth(math.max(0.01, (SPY_WIDTH) * pct / 100))
 		end
 		row.targetYards = data.yards
 		local yardsText = data.yards and (data.yards .. "y") or ""
@@ -1410,9 +1421,9 @@ function Spy:EnableTestMode()
 	local now = GetTime()
 
 	local mock = {
-		{ name = "Shadowstalker-Realm", classToken = "ROGUE", race = "Night Elf", level = 60, healthPct = 82, isStealthed = true, stealthSpell = "Stealth", lastSeen = now - 2, yards = 8 },
-		{ name = "Frostweaver-Realm", classToken = "MAGE", race = "Gnome", level = 60, healthPct = 100, isStealthed = false, lastSeen = now - 9, yards = 27 },
-		{ name = "Ironbreaker-Realm", classToken = "WARRIOR", race = "Dwarf", level = 58, healthPct = 65, isStealthed = false, lastSeen = now - 22, yards = 46 },
+		{ name = "Shadowstalker", classToken = "ROGUE", race = "Night Elf", level = 60, healthPct = 82, isStealthed = true, stealthSpell = "Stealth", lastSeen = now - 2, yards = 8 },
+		{ name = "Frostweaver", classToken = "MAGE", race = "Gnome", level = 60, healthPct = 100, isStealthed = false, lastSeen = now - 9, yards = 27 },
+		{ name = "Ironbreaker", classToken = "WARRIOR", race = "Dwarf", level = 58, healthPct = 65, isStealthed = false, lastSeen = now - 22, yards = 46 },
 	}
 
 	for i = 1, 3 do
@@ -1434,7 +1445,7 @@ function Spy:EnableTestMode()
 	Spy:RenderRows()
 	-- Preview the warning as it plays outside BGs, sound included.
 	if GetSpySettings().SoundAlert then Spy:PlayStealthDetectedSound() end
-	Spy:ShowAlert("Stealth", "Shadowstalker-Realm", "ROGUE", nil)
+	Spy:ShowAlert("Stealth", "Shadowstalker", "ROGUE", nil)
 end
 
 function Spy:DisableTestMode()

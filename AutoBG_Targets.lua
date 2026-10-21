@@ -431,7 +431,7 @@ end
 -- -------------------------------------------------------------------------- --
 local function GetEnemyFlagCarrier()
 	if Targets.isConfig then
-		return "Target1-Realm"
+		return "Target1"
 	end
 	if AutoBG_GetEnemyCarrier then
 		return AutoBG_GetEnemyCarrier()
@@ -1787,7 +1787,7 @@ function Targets:EnableConfigMode(size)
 	local now = GetTime()
 	for i = 1, currentSize do
 		local e = roster[i]
-		e.name = "Target" .. i .. "-Realm"
+		e.name = "Target" .. i
 		e.classToken = classes[((i - 1) % #classes) + 1]
 		e.guid = nil
 		healthPct[e.name] = 100 - ((i * 7) % 85)
