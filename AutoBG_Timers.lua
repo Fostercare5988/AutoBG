@@ -633,16 +633,16 @@ local START_TEST_DATA = {
 
 -- =========================================================
 -- Countdown Bar Row Renderer (Match Start / AB / AV / WSG)
--- colorMode = "faction" -> always faction colored (WSG flags)
--- otherwise faction colors follow the Faction Node Colors setting
+-- Rows take their faction's color; colorMode = "faction" also derives the
+-- faction from a WSG flag name.
 -- =========================================================
-local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMode, useColors, defaultIcon)
+local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMode, defaultIcon)
     -- WSG live timers store a flag name and expiry; the row presentation supplies its faction.
     if colorMode == "faction" and not faction then
         if name == "Alliance Flag" then faction = "Alliance"
         elseif name == "Horde Flag" then faction = "Horde" end
     end
-    local colorKey = ((useColors or colorMode == "faction") and BAR_COLORS[faction or ""]) and faction or "neutral"
+    local colorKey = BAR_COLORS[faction or ""] and faction or "neutral"
 
     local icon = (faction == "Alliance" and ALLIANCE_FLAG_TEX) or (faction == "Horde" and HORDE_FLAG_TEX) or defaultIcon
     if row.displayIcon ~= icon then
@@ -691,7 +691,6 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
     ApplyObjectiveAppearance(frame)
     local now       = GetTime()
     local isTestAll = AutoBG_Settings and AutoBG_Settings.TestAllTimers
-    local useColors = AutoBG_Settings and AutoBG_Settings.NodeColors
     local maxRows   = #frame.rows
     local activeCount = 0
 
@@ -701,7 +700,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
             for i = 1, activeCount do
                 local d   = testData[i]
                 local row = frame.rows[i]
-                ApplyTimerRowData(row, d.name, d.faction, d.remaining, maxTime, colorMode, useColors, frame.defaultIcon)
+                ApplyTimerRowData(row, d.name, d.faction, d.remaining, maxTime, colorMode, frame.defaultIcon)
             end
         else
             local sortCount = 0
@@ -741,7 +740,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
                 if remaining > 0 then
                     displayCount = displayCount + 1
                     local row = frame.rows[displayCount]
-                    ApplyTimerRowData(row, item.name, item.faction, remaining, item.maxTime or maxTime, colorMode, useColors, frame.defaultIcon)
+                    ApplyTimerRowData(row, item.name, item.faction, remaining, item.maxTime or maxTime, colorMode, frame.defaultIcon)
                     row.fillExpiry = item.expire
                 end
             end
@@ -973,7 +972,7 @@ local lastRecordedABases, lastRecordedHBases = nil, nil
 local lastATickTime, lastHTickTime = nil, nil
 
 local function UpdateABProjection(isTestAll, isAB)
-    if not AutoBG_Settings or AutoBG_Settings.ABProjection == false then
+    if not AutoBG_Settings then
         if ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
         return
     end
@@ -1227,13 +1226,12 @@ end
 
 SyncUpdateTicker = function()
     local s = AutoBG_Settings
-    local needed = s and ((s.TestAllTimers and
-        (s.StartTimer ~= false or s.ABTimers or s.AVTimers or s.WSGTimers or
-         s.RessTimer or s.QueueTimers or s.ABProjection ~= false)) or
+    -- Test mode always shows the AB projection, so it always needs the ticker.
+    local needed = s and (s.TestAllTimers or
         (s.QueueTimers and queuedCount > 0) or
         (inPVP and (s.RessTimer or
          (s.StartTimer ~= false and next(timers.Global)) or
-         (isAB and (s.ABProjection ~= false or (s.ABTimers and next(timers.AB)))) or
+         isAB or -- the projection is always on
          (isAV and s.AVTimers and next(timers.AV)) or
          (isWSG and s.WSGTimers and next(timers.WSG)))))
     if needed and not updateTicker then

@@ -173,19 +173,12 @@ local cbAVTimers = TimerSetting("AutoBG_Opt_AVTimers", "Alterac Valley nodes",
 	"Show 5-minute capture countdowns for Alterac Valley towers, bunkers and graveyards.", -144, "AVTimers")
 local cbWSGTimers = TimerSetting("AutoBG_Opt_WSGTimers", "Warsong flag respawn",
 	"Show the 23-second flag respawn countdown in Warsong Gulch.", -170, "WSGTimers")
-local cbStartTimer = TimerSetting("AutoBG_Opt_StartTimer", "Gates opening",
-	"Count down until the battleground gates open.", -196, "StartTimer")
+local cbStartTimer = TimerSetting("AutoBG_Opt_StartTimer", "Match start",
+	"Count down until the match starts.", -196, "StartTimer")
 local cbRessTimer = TimerSetting("AutoBG_Opt_RessTimer", "Spirit healer waves",
 	"Show the synced 30-second Spirit Healer resurrection wave.", -222, "RessTimer")
 local cbQueueTimers = TimerSetting("AutoBG_Opt_QueueTimers", "Queue wait time",
 	"Show how long you have waited in each battleground queue.", -248, "QueueTimers")
-local cbNodeColors = TimerSetting("AutoBG_Opt_NodeColors", "Faction colors on nodes",
-	"Color Arathi Basin and Alterac Valley countdowns by faction (red Horde, blue Alliance).", -274, "NodeColors")
-local cbABProjection = Setting("AutoBG_Opt_ABProjection", panelTimers, "Arathi Basin projection",
-	"Show the projected final score and time to win in Arathi Basin.", 28, -300, "ABProjection", function()
-		if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
-		RefreshTimers()
-	end)
 
 UI.Heading(panelTimers, "Flag carriers", 264, -98)
 local cbFCFrame = Setting("AutoBG_Opt_FCFrame", panelTimers, "Flag carrier frames",
@@ -220,8 +213,6 @@ Refresh[2] = function()
 	UI.Sync(cbStartTimer, s.StartTimer ~= false)
 	UI.Sync(cbRessTimer, s.RessTimer)
 	UI.Sync(cbQueueTimers, s.QueueTimers)
-	UI.Sync(cbNodeColors, s.NodeColors)
-	UI.Sync(cbABProjection, s.ABProjection ~= false)
 	UI.Sync(cbFCFrame, s.FCFrame)
 	UI.SetSlider(sliderObjectiveWidth, s.ObjectiveWidth or 260)
 	UI.SetSlider(sliderObjectiveHeight, s.ObjectiveHeight or 22)

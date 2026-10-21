@@ -168,13 +168,13 @@ local defaultSettings = {
     NotifySound = true, FlashTaskbar = true, ChatMessages = true,
     AutoAccept = false, AutoAcceptDelay = 0, AutoLeave = true,
     AutoRejoin = false, AutoQueueLogin = false, ScoreColor = true,
-    NodeColors = true, AutoRelease = true, ABTimers = true,
+    AutoRelease = true, ABTimers = true,
     AVTimers = true, RessTimer = true, QueueTimers = true,
     FCFrame = true, WSGTimers = true,
     TestAllTimers = false, LastPlayedBG = nil,
     Positions = {}, SkipIfAFK = true,
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
-    ABProjection = true, StartTimer = true,
+    StartTimer = true,
 }
 
 -- Battleground Icons
@@ -899,6 +899,9 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         -- Drop settings that now belong to FostercareTweaks.
         AutoBG_Settings.HideCastbar = nil
         AutoBG_Settings.HideStanceBar = nil
+        -- Faction-colored countdowns and the AB projection are always on now.
+        AutoBG_Settings.NodeColors = nil
+        AutoBG_Settings.ABProjection = nil
 
         -- Initialize Targets & Spy settings natively under AutoBG_Settings
         if not AutoBG_Settings.Targets then
@@ -1157,8 +1160,6 @@ local toggleCommands = {
     t = { key = "TestAllTimers", label = "Test Mode (All Timers)" },
     test = { key = "TestAllTimers", label = "Test Mode (All Timers)" },
     autoqueue = { key = "AutoQueueLogin", label = "Auto-Queue on Login" },
-    proj = { key = "ABProjection", label = "AB Score Projection" },
-    projection = { key = "ABProjection", label = "AB Score Projection" },
     start = { key = "StartTimer", label = "Match Start Timer" },
     starttimer = { key = "StartTimer", label = "Match Start Timer" },
 }
@@ -1216,7 +1217,7 @@ SlashCmdList["AUTOBG"] = function(msg)
         local entry = toggleCommands[cmd]
         AutoBG_Settings[entry.key] = not AutoBG_Settings[entry.key]
         if entry.key == "NotifySound" and not AutoBG_Settings.NotifySound then AutoBG_StopNotificationSound() end
-        if entry.key == "TestAllTimers" or entry.key == "ABProjection" or entry.key == "StartTimer" then
+        if entry.key == "TestAllTimers" or entry.key == "StartTimer" then
             RefreshBattlegroundDisplays()
         end
         AutoBG_Print(entry.label .. " is now " .. (AutoBG_Settings[entry.key] and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
