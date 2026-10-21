@@ -214,10 +214,10 @@ Refresh[2] = function()
 	UI.Sync(cbRessTimer, s.RessTimer)
 	UI.Sync(cbQueueTimers, s.QueueTimers)
 	UI.Sync(cbFCFrame, s.FCFrame)
-	UI.SetSlider(sliderObjectiveWidth, s.ObjectiveWidth or 260)
-	UI.SetSlider(sliderObjectiveHeight, s.ObjectiveHeight or 22)
+	UI.SetSlider(sliderObjectiveWidth, s.ObjectiveWidth or 225)
+	UI.SetSlider(sliderObjectiveHeight, s.ObjectiveHeight or 25)
 	UI.SetSlider(sliderObjectiveScale, math.floor((s.ObjectiveScale or 1) * 100 + 0.5))
-	UI.SetSlider(sliderObjectiveOpacity, math.floor((s.ObjectiveOpacity or 0.95) * 100 + 0.5))
+	UI.SetSlider(sliderObjectiveOpacity, math.floor((s.ObjectiveOpacity or 0.9) * 100 + 0.5))
 end
 
 -- -------------------------------------------------------------------------- --

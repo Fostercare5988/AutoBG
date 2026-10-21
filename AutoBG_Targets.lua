@@ -14,7 +14,8 @@ end
 
 local MAX_ENEMIES = 40
 local BRACKETS = { 10, 15, 40 }
-local DRAG_HEADER_HEIGHT = 20
+local DRAG_HEADER_HEIGHT = 16
+local CARD_COLOR = { 0.06, 0.06, 0.07, 0.82 }
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 local PROWL_TEXTURE = [[Interface\AddOns\AutoBG\Textures\prowl.tga]]
@@ -1148,11 +1149,12 @@ function Targets:CreateFrames()
 	header:RegisterForDrag("LeftButton")
 	header:SetScript("OnDragStart", MainFrame_OnMouseDown)
 	header:SetScript("OnDragStop", MainFrame_OnMouseUp)
-	local background = header:CreateTexture(nil, "BACKGROUND")
-	background:SetAllPoints(header)
-	background:SetTexture(UI.track[1], UI.track[2], UI.track[3], 0.95)
+	-- One softly rounded card behind the header and every row; the header is
+	-- just a quiet label on it, not a bar of its own.
+	UI.Rounded(main, "BACKGROUND", 6, CARD_COLOR, 3)
 	main.MoveText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	main.MoveText:SetPoint("CENTER", header, "CENTER", 0, 0)
+	main.MoveText:SetPoint("CENTER", header, "CENTER", 0, 1)
+	main.MoveText:SetFont(FONT, 9, "")
 	header:Show()
 
 	Targets.TargetButton = {}

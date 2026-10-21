@@ -175,6 +175,8 @@ local defaultSettings = {
     Positions = {}, SkipIfAFK = true,
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
     StartTimer = true,
+    -- Countdown look
+    ObjectiveWidth = 225, ObjectiveHeight = 25, ObjectiveScale = 1, ObjectiveOpacity = 0.9,
 }
 
 -- Battleground Icons
