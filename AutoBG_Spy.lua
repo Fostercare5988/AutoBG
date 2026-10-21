@@ -262,84 +262,46 @@ local CANONICAL_RACES = {
 	["NIGHTELF"] = "Night Elf",
 	["NIGHT ELF"] = "Night Elf",
 	["GNOME"] = "Gnome",
-	["HIGHELF"] = "High Elf",
-	["HIGH ELF"] = "High Elf",
 	["ORC"] = "Orc",
 	["UNDEAD"] = "Undead",
 	["SCOURGE"] = "Undead",
 	["TAUREN"] = "Tauren",
 	["TROLL"] = "Troll",
-	["BLOODELF"] = "Blood Elf",
-	["BLOOD ELF"] = "Blood Elf",
-	["GOBLIN"] = "Goblin",
 }
 
-local RACIAL_SPELL_IDS = {
-	-- Night Elf
-	[20580] = "Night Elf", -- Shadowmeld
-	[2651] = "Night Elf",  -- Elune's Grace (Rank 1)
-	[10795] = "Night Elf", -- Elune's Grace (Rank 2)
-	[10796] = "Night Elf", -- Elune's Grace (Rank 3)
-	[10797] = "Night Elf", -- Starshards (Rank 1)
-	[19296] = "Night Elf", -- Starshards (Rank 2)
-	[19299] = "Night Elf", -- Starshards (Rank 3)
-	[19302] = "Night Elf", -- Starshards (Rank 4)
-	[19303] = "Night Elf", -- Starshards (Rank 5)
-	[19304] = "Night Elf", -- Starshards (Rank 6)
-	[19305] = "Night Elf", -- Starshards (Rank 7)
-
-	-- Dwarf
-	[20594] = "Dwarf",     -- Stoneform
-	[6346] = "Dwarf",      -- Fear Ward
-
-	-- Gnome
-	[20589] = "Gnome",     -- Escape Artist
-
-	-- Human
-	[20600] = "Human",     -- Perception
-	[10793] = "Human",     -- Feedback (Rank 1)
-	[19261] = "Human",     -- Feedback (Rank 2)
-	[19262] = "Human",     -- Feedback (Rank 3)
-	[19264] = "Human",     -- Feedback (Rank 4)
-	[19265] = "Human",     -- Feedback (Rank 5)
-
-	-- Undead
-	[7744] = "Undead",      -- Will of the Forsaken
-	[20577] = "Undead",     -- Cannibalize
-	[2652] = "Undead",      -- Touch of Weakness
-
-	-- Orc
-	[20572] = "Orc",         -- Blood Fury
-
-	-- Tauren
-	[20549] = "Tauren",      -- War Stomp
-
-	-- Troll
-	[20554] = "Troll",       -- Berserking
-	[26296] = "Troll",
-	[26297] = "Troll",
-	[9035] = "Troll",        -- Hex of Weakness
-}
-
-local RACIAL_SPELL_NAMES = {
+-- Spells only one race can cast, by name so every rank counts. Checked on
+-- octowow.st/db, 2026-10-21: racial abilities, and priest spells taught by
+-- race-only quests. Fear Ward is left out; whether only Dwarves learn it here
+-- is unverified.
+local RACIAL_SPELLS = {
 	["Shadowmeld"] = "Night Elf",
 	["Elune's Grace"] = "Night Elf",
 	["Starshards"] = "Night Elf",
 	["Stoneform"] = "Dwarf",
-	["Fear Ward"] = "Dwarf",
 	["Escape Artist"] = "Gnome",
 	["Perception"] = "Human",
 	["Feedback"] = "Human",
 	["Will of the Forsaken"] = "Undead",
 	["Cannibalize"] = "Undead",
+	["Touch of Weakness"] = "Undead",
+	["Devouring Plague"] = "Undead",
 	["Blood Fury"] = "Orc",
 	["War Stomp"] = "Tauren",
 	["Berserking"] = "Troll",
 	["Hex of Weakness"] = "Troll",
-	["Touch of Weakness"] = "Undead",
-	["Arcane Flash"] = "High Elf",
-	["Meditation"] = "High Elf",
+	["Shadowguard"] = "Troll",
 }
+
+-- Casts arrive for every player nearby; name each spell ID once.
+local raceBySpell = {}
+local function RaceForSpell(spellId)
+	local race = raceBySpell[spellId]
+	if race == nil then
+		race = RACIAL_SPELLS[SpellInfo(spellId) or ""] or false
+		raceBySpell[spellId] = race
+	end
+	return race or nil
+end
 
 local function FormatRace(rawRace)
 	if not rawRace or rawRace == "" then return nil end
@@ -1473,8 +1435,8 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 			end
 		end
 
-		if not detectedRace and spellId and RACIAL_SPELL_IDS[spellId] then
-			detectedRace = RACIAL_SPELL_IDS[spellId]
+		if not detectedRace and spellId and eventType == "CAST" then
+			detectedRace = RaceForSpell(spellId)
 		end
 
 		if eventType == "CAST" and Targets and Targets.CheckIsStealthSpell then
@@ -1483,10 +1445,6 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 				isStealth = true
 				sName = spell
 			end
-		end
-
-		if not detectedRace and sName and RACIAL_SPELL_NAMES[sName] then
-			detectedRace = RACIAL_SPELL_NAMES[sName]
 		end
 
 		if rawName then
