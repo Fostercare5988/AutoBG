@@ -985,11 +985,11 @@ function Spy:ShowAlert(spellName, enemyName, classToken, guid)
 
 	if sName == "Prowl" then
 		tex = PROWL_TEXTURE or "Interface\\Icons\\Ability_Druid_Prowl"
-		titleText = "|cffff9900Prowl|r"
+		titleText = "|cff00ffffProwl|r"
 		edge = ALERT_EDGE.Prowl
 	elseif sName == "Shadowmeld" then
 		tex = "Interface\\Icons\\Ability_Racial_ShadowMeld"
-		titleText = "|cffbb88ffShadowmeld|r"
+		titleText = "|cff00ffffShadowmeld|r"
 		edge = ALERT_EDGE.Shadowmeld
 	elseif sName == "Vanish" then
 		tex = "Interface\\Icons\\Ability_Stealth"
@@ -997,11 +997,11 @@ function Spy:ShowAlert(spellName, enemyName, classToken, guid)
 		edge = ALERT_EDGE.Vanish
 	elseif string.find(sName, "Invis") then
 		tex = "Interface\\Icons\\Spell_Nature_Invisibilty"
-		titleText = "|cff88ccffInvisibility|r"
+		titleText = "|cff00ffffInvisibility|r"
 		edge = ALERT_EDGE.Invisibility
 	elseif sName == "Cloaking" then
 		tex = "Interface\\Icons\\INV_Misc_EngGizmos_04"
-		titleText = "|cffffff00Cloaking|r"
+		titleText = "|cff00ffffCloaking|r"
 		edge = ALERT_EDGE.Cloaking
 	end
 
