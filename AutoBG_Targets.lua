@@ -22,10 +22,9 @@ local HORDE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\HordeFlag"
 local ALLIANCE_FLAG_TEXTURE = "Interface\\WorldStateFrame\\AllianceFlag"
 local RAID_ICON_TEXTURE = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local CAST_WIDTH = 120
--- Most ranged spells and heals reach 40 yards. Most enemies are farther most of
--- the time, so their bars keep the class color, only a little darker.
+-- Most ranged spells and heals reach 40 yards. Bars always keep their class
+-- color; a farther enemy's name and health text turn grey instead.
 local RANGE_SQUARED = 40 * 40
-local function FarShade(c) return 0.08 + c * 0.65 end
 local ALLIANCE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01"
 local HORDE_TRINKET_TEXTURE = "Interface\\Icons\\INV_Jewelry_TrinketPVP_02"
 
@@ -521,16 +520,13 @@ local function UpdateRowStealthVisual(index, name)
 	end
 	if btn.visualAlpha ~= alpha then btn.visualAlpha = alpha; btn:SetAlpha(alpha) end
 
-	-- Out of range greys the health bar only; name, health and icons stay readable.
-	local far = btn.outOfRange and not dead
-	local color = btn.classColor
-	if color and btn.fillFar ~= far then
-		btn.fillFar = far
-		if far then
-			btn.HealthBar:SetVertexColor(FarShade(color.r), FarShade(color.g), FarShade(color.b), 1)
-		else
-			btn.HealthBar:SetVertexColor(color.r, color.g, color.b, 1)
-		end
+	-- In range: white text. Out of range: grey text on the same bright bar.
+	local far = (btn.outOfRange and not dead) and true or false
+	if btn.textFar ~= far then
+		btn.textFar = far
+		local shade = far and 0.6 or 1
+		btn.Name:SetTextColor(shade, shade, shade, 1)
+		btn.HealthText:SetTextColor(shade, shade, shade, 0.90)
 	end
 
 	local text, showText
@@ -1557,7 +1553,6 @@ local function RenderRoster()
 
 			btn.ClassBackground:SetTexture(0.12 + color.r * 0.30, 0.12 + color.g * 0.30, 0.12 + color.b * 0.30, 1)
 			btn.HealthBar:SetVertexColor(color.r, color.g, color.b, 1)
-			btn.classColor, btn.fillFar = color, nil
 
 			btn.Name:SetText((o and o.ButtonHideRealm and o.ButtonHideRealm[currentSize]) and StripRealm(name) or name)
 			-- A row that now shows a different enemy drops the old enemy's cast.
