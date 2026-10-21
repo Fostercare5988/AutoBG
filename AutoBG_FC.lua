@@ -62,13 +62,6 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     frame:SetWidth(220)
     frame:SetHeight(42)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
-    frame:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 }
-    })
-    frame:SetBackdropColor(0.12, 0.16, 0.22, 0.95)
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
