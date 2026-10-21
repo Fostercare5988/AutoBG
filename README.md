@@ -17,10 +17,14 @@ enemy alerts for World of Warcraft 1.12.1, build 5875.
 
 ## Requirements
 
+All four DLLs are required:
+
 - [ClassicAPI v1.16.0+](https://github.com/brues-code/ClassicAPI)
 - [SuperWoW v2.2+](https://github.com/balakethelock/SuperWoW)
-- Optional: [UnitXP SP3](https://codeberg.org/konaka/UnitXP_SP3) for supported
-  carrier health and distance telemetry.
+- [NamPower v4.6.2+](https://github.com/Emyrk/nampower): deaths, stealth buffs
+  and health by GUID
+- [UnitXP SP3 v89+](https://github.com/brues-code/UnitXP_SP3): distances for range
+  marks, Spy and flag carriers
 
 Start through a launcher that loads the required DLLs. Installing or updating
 a DLL requires a full game restart.
