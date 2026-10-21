@@ -723,10 +723,12 @@ end
 -- ClassicAPI times remote casts from the server's cast packet and clears them
 -- on interrupt, so it is the authority; the cast event is only the cue to ask.
 local function ReadCast(guid)
+	-- The cache can hold a name before its timings, so a cast without both
+	-- times is treated as no cast.
 	local name, _, texture, startMs, endMs, _, _, locked = C_Spell.UnitCastingInfo(guid)
-	if name then return name, texture, startMs, endMs, false, locked end
+	if name and startMs and endMs then return name, texture, startMs, endMs, false, locked end
 	name, _, texture, startMs, endMs, _, locked = C_Spell.UnitChannelInfo(guid)
-	if name then return name, texture, startMs, endMs, true, locked end
+	if name and startMs and endMs then return name, texture, startMs, endMs, true, locked end
 end
 
 local function ShowCast(btn, guid, spell, texture, startMs, endMs, channel, locked)
@@ -796,7 +798,7 @@ local function Cast_OnUpdate(self)
 			return
 		end
 	end
-	if nowMs >= cast.endMs then StopCast(btn); return end
+	if not cast.endMs or not cast.startMs or nowMs >= cast.endMs then StopCast(btn); return end
 	local span = cast.endMs - cast.startMs
 	local pct = span > 0 and (nowMs - cast.startMs) / span or 1
 	if cast.channel then pct = 1 - pct end
