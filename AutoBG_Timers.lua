@@ -1333,6 +1333,12 @@ local function ParseCombatMessage(msg, ev)
     local lower = string.lower(msg)
     local faction = GetFactionFromMessage(msg, ev)
 
+    -- The flag watch learns from the same messages where flags stand and who holds them.
+    if AutoBG_FlagWatch and (isAB or isAV) then
+        local node = MatchNodeName(msg, isAB and AB_NODES or AV_NODES)
+        if node then AutoBG_FlagWatch:OnNodeMessage(node, msg, faction) end
+    end
+
     -- 1. AB Nodes: 60s on OctoWoW (confirmed in play, 2026-10-21)
     if AutoBG_Settings.ABTimers and isAB then
         local node = MatchNodeName(msg, AB_NODES)

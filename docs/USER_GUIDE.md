@@ -80,7 +80,13 @@ list out of combat; in combat it stays locked, so a stray click cannot move it.
   not been near yet get no stripe.
 - **Raid icons:** skull, cross and the other raid icons your group sets.
 - **Who's on them:** an orange number beside the health shows how many of your
-  group, you included, target that enemy. The trinket icon can sit on either side; its 180-second countdown
+  group, you included, target that enemy.
+- **Flag warnings:** in Arathi Basin and Alterac Valley, an enemy standing
+  still at a flag their team does not hold gets a warning ("Opening
+  Blacksmith"), a sound and a red OPENING on their row. It works even when they
+  open straight out of stealth, which sends no cast bar. AutoBG learns where
+  each flag is from the players who assault it, so it needs a game or two
+  first; in Alterac Valley it learns from your own assaults. The trinket icon can sit on either side; its 180-second countdown
 estimates cooldown from observed activations. Left-click targets; right-click
 focuses a verified loaded player.
 

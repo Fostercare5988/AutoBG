@@ -1024,6 +1024,7 @@ local ALERT_EDGE = {
 	Vanish = { 0.3, 0.9, 1.0, 0.95 },
 	Invisibility = { 0.5, 0.8, 1.0, 0.95 },
 	Cloaking = { 0.9, 0.9, 0.2, 0.95 },
+	Opening = { 1.0, 0.25, 0.25, 0.95 },
 }
 
 function Spy:CreateAlertWindow()
@@ -1136,7 +1137,8 @@ function Spy:ResetAlertPosition()
 	Spy:ApplyAlertPosition()
 end
 
-function Spy:ShowAlert(spellName, enemyName, classToken, guid)
+-- node: the flag an enemy is opening (flag watch), shown as the title.
+function Spy:ShowAlert(spellName, enemyName, classToken, guid, node)
 	if not Spy.AlertWindow then Spy:CreateAlertWindow() end
 	local w = Spy.AlertWindow
 	if not w then return end
@@ -1166,6 +1168,10 @@ function Spy:ShowAlert(spellName, enemyName, classToken, guid)
 		tex = "Interface\\Icons\\INV_Misc_EngGizmos_04"
 		titleText = "|cff00ffffCloaking|r"
 		edge = ALERT_EDGE.Cloaking
+	elseif sName == "Opening" then
+		tex = "Interface\\Icons\\INV_BannerPVP_0" .. (UnitFactionGroup("player") == "Horde" and "2" or "1")
+		titleText = "|cff00ffffOpening " .. (node or "a flag") .. "|r"
+		edge = ALERT_EDGE.Opening
 	end
 
 	w.Icon:SetTexture(tex)

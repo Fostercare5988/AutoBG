@@ -132,6 +132,7 @@ local healthPct = {}
 local deadState = {}
 local stealthedState = {}
 local trinketCooldown = {}
+local openingNode = {} -- enemy name -> flag the flag watch sees them opening
 
 local wipe = table.wipe
 
@@ -539,7 +540,10 @@ local function UpdateRowStealthVisual(index, name)
 	end
 
 	local text, showText
-	if stealth and not dead then
+	if openingNode[name] and not dead then
+		text = "|cffff4040OPENING|r"
+		showText = true
+	elseif stealth and not dead then
 		text = STEALTH_LABELS[stealth.spellName or ""] or STEALTH_LABELS.Stealth
 		showText = true
 	else
@@ -1923,6 +1927,20 @@ function Targets:CopySettings(sourceSize, destinationSize)
 	o.ButtonSortBy[destinationSize] = o.ButtonSortBy[sourceSize]
 	o.DimStealthed[destinationSize] = o.DimStealthed[sourceSize]
 	o.ShowTrinket[destinationSize] = o.ShowTrinket[sourceSize]
+end
+
+-- The flag watch (AutoBG_FlagWatch.lua) reads the roster and marks rows.
+function Targets.EnemyCount() return enemyCount end
+function Targets.GetEnemy(i)
+	local e = i <= enemyCount and roster[i]
+	if e and e.name then return e.name, nameToGUID[e.name], e.classToken end
+end
+function Targets.GetGUID(name) return name and nameToGUID[name] end
+function Targets.SetOpening(name, node)
+	if not name or openingNode[name] == node then return end
+	openingNode[name] = node
+	local row = nameToRow[name]
+	if row and Targets.MainFrame and Targets.MainFrame:IsShown() then UpdateRowStealthVisual(row, name) end
 end
 
 Targets:RegisterEvent("PLAYER_LOGIN")

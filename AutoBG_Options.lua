@@ -332,6 +332,8 @@ local cbTgtRaidIcons = RowFeature("AutoBG_Tgt_RaidIcons", "Raid icons",
 	"Show the skull, cross and other raid icons your group puts on enemies.", -284, "ShowRaidIcons")
 local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
 	"Show how many of your group, you included, target each enemy, in orange beside the health.", -310, "ShowTargetCount")
+local cbTgtFlagWatch = RowFeature("AutoBG_Tgt_FlagWatch", "Flag warnings",
+	"In Arathi Basin and Alterac Valley, warn when an enemy stands still at a flag their team does not hold, even straight out of stealth. AutoBG learns where the flags are as they are assaulted.", -336, "FlagWatch")
 
 local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, store, rerender, format)
 	return UI.Slider(name, panelTargets, text, x, y, width, minValue, maxValue, step, function(value)
@@ -395,6 +397,7 @@ UpdateTargetsWidgets = function(sz)
 	UI.Sync(cbTgtRange, o.FadeOutOfRange ~= false)
 	UI.Sync(cbTgtRaidIcons, o.ShowRaidIcons ~= false)
 	UI.Sync(cbTgtTargetCount, o.ShowTargetCount ~= false)
+	UI.Sync(cbTgtFlagWatch, o.FlagWatch ~= false)
 	local width = (o.ButtonWidth and o.ButtonWidth[sz]) or 150
 	local height = (o.ButtonHeight and o.ButtonHeight[sz]) or 20
 	local fontSize = (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10
