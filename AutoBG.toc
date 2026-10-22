@@ -17,4 +17,5 @@ AutoBG_Timers.lua
 AutoBG_FC.lua
 AutoBG_Targets.lua
 AutoBG_Spy.lua
+AutoBG_FlagWatch.lua
 AutoBG_Options.lua

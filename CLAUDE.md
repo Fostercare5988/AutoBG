@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (119 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (125 tests).
 
 | File | Job |
 | --- | --- |
@@ -12,6 +12,7 @@ Regression tests: `regressions/AutoBG` in VanillaForge (119 tests).
 | `AutoBG_FC.lua` | Warsong Gulch flag carrier frames |
 | `AutoBG_Targets.lua` | Enemy frames: health, cast bars, range fading, raid icons, trinkets, stealth |
 | `AutoBG_Spy.lua` | Enemy list and stealth alerts outside battlegrounds |
+| `AutoBG_FlagWatch.lua` | AB/AV warning when a visible enemy stands still at a flag; learns flag spots per map (`AutoBG_Settings.FlagSpots`) |
 | `AutoBG_Options.lua` | Settings window, tabs General, Timers, Enemy frames, Spy |
 
 Things to know:
@@ -23,3 +24,5 @@ Things to know:
   from an invite that runs out (`AutoBG_Settings.InviteWindow`).
 - Faction colors on timers and the Arathi Basin projection are always on; their
   old settings are cleared on load.
+- A cast started from stealth never reaches the client (the caster is still
+  invisible), so the flag watch uses positions, not cast bars.
