@@ -70,6 +70,10 @@ local RAID_UNITS = {}
 for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
 
 local function SendTimerAnnouncement(text)
+    if AutoBG_SendAnnouncement then
+        AutoBG_SendAnnouncement(text)
+        return
+    end
     if not text or text == "" then return end
     local inInstance, instanceType = IsInInstance()
     local isPvP = (inInstance and instanceType == "pvp")
