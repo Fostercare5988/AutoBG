@@ -1115,7 +1115,15 @@ end
 
 local function TargetButton_OnClick(self, button)
 	local b = self or this
-	Targets.SelectEnemy(b.targetName, b.targetGUID or nameToGUID[b.targetName], button or arg1)
+	local btn = button or arg1
+	if btn == "LeftButton" and IsControlKeyDown and IsControlKeyDown() then
+		local node = openingNode[b.targetName]
+		if node and b.targetName and AutoBG_SendAnnouncement then
+			AutoBG_SendAnnouncement(b.targetName .. " is opening " .. node)
+			return
+		end
+	end
+	Targets.SelectEnemy(b.targetName, b.targetGUID or nameToGUID[b.targetName], btn)
 end
 
 local function TargetButton_OnEnter(self)

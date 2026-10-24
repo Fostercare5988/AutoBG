@@ -74,7 +74,7 @@ local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", {
 	{ label = "General", height = 446 },
 	{ label = "Timers", height = 436 },
 	{ label = "Enemy frames", height = 542 },
-	{ label = "Spy", height = 362 },
+	{ label = "Spy", height = 390 },
 }, function(index)
 	selectedTab = index
 	Refresh[index]()
@@ -440,16 +440,18 @@ local cbSpyEnable = SpySetting("AutoBG_Spy_Enable", "Show the Spy list",
 	"List nearby hostile players in the open world.", 28, -118, "Enabled", RenderSpy)
 local cbSpyAutoHide = SpySetting("AutoBG_Spy_AutoHide", "Hide when empty",
 	"Hide the Spy list completely while no enemies are tracked.", 28, -144, "AutoHide", RenderSpy)
+local cbSpyDisableInRaids = SpySetting("AutoBG_Spy_DisableInRaids", "Disable in raids",
+	"Turn off the Spy list and alerts inside raid instances (Molten Core, Blackwing Lair, etc.).", 28, -170, "DisableInRaids", RenderSpy)
 
-UI.Heading(panelSpy, "Alerts", 28, -180)
+UI.Heading(panelSpy, "Alerts", 28, -206)
 local cbSpySound = SpySetting("AutoBG_Spy_SoundAlert", "Alert sounds",
-	"Play a sound for new enemies and stealth warnings outside BGs. At most one alert per 8 seconds; repeated contacts stay quiet. Off by default. BG sounds have their own setting.", 28, -200, "SoundAlert")
+	"Play a sound for new enemies and stealth warnings outside BGs. At most one alert per 8 seconds; repeated contacts stay quiet. Off by default. BG sounds have their own setting.", 28, -226, "SoundAlert")
 local cbSpyStealth = SpySetting("AutoBG_Spy_StealthAlert", "Stealth warnings",
-	"Show a brief stealth warning outside BGs. Its sound follows Alert sounds. Repeated warnings for the same enemy stay quiet for 60 seconds. BG alerts have their own setting.", 28, -226, "StealthAlert", function() Refresh[4]() end)
+	"Show a brief stealth warning outside BGs. Its sound follows Alert sounds. Repeated warnings for the same enemy stay quiet for 60 seconds. BG alerts have their own setting.", 28, -252, "StealthAlert", function() Refresh[4]() end)
 local cbSpyProximity = SpySetting("AutoBG_Spy_StealthProximityOnly", "Only enemies I can see",
-	"On (default): warn only for a stealthed enemy you can actually see, at any distance your detection reaches. Off: Spy-style warning on a received stealth cast, even if you cannot see the enemy. BG warnings always need you to see them.", 44, -252, "StealthProximityOnly")
+	"On (default): warn only for a stealthed enemy you can actually see, at any distance your detection reaches. Off: Spy-style warning on a received stealth cast, even if you cannot see the enemy. BG warnings always need you to see them.", 44, -278, "StealthProximityOnly")
 local cbSpyBGStealth = UI.Switch("AutoBG_Spy_BGStealthAlert", panelSpy, "Stealth warnings in BGs",
-	"In battlegrounds, warn with a sound when you can see a stealthed enemy, at any distance your detection reaches. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Enemy frames still show who is hidden.", 28, -278, function(value)
+	"In battlegrounds, warn with a sound when you can see a stealthed enemy, at any distance your detection reaches. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Enemy frames still show who is hidden.", 28, -304, function(value)
 		Targets:EnsureOptions()
 		AutoBG_Settings.Targets.StealthAlert = value
 	end)
@@ -479,6 +481,7 @@ Refresh[4] = function()
 	if not opt then return end
 	UI.Sync(cbSpyEnable, opt.Enabled)
 	UI.Sync(cbSpyAutoHide, opt.AutoHide)
+	UI.Sync(cbSpyDisableInRaids, opt.DisableInRaids ~= false)
 	UI.Sync(cbSpySound, opt.SoundAlert)
 	UI.Sync(cbSpyStealth, opt.StealthAlert)
 	UI.Sync(cbSpyProximity, opt.StealthProximityOnly ~= false, opt.StealthAlert and true or false)

@@ -164,6 +164,24 @@ function AutoBG_MigratePositions()
     end
 end
 
+function AutoBG_SendAnnouncement(text)
+    if not text or text == "" then return end
+    local inInstance, instanceType = IsInInstance()
+    local isPvP = (inInstance and instanceType == "pvp")
+    local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
+    local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
+    local chatType = isPvP and "BATTLEGROUND" or "RAID"
+
+    if not isPvP and numRaid == 0 then
+        if numParty > 0 then
+            chatType = "PARTY"
+        else
+            chatType = "SAY"
+        end
+    end
+    SendChatMessage(text, chatType)
+end
+
 local defaultSettings = {
     NotifySound = true, FlashTaskbar = true, ChatMessages = true,
     AutoAccept = false, AutoAcceptDelay = 0, AutoLeave = true,
@@ -795,15 +813,11 @@ frame:RegisterEvent("UNIT_AURA")
 
 -- An OctoWoW invite runs out after about 80 seconds (measured in play:
 -- 79s, 2026-10-21). Enter at least INVITE_MARGIN seconds before it can run
--- out; an invite that still expires teaches us a shorter window.
-local INVITE_MARGIN = 5
+-- out.
+local INVITE_MARGIN = 1
 local DEFAULT_INVITE_WINDOW = 80
 AutoBG_MAX_ENTER_DELAY = DEFAULT_INVITE_WINDOW - INVITE_MARGIN
 local inviteStart = {}
-
-local function InviteWindow()
-    return tonumber(AutoBG_Settings and AutoBG_Settings.InviteWindow) or DEFAULT_INVITE_WINDOW
-end
 
 local function ProcessBattlefieldQueue(id)
     local status, mapName = GetBattlefieldStatus(id)
@@ -825,7 +839,7 @@ local function ProcessBattlefieldQueue(id)
                     FlashTaskbar()
                     return
                 end
-                local delay = math.min(AutoBG_Settings.AutoAcceptDelay or 0, InviteWindow() - INVITE_MARGIN)
+                local delay = math.min(AutoBG_Settings.AutoAcceptDelay or 0, AutoBG_MAX_ENTER_DELAY)
                 if delay < 0 then delay = 0 end
                 local qId, bg = id, mapName or "Battleground"
                 if delay <= 0 then
@@ -859,17 +873,6 @@ local function ProcessBattlefieldQueue(id)
             end
         end
     else
-        -- An invite we never accepted that lasted this long ran out (or was
-        -- declined very late): remember the shorter window.
-        local started = inviteStart[id]
-        if started and notifiedQueues[id] == true and status ~= "active" then
-            local lasted = math.floor(GetTime() - started)
-            if lasted >= 30 and lasted < InviteWindow() then
-                AutoBG_Settings.InviteWindow = lasted
-                AutoBG_Print("The invite for |cFFFFFF00" .. (invitedMaps[id] or "Battleground") .. "|r ran out after |cFFFFFF00"
-                    .. lasted .. "s|r. Auto-Enter will now enter by |cFFFFFF00" .. (lasted - INVITE_MARGIN) .. "s|r at the latest.", true)
-            end
-        end
         inviteStart[id] = nil
         inviteGeneration[id] = (inviteGeneration[id] or 0) + 1
         notifiedQueues[id] = false
@@ -894,6 +897,8 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         end
         -- Blood Ring was removed: OctoWoW has no queue type for it.
         AutoBG_Settings.AutoQueue_BR = nil
+        -- Dynamic invite window clobbered by early leaves is retired.
+        AutoBG_Settings.InviteWindow = nil
         -- Older/manual SavedVariables must not break queue comparisons or sliders.
         local delay = tonumber(AutoBG_Settings.AutoAcceptDelay) or 0
         if delay ~= delay then delay = 0 end
@@ -1266,7 +1271,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "reset" then
         AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg proj, /abg targets, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg proj, /abg targets, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
     else
         if AutoBG_OpenOptions then
             AutoBG_OpenOptions("general")

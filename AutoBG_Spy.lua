@@ -56,7 +56,7 @@ end
 
 local SPY_DEFAULTS = {
 	Enabled = true, SoundAlert = false, StealthAlert = true, StealthProximityOnly = true,
-	AutoHide = false, Timeout = 30, MaxRows = 5, Scale = 1.0,
+	AutoHide = false, Timeout = 30, MaxRows = 5, Scale = 1.0, DisableInRaids = true,
 }
 local function GetSpySettings()
 	if not AutoBG_Settings then AutoBG_Settings = {} end
@@ -69,6 +69,14 @@ end
 
 function Spy:EnsureOptions()
 	return GetSpySettings()
+end
+
+function Spy:IsRaidDisabled()
+	local opt = GetSpySettings()
+	if not opt or not opt.DisableInRaids then return false end
+	if not IsInInstance then return false end
+	local inInstance, instanceType = IsInInstance()
+	return (inInstance and instanceType == "raid") and true or false
 end
 
 -- Kill on sight, ignore and encounter statistics are saved account-wide, keyed
@@ -728,6 +736,13 @@ function Spy:HandleCommand(text)
 		local listed = Spy:ToggleList(key, name)
 		AutoBG_Print(name .. (listed and " added to " or " removed from ") .. string.lower(title) .. ".", true)
 		return true
+	elseif sub == "raid" or sub == "raids" then
+		local opt = GetSpySettings()
+		opt.DisableInRaids = not opt.DisableInRaids
+		AutoBG_Print("Spy in raids: " .. (opt.DisableInRaids and "|cFFFF0000Disabled|r" or "|cFF00FF00Enabled|r"), true)
+		if Spy.RenderRows then Spy:RenderRows() end
+		if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
+		return true
 	elseif sub == "stats" then
 		local all, total = {}, 0
 		for _, v in pairs(SavedList("Stats")) do table.insert(all, v); total = total + (v.seen or 0) end
@@ -1060,11 +1075,21 @@ function Spy:CreateAlertWindow()
 		end
 	end)
 	-- Left-click targets the stealthed enemy, right-click focuses them.
+	-- Ctrl+left-click announces flag opening in AB.
 	f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	f:SetScript("OnClick", function(self, button)
 		local frame = self or this
 		if frame.isMoving then return end
-		Targets.SelectEnemy(frame.targetName, frame.targetGUID, button or arg1)
+		local btn = button or arg1
+		if btn == "LeftButton" and IsControlKeyDown and IsControlKeyDown() then
+			local node = frame.node or frame.alertNode
+			local name = frame.targetName
+			if name and node and AutoBG_SendAnnouncement then
+				AutoBG_SendAnnouncement(name .. " is opening " .. node)
+				return
+			end
+		end
+		Targets.SelectEnemy(frame.targetName, frame.targetGUID, btn)
 	end)
 
 	-- Icon and text live on a child frame above the card, with their own font,
@@ -1139,6 +1164,7 @@ end
 
 -- node: the flag an enemy is opening (flag watch), shown as the title.
 function Spy:ShowAlert(spellName, enemyName, classToken, guid, node)
+	if Spy:IsRaidDisabled() then return end
 	if not Spy.AlertWindow then Spy:CreateAlertWindow() end
 	local w = Spy.AlertWindow
 	if not w then return end
@@ -1178,6 +1204,7 @@ function Spy:ShowAlert(spellName, enemyName, classToken, guid, node)
 	w.Title:SetText(titleText)
 	w.targetName = enemyName or "Unknown"
 	w.targetGUID = guid
+	w.node = node
 
 	local color = (classToken and Targets and Targets.GetClassColor and Targets.GetClassColor(classToken)) or (classToken and AutoBG_GetClassColorRGB and AutoBG_GetClassColorRGB(classToken)) or { r = 1, g = 1, b = 1 }
 	w.Name:SetText(enemyName or "Unknown")
@@ -1255,7 +1282,7 @@ function Spy:RenderRows()
 	MaintainTicker()
 	if not Spy.Frame then return end
 	local f, opt = Spy.Frame, GetSpySettings()
-	if not opt.Enabled or (Targets and Targets.activeBG) then
+	if not opt.Enabled or (Targets and Targets.activeBG) or Spy:IsRaidDisabled() then
 		f:Hide()
 		if not (Targets and Targets.activeBG) then Spy:HideAlert() end
 		return
@@ -1343,7 +1370,7 @@ end
 -- -------------------------------------------------------------------------- --
 OnSpyTick = function()
 	local opt = GetSpySettings()
-	if not opt.Enabled or (Targets and Targets.activeBG) then
+	if not opt.Enabled or (Targets and Targets.activeBG) or Spy:IsRaidDisabled() then
 		StopTicker()
 		if Spy.Frame then Spy.Frame:Hide() end
 		return
@@ -1553,6 +1580,8 @@ local eventFrame = CreateFrame("Frame", "AutoBG_SpyEventFrame", UIParent)
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_LOGOUT")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+eventFrame:RegisterEvent("ZONE_CHANGED")
 eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 eventFrame:RegisterEvent("UNIT_CASTEVENT")
@@ -1577,9 +1606,18 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 	else
 		event, arg1, arg2, arg3, arg4, arg5 = _G.event, _G.arg1, _G.arg2, _G.arg3, _G.arg4, _G.arg5
 	end
-	if event == "PLAYER_ENTERING_WORLD" then
-		Spy:ClearHistory()
-		UpdateGroupRoster()
+	if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" or event == "ZONE_CHANGED" then
+		if Spy:IsRaidDisabled() then
+			ClearObservations()
+			Spy:ClearHistory()
+			StopTicker()
+			Spy:HideAlert()
+			if Spy.Frame then Spy.Frame:Hide() end
+		else
+			Spy:ClearHistory()
+			UpdateGroupRoster()
+			if Spy.RenderRows then Spy:RenderRows() end
+		end
 		return
 	end
 	if event == "PLAYER_LOGOUT" then
@@ -1603,7 +1641,7 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 
 	if Targets and Targets.activeBG then return end
 	local opt = GetSpySettings()
-	if not opt or not opt.Enabled or Spy.isTestMode then return end
+	if not opt or not opt.Enabled or Spy.isTestMode or Spy:IsRaidDisabled() then return end
 
 	if event == "UNIT_CASTEVENT" or event == "UNIT_SPELLCAST_SUCCEEDED" then
 		local modern = event == "UNIT_SPELLCAST_SUCCEEDED"
