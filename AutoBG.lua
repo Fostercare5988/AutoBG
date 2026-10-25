@@ -1,14 +1,14 @@
 -- AutoBG for World of Warcraft 1.12.1 (Vanilla Enhanced)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI v1.16.0+, SuperWoW 2.2+, UnitXP SP3
+-- Built natively for ClassicAPI v1.17.7+, SuperWoW 2.2+, UnitXP SP3
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.16.0+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11600
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11707
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI (v1.16.0+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI (v1.17.7+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
     end
     return
 end
@@ -1204,22 +1204,11 @@ SlashCmdList["AUTOBG"] = function(msg)
         AutoBG_CancelAllQueues()
         return
     elseif cmd == "test" then
-        local anyActive = (AutoBG_Targets and AutoBG_Targets.isConfig) or (AutoBG_Spy and AutoBG_Spy.isTestMode) or (AutoBG_Settings and AutoBG_Settings.TestAllTimers)
-        if anyActive then
-            if AutoBG_Targets and AutoBG_Targets.DisableConfigMode then AutoBG_Targets:DisableConfigMode() end
-            if AutoBG_Spy and AutoBG_Spy.DisableTestMode then AutoBG_Spy:DisableTestMode() end
-            if AutoBG_Settings then AutoBG_Settings.TestAllTimers = false end
-            if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
-            AutoBG_Print("Test mode is now |cFFFF0000OFF|r", true)
-        else
-            if AutoBG_Targets and AutoBG_Targets.EnableConfigMode then AutoBG_Targets:EnableConfigMode(10) end
-            if AutoBG_Spy and AutoBG_Spy.EnableTestMode then AutoBG_Spy:EnableTestMode() end
-            if AutoBG_Settings then AutoBG_Settings.TestAllTimers = true end
-            if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
-            AutoBG_Print("Test mode is now |cFF00FF00ON|r", true)
+        if AutoBG_SetPreview then
+            local on = not AutoBG_IsPreviewActive()
+            AutoBG_SetPreview(on)
+            AutoBG_Print("Test mode is now " .. (on and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
         end
-        RefreshBattlegroundDisplays()
-        if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
         return
     end
 

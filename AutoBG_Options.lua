@@ -1,10 +1,10 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Options window (VanillaForge ForgeUI layout, Ember palette)         --
--- World of Warcraft 1.12.1, ClassicAPI v1.16.0+, SuperWoW v2.2+                --
+-- World of Warcraft 1.12.1, ClassicAPI v1.17.7+, SuperWoW v2.2+                --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.16.0+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11600
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11707
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then
@@ -15,6 +15,7 @@ local _, ns = ...
 local UI = ns.UI
 local Targets = AutoBG_Targets
 local Spy = AutoBG_Spy
+local FlagAlert = AutoBG_FlagAlert
 local BRACKETS = { 10, 15, 40 }
 local WIDTH = 500
 local selectedTab = 1
@@ -30,8 +31,10 @@ end
 
 local function PreviewActive()
 	return (Targets and Targets.isConfig) or (Spy and Spy.isTestMode)
+		or (FlagAlert and FlagAlert.isPreview)
 		or (AutoBG_Settings and AutoBG_Settings.TestAllTimers)
 end
+AutoBG_IsPreviewActive = PreviewActive
 
 -- The preview button fills while any frame preview is showing.
 local function RefreshTestCaption()
@@ -333,7 +336,7 @@ local cbTgtRaidIcons = RowFeature("AutoBG_Tgt_RaidIcons", "Raid icons",
 local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
 	"Show how many of your group, you included, target each enemy, in orange beside the health.", -310, "ShowTargetCount")
 local cbTgtFlagWatch = RowFeature("AutoBG_Tgt_FlagWatch", "Flag warnings",
-	"In Arathi Basin and Alterac Valley, warn when an enemy stands still at a flag their team does not hold, even straight out of stealth. AutoBG learns where the flags are as they are assaulted.", -336, "FlagWatch")
+	"In Arathi Basin and Alterac Valley, warn when an enemy stands still at a flag their team does not hold, even straight out of stealth. Flag spots are learned as flags are assaulted. Ctrl-click the warning to announce it.", -336, "FlagWatch")
 
 local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, store, rerender, format)
 	return UI.Slider(name, panelTargets, text, x, y, width, minValue, maxValue, step, function(value)
@@ -441,7 +444,7 @@ local cbSpyEnable = SpySetting("AutoBG_Spy_Enable", "Show the Spy list",
 local cbSpyAutoHide = SpySetting("AutoBG_Spy_AutoHide", "Hide when empty",
 	"Hide the Spy list completely while no enemies are tracked.", 28, -144, "AutoHide", RenderSpy)
 local cbSpyDisableInRaids = SpySetting("AutoBG_Spy_DisableInRaids", "Disable in raids",
-	"Turn off the Spy list and alerts inside raid instances (Molten Core, Blackwing Lair, etc.).", 28, -170, "DisableInRaids", RenderSpy)
+	"No Spy list or alerts inside raids.", 28, -170, "DisableInRaids", RenderSpy)
 
 UI.Heading(panelSpy, "Alerts", 28, -206)
 local cbSpySound = SpySetting("AutoBG_Spy_SoundAlert", "Alert sounds",
@@ -495,48 +498,48 @@ end
 -- -------------------------------------------------------------------------- --
 -- Footer: one preview for every frame, one reset for every position          --
 -- -------------------------------------------------------------------------- --
-previewButton = UI.Button("AutoBG_BtnTestAll", panel, "Preview frames", 0, 0, 150, function()
-	if PreviewActive() then
-		if Targets and Targets.DisableConfigMode then Targets:DisableConfigMode() end
-		if Spy and Spy.DisableTestMode then Spy:DisableTestMode() end
-		if AutoBG_Settings then AutoBG_Settings.TestAllTimers = false end
-	else
+-- One switch for every frame preview, shared by this button, closing the
+-- window and /abg test.
+function AutoBG_SetPreview(on)
+	if on then
 		if Targets and Targets.EnableConfigMode then Targets:EnableConfigMode(selectedBracket) end
 		if Spy and Spy.EnableTestMode then Spy:EnableTestMode() end
+		if FlagAlert then FlagAlert:SetPreview(true) end
 		if AutoBG_Settings then AutoBG_Settings.TestAllTimers = true end
+	else
+		if Targets and Targets.isConfig then Targets:DisableConfigMode() end
+		if Spy and Spy.isTestMode then Spy:DisableTestMode() end
+		if FlagAlert then FlagAlert:SetPreview(false) end
+		if AutoBG_Settings then AutoBG_Settings.TestAllTimers = false end
 	end
 	if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
-	AutoBG_Options_Refresh()
 	RefreshTimers(true)
+	AutoBG_Options_Refresh()
+end
+
+previewButton = UI.Button("AutoBG_BtnTestAll", panel, "Preview frames", 0, 0, 150, function()
+	AutoBG_SetPreview(not PreviewActive())
 end)
 previewButton:ClearAllPoints()
 previewButton:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 28, 18)
-UI.Tooltip(previewButton, "Show every AutoBG frame with sample enemies so you can drag it into place: timers, flag carriers, enemy frames for the selected size, the Spy list, and a stealth warning with its sound. Click again or close this window to hide them.")
+UI.Tooltip(previewButton, "Show every frame with samples so you can drag it into place: timers, flag carriers, enemy frames for this size, the Spy list, the stealth and flag warnings. Click again or close this window to hide them.")
 
 local btnResetAll = UI.Button("AutoBG_BtnResetAll", panel, "Reset positions", 0, 0, 150, function()
 	if AutoBG_Settings then
 		AutoBG_Settings.Positions = {}
-		if AutoBG_Settings.Targets and AutoBG_Settings.Targets.pos then
-			AutoBG_Settings.Targets.pos = {}
-		end
-		if AutoBG_Settings.Spy then
-			AutoBG_Settings.Spy.posX = nil
-			AutoBG_Settings.Spy.posY = nil
-			AutoBG_Settings.Spy.alertPosX = nil
-			AutoBG_Settings.Spy.alertPosY = nil
-		end
 	end
 	if AutoBG_ResetTimerPositions then AutoBG_ResetTimerPositions() end
 	if AutoBG_ResetFCPositions then AutoBG_ResetFCPositions() end
 	if Targets and Targets.ResetPosition then Targets:ResetPosition() end
 	if Spy and Spy.ResetPosition then Spy:ResetPosition() end
+	if FlagAlert then FlagAlert:ResetPosition() end
 	if DEFAULT_CHAT_FRAME then
 		DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00AutoBG:|r All frame positions reset to defaults.")
 	end
 end)
 btnResetAll:ClearAllPoints()
 btnResetAll:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 186, 18)
-UI.Tooltip(btnResetAll, "Move every AutoBG frame back to its default position: timers, flag carriers, enemy frames, the Spy list and the stealth warning.")
+UI.Tooltip(btnResetAll, "Move every frame back to its default place: timers, flag carriers, enemy frames, the Spy list, the stealth and flag warnings.")
 
 -- -------------------------------------------------------------------------- --
 -- Tab selection & universal refresh                                          --
@@ -559,14 +562,7 @@ panel:SetScript("OnShow", function()
 end)
 
 panel:SetScript("OnHide", function()
-	if Targets and Targets.isConfig then Targets:DisableConfigMode() end
-	if Spy and Spy.isTestMode then Spy:DisableTestMode() end
-	if AutoBG_Settings and AutoBG_Settings.TestAllTimers then
-		AutoBG_Settings.TestAllTimers = false
-		if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
-		RefreshTimers(true)
-	end
-	RefreshTestCaption()
+	if PreviewActive() then AutoBG_SetPreview(false) end
 end)
 
 -- -------------------------------------------------------------------------- --

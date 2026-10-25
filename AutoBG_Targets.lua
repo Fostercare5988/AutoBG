@@ -1,11 +1,11 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Enemy Target Frames Module (Consolidated from BattlegroundTargets)  --
 -- Engineered natively for World of Warcraft 1.12.1 (Enhanced Engine)        --
--- ClassicAPI v1.16.0+, SuperWoW v2.2+, UnitXP SP3                            --
+-- ClassicAPI v1.17.7+, SuperWoW v2.2+, UnitXP SP3                            --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.16.0+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11600
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11707
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then
@@ -1116,12 +1116,10 @@ end
 local function TargetButton_OnClick(self, button)
 	local b = self or this
 	local btn = button or arg1
-	if btn == "LeftButton" and IsControlKeyDown and IsControlKeyDown() then
-		local node = openingNode[b.targetName]
-		if node and b.targetName and AutoBG_SendAnnouncement then
-			AutoBG_SendAnnouncement(b.targetName .. " is opening " .. node)
-			return
-		end
+	local node = b.targetName and openingNode[b.targetName]
+	if node and btn == "LeftButton" and IsControlKeyDown() and AutoBG_FlagAlert then
+		AutoBG_FlagAlert:Announce(b.targetName, node)
+		return
 	end
 	Targets.SelectEnemy(b.targetName, b.targetGUID or nameToGUID[b.targetName], btn)
 end
@@ -1132,12 +1130,20 @@ local function TargetButton_OnEnter(self)
 	if guid and type(guid) == "string" and string.sub(guid, 1, 2) == "0x" and SetMouseoverUnit then
 		pcall(SetMouseoverUnit, guid)
 	end
+	local node = b.targetName and openingNode[b.targetName]
+	if node then
+		GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
+		GameTooltip:SetText("Opening " .. node, 1, 0.25, 0.25)
+		GameTooltip:AddLine("Ctrl-click: announce in chat", 0.75, 0.75, 0.75)
+		GameTooltip:Show()
+	end
 end
 
 local function TargetButton_OnLeave(self)
 	if SetMouseoverUnit then
 		pcall(SetMouseoverUnit)
 	end
+	GameTooltip:Hide()
 end
 
 local function Cast_OnClick(self, button)
