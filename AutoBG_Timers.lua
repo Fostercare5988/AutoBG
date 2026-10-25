@@ -69,28 +69,6 @@ for i = 1, 30 do activeSortBuffer[i] = { name = "", expire = 0, faction = nil } 
 local RAID_UNITS = {}
 for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
 
-local function SendTimerAnnouncement(text)
-    if AutoBG_SendAnnouncement then
-        AutoBG_SendAnnouncement(text)
-        return
-    end
-    if not text or text == "" then return end
-    local inInstance, instanceType = IsInInstance()
-    local isPvP = (inInstance and instanceType == "pvp")
-    local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
-    local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
-    local chatType = isPvP and "BATTLEGROUND" or "RAID"
-
-    if not isPvP and numRaid == 0 then
-        if numParty > 0 then
-            chatType = "PARTY"
-        else
-            chatType = "SAY"
-        end
-    end
-    SendChatMessage(text, chatType)
-end
-
 -- =========================================================
 -- Shared Bar Timer Frame Factory
 -- =========================================================
@@ -205,7 +183,7 @@ local function CreateBarTimerFrame(name, titleText, xOffset, yOffset, maxRows, d
             if AutoBG_SavePosition then AutoBG_SavePosition(frame, name) end
         end)
         row:SetScript("OnClick", function()
-            if IsControlKeyDown() and this.announceText then SendTimerAnnouncement(this.announceText) end
+            if IsControlKeyDown() and this.announceText then AutoBG_SendAnnouncement(this.announceText) end
         end)
         row:SetScript("OnEnter", function()
             if this.announceText and this.announceText ~= "" then
@@ -292,7 +270,7 @@ local function CreateRespawnFrame(name, xOffset, yOffset)
         if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
     end)
     frame:SetScript("OnClick", function()
-        if IsControlKeyDown() and this.announceText then SendTimerAnnouncement(this.announceText) end
+        if IsControlKeyDown() and this.announceText then AutoBG_SendAnnouncement(this.announceText) end
     end)
     frame:SetScript("OnEnter", function()
         if this.announceText and this.announceText ~= "" then
@@ -389,7 +367,7 @@ local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minW
             end)
             btn:SetScript("OnClick", function()
                 if IsControlKeyDown() and this.announceText then
-                    SendTimerAnnouncement(this.announceText)
+                    AutoBG_SendAnnouncement(this.announceText)
                 end
             end)
             btn:SetScript("OnEnter", function()
@@ -497,7 +475,7 @@ local function CreateABProjectionFrame(name)
     frame:SetScript("OnClick", function()
         local self = this or frame
         if IsControlKeyDown() and self.announceText and self.announceText ~= "" then
-            SendTimerAnnouncement(self.announceText)
+            AutoBG_SendAnnouncement(self.announceText)
         end
     end)
     frame:SetScript("OnEnter", function()

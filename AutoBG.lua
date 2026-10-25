@@ -164,21 +164,12 @@ function AutoBG_MigratePositions()
     end
 end
 
+-- Ctrl+click announcements go to the battleground, else the raid or party,
+-- else say.
 function AutoBG_SendAnnouncement(text)
     if not text or text == "" then return end
-    local inInstance, instanceType = IsInInstance()
-    local isPvP = (inInstance and instanceType == "pvp")
-    local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
-    local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
-    local chatType = isPvP and "BATTLEGROUND" or "RAID"
-
-    if not isPvP and numRaid == 0 then
-        if numParty > 0 then
-            chatType = "PARTY"
-        else
-            chatType = "SAY"
-        end
-    end
+    local chatType = (currentZonePVP and "BATTLEGROUND") or (IsInRaid() and "RAID")
+        or (IsInGroup() and "PARTY") or "SAY"
     SendChatMessage(text, chatType)
 end
 
@@ -261,10 +252,9 @@ function AutoBG_Print(msg, force)
     end
 end
 
--- UnitXP SP3 flashes the taskbar icon (FlashClientIcon does not exist on this client).
+-- ClassicAPI 1.17.7: flashes until the game window has focus; nothing while it has.
 local function FlashTaskbar()
-    if not (AutoBG_Settings and AutoBG_Settings.FlashTaskbar) then return end
-    if UnitXP then pcall(UnitXP, "notify", "taskbarIcon") end
+    if AutoBG_Settings and AutoBG_Settings.FlashTaskbar then FlashClientIcon() end
 end
 
 -- Canonical Class Colors (Rule B7: Shaman Blue 0x00, 0x70, 0xDE)
@@ -811,13 +801,20 @@ frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 frame:RegisterEvent("CHAT_MSG_SYSTEM")
 frame:RegisterEvent("UNIT_AURA")
 
--- An OctoWoW invite runs out after about 80 seconds (measured in play:
--- 79s, 2026-10-21). Enter at least INVITE_MARGIN seconds before it can run
--- out.
-local INVITE_MARGIN = 1
-local DEFAULT_INVITE_WINDOW = 80
-AutoBG_MAX_ENTER_DELAY = DEFAULT_INVITE_WINDOW - INVITE_MARGIN
+-- An invite runs out after about 80 seconds (measured in play: one ran out at
+-- 79s, 2026-10-21), so the enter delay tops out at 79. An invite that ends
+-- before a scheduled enter is reported, so a delay that is too long shows.
+AutoBG_MAX_ENTER_DELAY = 79
 local inviteStart = {}
+
+local function ReportMissedEnter(id)
+    local started = inviteStart[id]
+    local delay = AutoBG_Settings.AutoAcceptDelay or 0
+    if not (started and notifiedQueues[id] == true and AutoBG_Settings.AutoAccept and delay > 0) then return end
+    local lasted = math.floor(GetTime() - started)
+    AutoBG_Print("The invite for |cFFFFFF00" .. (invitedMaps[id] or "Battleground") .. "|r ended after |cFFFFFF00"
+        .. lasted .. "s|r, before Auto-Enter at |cFFFFFF00" .. delay .. "s|r. Lower the enter delay if it ran out.", true)
+end
 
 local function ProcessBattlefieldQueue(id)
     local status, mapName = GetBattlefieldStatus(id)
@@ -873,6 +870,7 @@ local function ProcessBattlefieldQueue(id)
             end
         end
     else
+        if status ~= "active" then ReportMissedEnter(id) end
         inviteStart[id] = nil
         inviteGeneration[id] = (inviteGeneration[id] or 0) + 1
         notifiedQueues[id] = false
@@ -1251,7 +1249,7 @@ SlashCmdList["AUTOBG"] = function(msg)
         else
             AutoBG_Print("Current Auto-Accept Enter Delay: |cFFFFFF00" .. ((AutoBG_Settings.AutoAcceptDelay or 0) == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r", true)
         end
-    elseif cmd == "efc" or cmd == "tar" or cmd == "target" then
+    elseif cmd == "efc" or cmd == "tar" then
         if AutoBG_TargetCarrier then AutoBG_TargetCarrier("enemy") end
     elseif cmd == "ffc" then
         if AutoBG_TargetCarrier then AutoBG_TargetCarrier("friendly") end
