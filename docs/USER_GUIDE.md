@@ -24,7 +24,7 @@ Choose battlegrounds under General, then press **Queue now**.
 The available battleground list comes from the server.
 
 - **Accept queue pops:** enter when an invitation arrives. **Enter delay** waits
-  0 to 79 seconds first; an invite runs out after about 80 seconds. If an
+  0 to 78 seconds first; an invite runs out after about 80 seconds. If an
   invite ends before AutoBG enters, chat says so; lower the delay then. **Pause while AFK** stops accepting, queueing and
   rejoining while you are AFK.
 - **Leave when it ends:** leave a completed match. Current or queued casts and

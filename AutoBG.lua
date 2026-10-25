@@ -802,9 +802,10 @@ frame:RegisterEvent("CHAT_MSG_SYSTEM")
 frame:RegisterEvent("UNIT_AURA")
 
 -- An invite runs out after about 80 seconds (measured in play: one ran out at
--- 79s, 2026-10-21), so the enter delay tops out at 79. An invite that ends
+-- 79s, 2026-10-21), so the enter delay tops out at 78, a second to spare. A
+-- saved longer delay is clamped on load. An invite that ends
 -- before a scheduled enter is reported, so a delay that is too long shows.
-AutoBG_MAX_ENTER_DELAY = 79
+AutoBG_MAX_ENTER_DELAY = 78
 local inviteStart = {}
 
 local function ReportMissedEnter(id)

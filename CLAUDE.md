@@ -21,7 +21,7 @@ Things to know:
 
 - Enemy frames have separate sizes and positions per battleground size
   (10, 15, 40). In a match the settings page edits the size being played.
-- Invites run out after about 80 seconds. The enter delay tops out at 79; an
+- Invites run out after about 80 seconds. The enter delay tops out at 78; an
   invite that ends before the scheduled enter is reported in chat.
 - Requires ClassicAPI 1.17.7+ (guards check `11707`), SuperWoW and
   NamPower. UnitXP is no longer used.
