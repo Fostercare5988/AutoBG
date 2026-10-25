@@ -8,10 +8,10 @@ closing also ends display previews.
 
 **Preview frames** at the bottom of the window shows every AutoBG frame with
 sample data: timers, flag carriers, enemy frames for the selected size, the Spy
-list and a stealth warning with its sound. It stays filled while the preview is
+list, and the stealth and flag warnings. It stays filled while the preview is
 on; click it again or close the window to hide them.
 
-Drag timer and enemy-list headers to move them. Carrier cards and the Spy alert
+Drag timer and enemy-list headers to move them. Carrier cards and both warnings
 also support dragging. Settings and positions are shared across characters on
 the account. Enemy frames store separate positions for 10-, 15- and 40-player
 brackets. **Reset positions** moves every frame back to its default position
@@ -24,8 +24,8 @@ Choose battlegrounds under General, then press **Queue now**.
 The available battleground list comes from the server.
 
 - **Accept queue pops:** enter when an invitation arrives. **Enter delay** waits
-  0 to 75 seconds first; an invite runs out after about 80 seconds, and
-  AutoBG always enters before that. **Pause while AFK** stops accepting, queueing and
+  0 to 79 seconds first; an invite runs out after about 80 seconds. If an
+  invite ends before AutoBG enters, chat says so; lower the delay then. **Pause while AFK** stops accepting, queueing and
   rejoining while you are AFK.
 - **Leave when it ends:** leave a completed match. Current or queued casts and
   terrain targeting are stopped before departure. Turning it off cancels a
@@ -86,7 +86,11 @@ list out of combat; in combat it stays locked, so a stray click cannot move it.
   Blacksmith"), a sound and a red OPENING on their row. It works even when they
   open straight out of stealth, which sends no cast bar. AutoBG learns where
   each flag is from the players who assault it, so it needs a game or two
-  first; in Alterac Valley it learns from your own assaults. The trinket icon can sit on either side; its 180-second countdown
+  first; in Alterac Valley it learns from your own assaults. The warning has
+  its own popup, apart from the stealth warning, so you can place each. Its
+  icon is the Opening spell, learned the first time AutoBG sees one cast
+  (a question mark until then). Ctrl + left-click the popup, or a row marked
+  OPENING, to tell your battleground who is opening which flag. The trinket icon can sit on either side; its 180-second countdown
 estimates cooldown from observed activations. Left-click targets; right-click
 focuses a verified loaded player.
 
@@ -104,7 +108,8 @@ Hover for race, health, stealth state and observation age. New enemies enter at
 the top; further activity updates their existing row. Up to 20 enemies are
 tracked; **Enemies shown** controls the visible portion.
 **Forget after** expires quiet rows. **Hide when empty** hides the
-empty list. **Clear list** clears observations without resetting recent alerts.
+empty list. **Disable in raids** (on by default) turns the list and its alerts
+off inside raids; `/abg spy raids` toggles it. **Clear list** clears observations without resetting recent alerts.
 
 Each row shows the enemy's health as its bar and, while you can see them, the
 distance in yards. **Shift-click** a name to put it on the kill-on-sight list:
@@ -136,8 +141,9 @@ It cannot reveal players or actions that the server has not sent to your client.
 
 ## Quick checks
 
-Use **Preview frames** to check placement and the stealth warning sound (it plays
-when **Alert sounds** is on). For a gameplay check, have a duel opponent enter Stealth or Prowl at different
-distances. Nearby mode should warn only after its range, sight and aura gates pass.
+Use **Preview frames** to check placement of every frame, including both
+warnings, and the stealth warning sound (it plays when **Alert sounds** is on). For a gameplay check, have a duel opponent enter Stealth or Prowl at different
+distances. With **Only enemies I can see** on, a warning needs a stealthed enemy
+you can see.
 Immediate re-entry should remain quiet; allow at least 60 seconds before testing
 a fresh warning from that opponent.

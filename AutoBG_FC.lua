@@ -1,6 +1,6 @@
 -- AutoBG Warsong Flag Carrier (FC) Tracker (Zero-Bloat Consolidated Architecture)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI v1.17.7+, SuperWoW 2.2+, UnitXP SP3
+-- Built natively for ClassicAPI v1.17.7+, SuperWoW 2.2+, NamPower
 
 -- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
 local MIN_CLASSIC_API = 11707
