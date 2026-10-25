@@ -118,9 +118,19 @@ local function Tick()
 		local name, guid, classToken = Targets.GetEnemy(i)
 		local w = name and watch[name]
 		local y, x, map
+		local dead = guid and UnitIsDeadOrGhost(guid)
 		-- An enemy in stealth or out of sight has no position.
-		if guid and not UnitIsDeadOrGhost(guid) then y, x, _, map = UnitPosition(guid) end
-		if y and map == mapID then
+		if guid and not dead then y, x, _, map = UnitPosition(guid) end
+		if dead then
+			if not w then
+				w = { still = 0, warnedAt = 0 }
+				watch[name] = w
+			end
+			-- A ghost sends no moves, so after the spirit healer the client keeps
+			-- the spot where they died until they walk. Wait for a real move.
+			w.dead, w.y, w.x, w.still = true, nil, nil, 0
+			if w.node then ClearWarning(name) end
+		elseif y and map == mapID then
 			if not w then
 				w = { still = 0, warnedAt = 0 }
 				watch[name] = w
@@ -130,9 +140,10 @@ local function Tick()
 			if w.y then
 				local dy, dx = y - w.y, x - w.x
 				moved = dy * dy + dx * dx >= STILL_SQUARED
+				if moved then w.dead = nil end
 			end
 			w.y, w.x = y, x
-			if node and not moved and nodeHolder[node] ~= enemyFaction then
+			if node and not moved and not w.dead and nodeHolder[node] ~= enemyFaction then
 				w.still = w.still + 1
 				if w.still >= STILL_TICKS then Warn(name, node, classToken, guid, now) end
 			else
