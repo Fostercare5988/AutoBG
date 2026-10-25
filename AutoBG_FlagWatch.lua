@@ -29,6 +29,7 @@ local active, mapID, enemyFaction, ticker, playerGUID
 local nodeHolder = {} -- node -> faction holding it or taking it
 local watch = {}      -- enemy name -> { y, x, still, node, warnedNode, warnedAt }
 local ownOpeningAt = 0
+local openingBySpell = {} -- spell ID -> whether it is an Opening cast
 
 local function Enabled()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
@@ -104,10 +105,7 @@ local function Warn(name, node, classToken, guid, now)
 	Targets.SetOpening(name, node)
 	if w.warnedNode == node and now - w.warnedAt < REPEAT then return end
 	w.warnedNode, w.warnedAt = node, now
-	if AutoBG_Spy and AutoBG_Spy.ShowAlert then
-		AutoBG_Spy:ShowAlert("Opening", name, classToken, guid, node)
-		PlaySound("RaidWarning")
-	end
+	if AutoBG_FlagAlert then AutoBG_FlagAlert:Show(name, classToken, guid, node) end
 end
 
 local function Tick()
@@ -205,11 +203,18 @@ FlagWatch:SetScript("OnEvent", function(p1, p2, p3, p4, p5, p6)
 	elseif type(p2) == "string" then ev, a1, a3, a4 = p2, p3, p5, p6
 	else ev, a1, a3, a4 = event, arg1, arg3, arg4 end
 	if ev == "UNIT_CASTEVENT" then
-		-- SuperWoW: caster GUID, target GUID, event type, spell ID.
-		if a1 ~= playerGUID or a3 ~= "CAST" then return end
-		local spell = SpellInfo(a4)
-		-- UNVERIFIED: test in game that flags are opened with a spell named "Opening".
-		if spell and string.find(spell, "^Opening") then ownOpeningAt = GetTime() end
+		-- SuperWoW: caster GUID, target GUID, event type, spell ID. Casts arrive
+		-- for everyone nearby; name each spell ID once.
+		if not a4 then return end
+		local opening = openingBySpell[a4]
+		if opening == nil then
+			local spell = SpellInfo(a4)
+			-- UNVERIFIED: test in game that flags are opened with a spell named "Opening".
+			opening = spell and string.find(spell, "^Opening") and true or false
+			openingBySpell[a4] = opening
+			if opening and AutoBG_FlagAlert then AutoBG_FlagAlert:LearnOpening(a4) end
+		end
+		if opening and a1 == playerGUID and a3 == "CAST" then ownOpeningAt = GetTime() end
 	else
 		UpdateZone()
 	end

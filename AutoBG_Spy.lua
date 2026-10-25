@@ -1,11 +1,11 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Open-World Spy Module (Consolidated from BattlegroundTargets)       --
 -- Engineered natively for World of Warcraft 1.12.1 (Enhanced Engine)        --
--- Leveraging SuperWoW v2.2+, ClassicAPI v1.16.0+, UnitXP SP3                 --
+-- Leveraging SuperWoW v2.2+, ClassicAPI v1.17.7+, UnitXP SP3                 --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.16.0+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11600
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11707
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then
@@ -239,7 +239,7 @@ local groupNames = {}
 local groupGUIDs = {}
 
 Spy.isTestMode = false
-local renderTimer, purgeTicker, OnSpyTick, alertTimer
+local renderTimer, purgeTicker, OnSpyTick
 local pendingObservations, spareObservations, pendingByGUID, pendingCount = {}, {}, {}, 0
 for i = 1, MAX_SPY_ENEMIES do pendingObservations[i], spareObservations[i] = {}, {} end
 local FlushObservations, flushingObservations, QueueObservation
@@ -251,11 +251,6 @@ local function ClearObservations()
 	end
 	pendingCount = 0
 	table.wipe(pendingByGUID)
-end
-
-function Spy:HideAlert()
-	if alertTimer then alertTimer:Cancel(); alertTimer = nil end
-	if Spy.AlertWindow then Spy.AlertWindow:Hide() end
 end
 
 local function StopTicker()
@@ -1040,206 +1035,55 @@ function Spy:CreateFrames()
 	Spy:ApplyScale()
 end
 
--- Alert rim per stealth type; shapes repaint by table, so these stay fixed.
-local ALERT_EDGE = {
-	Stealth = { 0.2, 0.8, 1.0, 0.95 },
-	Prowl = { 1.0, 0.5, 0.0, 0.95 },
-	Shadowmeld = { 0.7, 0.4, 0.9, 0.95 },
-	Vanish = { 0.3, 0.9, 1.0, 0.95 },
-	Invisibility = { 0.5, 0.8, 1.0, 0.95 },
-	Cloaking = { 0.9, 0.9, 0.2, 0.95 },
-	Opening = { 1.0, 0.25, 0.25, 0.95 },
+-- Stealth warning look per kind: icon and rim color. Shapes repaint by table,
+-- so these stay fixed.
+local ALERT_LOOK = {
+	Stealth      = { texture = "Interface\Icons\Ability_Stealth", edge = { 0.2, 0.8, 1.0, 0.95 } },
+	Prowl        = { texture = PROWL_TEXTURE, edge = { 1.0, 0.5, 0.0, 0.95 } },
+	Shadowmeld   = { texture = "Interface\Icons\Ability_Racial_ShadowMeld", edge = { 0.7, 0.4, 0.9, 0.95 } },
+	Vanish       = { texture = "Interface\Icons\Ability_Stealth", edge = { 0.3, 0.9, 1.0, 0.95 } },
+	Invisibility = { texture = "Interface\Icons\Spell_Nature_Invisibilty", edge = { 0.5, 0.8, 1.0, 0.95 } },
+	Cloaking     = { texture = "Interface\Icons\INV_Misc_EngGizmos_04", edge = { 0.9, 0.9, 0.2, 0.95 } },
 }
+
+-- Left-click targets the stealthed enemy, right-click focuses them.
+local function AlertWindow_OnClick(card, button)
+	Targets.SelectEnemy(card.targetName, card.targetGUID, button)
+end
 
 function Spy:CreateAlertWindow()
 	if Spy.AlertWindow then return end
-
-	local f = CreateFrame("Button", "AutoBG_SpyAlertWindow", UIParent)
-	f:SetWidth(190)
-	f:SetHeight(42)
-	f:SetMovable(true)
-	f:EnableMouse(true)
-	f:SetClampedToScreen(true)
-	f:Hide()
-
-	-- ForgeUI card: soft shadow, a rim tinted by stealth type, the Ember surface.
-	UI.Rounded(f, "BACKGROUND", 20, UI.shadowColor, 12, UI.shadow, -3)
-	f.edge = UI.Rounded(f, "BORDER", 10, ALERT_EDGE.Stealth)
-	UI.Rounded(f, "ARTWORK", 9, UI.surface, -1)
-
-	f:RegisterForDrag("LeftButton")
-	f:SetScript("OnDragStart", function()
-		local frame = this or self
-		if frame and frame.StartMoving then
-			frame:StartMoving()
-			frame.isMoving = true
-		end
-	end)
-	f:SetScript("OnDragStop", function()
-		local frame = this or self
-		if frame and frame.StopMovingOrSizing then
-			frame:StopMovingOrSizing()
-			frame.isMoving = false
-			Spy:SaveAlertPosition()
-		end
-	end)
-	-- Left-click targets the stealthed enemy, right-click focuses them.
-	-- Ctrl+left-click announces flag opening in AB.
-	f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-	f:SetScript("OnClick", function(self, button)
-		local frame = self or this
-		if frame.isMoving then return end
-		local btn = button or arg1
-		if btn == "LeftButton" and IsControlKeyDown and IsControlKeyDown() then
-			local node = frame.node or frame.alertNode
-			local name = frame.targetName
-			if name and node and AutoBG_SendAnnouncement then
-				AutoBG_SendAnnouncement(name .. " is opening " .. node)
-				return
-			end
-		end
-		Targets.SelectEnemy(frame.targetName, frame.targetGUID, btn)
-	end)
-
-	-- Icon and text live on a child frame above the card, with their own font,
-	-- so neither the card's layers nor a changed shared font can hide them.
-	local content = CreateFrame("Frame", nil, f)
-	content:SetAllPoints(f)
-	content:SetFrameLevel(f:GetFrameLevel() + 2)
-	f.Content = content
-
-	local icon = content:CreateTexture(nil, "ARTWORK")
-	icon:SetWidth(30)
-	icon:SetHeight(30)
-	icon:SetPoint("LEFT", f, "LEFT", 6, 0)
-	icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-	icon:SetTexture("Interface\\Icons\\Ability_Stealth")
-	f.Icon = icon
-
-	-- Title
-	local title = content:CreateFontString(nil, "OVERLAY")
-	title:SetFont(FONT, 10, "OUTLINE")
-	-- Both lines are centered in the space right of the icon.
-	title:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -2)
-	title:SetPoint("TOPRIGHT", f, "TOPRIGHT", -10, -8)
-	title:SetJustifyH("CENTER")
-	title:SetText("|cff00ffffStealth|r")
-	f.Title = title
-
-	-- Name
-	local nameText = content:CreateFontString(nil, "OVERLAY")
-	nameText:SetFont(FONT, 12, "OUTLINE")
-	nameText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
-	nameText:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 9)
-	nameText:SetJustifyH("CENTER")
-	nameText:SetText("Unknown")
-	f.Name = nameText
-
-	Spy.AlertWindow = f
-	Spy:ApplyAlertPosition()
+	Spy.AlertWindow = ns.CreateAlertCard("AutoBG_SpyAlertWindow", -140, ALERT_LOOK.Stealth.edge,
+		AlertWindow_OnClick, { "Click: target  |  Right-click: focus" })
 end
 
--- -------------------------------------------------------------------------- --
--- Position & Scale Management                                                --
--- -------------------------------------------------------------------------- --
-function Spy:ApplyAlertPosition()
-	if not Spy.AlertWindow then return end
-	if AutoBG_LoadPosition then
-		AutoBG_LoadPosition(Spy.AlertWindow, "AutoBG_SpyAlertWindow", "TOP", 0, -140, "TOP")
-	else
-		Spy.AlertWindow:ClearAllPoints()
-		Spy.AlertWindow:SetPoint("TOP", UIParent, "TOP", 0, -140)
-	end
-end
-
-function Spy:SaveAlertPosition()
-	if not Spy.AlertWindow then return end
-	if AutoBG_SavePosition then
-		AutoBG_SavePosition(Spy.AlertWindow, "AutoBG_SpyAlertWindow")
-	end
+function Spy:HideAlert()
+	if Spy.AlertWindow then Spy.AlertWindow:Dismiss() end
 end
 
 function Spy:ResetAlertPosition()
-	local opt = GetSpySettings()
-	if opt then
-		opt.alertPosX = nil
-		opt.alertPosY = nil
-	end
-	if AutoBG_Settings and AutoBG_Settings.Positions then
+	if Spy.AlertWindow then Spy.AlertWindow:ResetPosition()
+	elseif AutoBG_Settings and AutoBG_Settings.Positions then
 		AutoBG_Settings.Positions["AutoBG_SpyAlertWindow"] = nil
 	end
-	Spy:ApplyAlertPosition()
 end
 
--- node: the flag an enemy is opening (flag watch), shown as the title.
-function Spy:ShowAlert(spellName, enemyName, classToken, guid, node)
+function Spy:ShowAlert(spellName, enemyName, classToken, guid)
 	if Spy:IsRaidDisabled() then return end
-	if not Spy.AlertWindow then Spy:CreateAlertWindow() end
+	Spy:CreateAlertWindow()
+	local kind = spellName or "Stealth"
+	if string.find(kind, "Invis") then kind = "Invisibility" end
+	if not ALERT_LOOK[kind] then kind = "Stealth" end
+	local look = ALERT_LOOK[kind]
 	local w = Spy.AlertWindow
-	if not w then return end
-
-	local sName = spellName or "Stealth"
-	local tex = "Interface\\Icons\\Ability_Stealth"
-	local titleText = "|cff00ffffStealth|r"
-	local edge = ALERT_EDGE.Stealth
-
-	if sName == "Prowl" then
-		tex = PROWL_TEXTURE or "Interface\\Icons\\Ability_Druid_Prowl"
-		titleText = "|cff00ffffProwl|r"
-		edge = ALERT_EDGE.Prowl
-	elseif sName == "Shadowmeld" then
-		tex = "Interface\\Icons\\Ability_Racial_ShadowMeld"
-		titleText = "|cff00ffffShadowmeld|r"
-		edge = ALERT_EDGE.Shadowmeld
-	elseif sName == "Vanish" then
-		tex = "Interface\\Icons\\Ability_Stealth"
-		titleText = "|cff00ffffVanish|r"
-		edge = ALERT_EDGE.Vanish
-	elseif string.find(sName, "Invis") then
-		tex = "Interface\\Icons\\Spell_Nature_Invisibilty"
-		titleText = "|cff00ffffInvisibility|r"
-		edge = ALERT_EDGE.Invisibility
-	elseif sName == "Cloaking" then
-		tex = "Interface\\Icons\\INV_Misc_EngGizmos_04"
-		titleText = "|cff00ffffCloaking|r"
-		edge = ALERT_EDGE.Cloaking
-	elseif sName == "Opening" then
-		tex = "Interface\\Icons\\INV_BannerPVP_0" .. (UnitFactionGroup("player") == "Horde" and "2" or "1")
-		titleText = "|cff00ffffOpening " .. (node or "a flag") .. "|r"
-		edge = ALERT_EDGE.Opening
-	end
-
-	w.Icon:SetTexture(tex)
-	w.Title:SetText(titleText)
 	w.targetName = enemyName or "Unknown"
 	w.targetGUID = guid
-	w.node = node
-
-	local color = (classToken and Targets and Targets.GetClassColor and Targets.GetClassColor(classToken)) or (classToken and AutoBG_GetClassColorRGB and AutoBG_GetClassColorRGB(classToken)) or { r = 1, g = 1, b = 1 }
-	w.Name:SetText(enemyName or "Unknown")
-	w.Name:SetTextColor(color.r, color.g, color.b)
-
-	UI.Paint(w.edge, edge)
-
-	local titleW = (w.Title.GetStringWidth and w.Title:GetStringWidth()) or 100
-	local nameW = (w.Name.GetStringWidth and w.Name:GetStringWidth()) or 80
-	-- Just wide enough for the longer line beside the icon.
-	local neededW = math.max(titleW, nameW) + 56
-	w:SetWidth(neededW)
-
-	w:Show()
-
-	if alertTimer then alertTimer:Cancel(); alertTimer = nil end
-	if not Spy.isTestMode then
-		alertTimer = C_Timer.NewTimer(4.5, function()
-			alertTimer = nil
-			Spy:HideAlert()
-		end)
-	end
+	local color = classToken and Targets.GetClassColor(classToken)
+	w:Present(look.texture, "|cff00ffff" .. kind .. "|r", w.targetName, color, look.edge, Spy.isTestMode)
 end
 
 function Spy:ApplyPosition()
-	Spy:ApplyAlertPosition()
+	if Spy.AlertWindow then Spy.AlertWindow:ApplyPosition() end
 	if not Spy.Frame then return end
 	if AutoBG_LoadPosition then
 		AutoBG_LoadPosition(Spy.Frame, "AutoBG_SpyFrame", "TOPLEFT", 100, -200, "TOPLEFT")
@@ -1256,20 +1100,10 @@ function Spy:SavePosition()
 	if Spy.Frame then AnchorSpyTopLeft(Spy.Frame) end
 end
 
+-- Older position keys are moved into Positions on load (AutoBG_MigratePositions).
 function Spy:ResetPosition()
-	local opt = GetSpySettings()
-	if opt then
-		opt.posX = nil
-		opt.posY = nil
-	end
-	if AutoBG_Settings then
-		if AutoBG_Settings.Positions then
-			AutoBG_Settings.Positions["AutoBG_SpyFrame"] = nil
-		end
-		if AutoBG_Settings.Targets and AutoBG_Settings.Targets.pos then
-			AutoBG_Settings.Targets.pos["AutoBG_SpyFrame_posX"] = nil
-			AutoBG_Settings.Targets.pos["AutoBG_SpyFrame_posY"] = nil
-		end
+	if AutoBG_Settings and AutoBG_Settings.Positions then
+		AutoBG_Settings.Positions["AutoBG_SpyFrame"] = nil
 	end
 	Spy:ResetAlertPosition()
 	Spy:ApplyPosition()
