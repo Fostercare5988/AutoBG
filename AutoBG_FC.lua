@@ -286,36 +286,10 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     end
 end)
 
+-- ClassicAPI distance, as the enemy frames and Spy use; nil when unknown.
 local function GetDistance(unit)
-    -- 1. ClassicAPI Native Hardware Euclidean Engine (Rule B10)
-    if unit and UnitDistanceSquared then
-        local ok, dSq, checked = pcall(UnitDistanceSquared, unit)
-        if ok and checked and type(dSq) == "number" and dSq >= 0 then
-            return math.floor(math.sqrt(dSq) + 0.5)
-        end
-    end
-
-    -- 2. SuperWoW 3D World Space Euclidean Distance (Rule B9)
-    if unit and UnitPosition then
-        local ok1, px, py, pz = pcall(UnitPosition, "player")
-        local ok2, ux, uy, uz = pcall(UnitPosition, unit)
-        if ok1 and ok2 and type(px) == "number" and type(ux) == "number" and type(py) == "number" and type(uy) == "number" then
-            local dx = px - ux
-            local dy = py - uy
-            local dz = (type(pz) == "number" and type(uz) == "number") and (pz - uz) or 0
-            return math.floor(math.sqrt(dx * dx + dy * dy + dz * dz) + 0.5)
-        end
-    end
-
-    -- 3. UnitXP Native Yard Engine (Rule B8)
-    if unit and UnitXP then
-        local ok2, dist2 = pcall(UnitXP, "distanceBetween", "player", unit)
-        if ok2 and type(dist2) == "number" and dist2 >= 0 and dist2 < 9999 then
-            return math.floor(dist2 + 0.5)
-        end
-    end
-
-    return nil
+    local distanceSquared, checked = UnitDistanceSquared(unit)
+    if checked and distanceSquared then return math.floor(math.sqrt(distanceSquared) + 0.5) end
 end
 
 local carrierAuraSlots = {}
@@ -517,47 +491,22 @@ function AutoBG_GetEnemyCarrier()
     return carrierHorde
 end
 
-function AutoBG_TargetCarrier(which)
-    local w = which and string.lower(which) or "enemy"
-    local target = nil
-
-    if w == "friendly" or w == "ffc" then
-        target = AutoBG_GetFriendlyCarrier()
-    else
-        target = AutoBG_GetEnemyCarrier()
-    end
-
+-- Targets (or focuses) the friendly or enemy carrier for /abg efc, ffc and focus.
+local function SelectCarrierByRole(which, focus)
+    local friendly = which and (string.lower(which) == "friendly" or string.lower(which) == "ffc")
+    local target = friendly and AutoBG_GetFriendlyCarrier() or AutoBG_GetEnemyCarrier()
     if not target or target == "" then
-        if AutoBG_Print then AutoBG_Print("No " .. (w == "friendly" and "friendly" or "enemy") .. " flag carrier detected.") end
+        AutoBG_Print("No " .. (friendly and "friendly" or "enemy") .. " flag carrier detected.")
         return false
     end
-
     local frame = (target == carrierAlliance and AllianceFC) or (target == carrierHorde and HordeFC)
-    local selected = SelectCarrier(target, frame and frame.carrierGuid, false)
-    if selected and AutoBG_Print then AutoBG_Print("Targeted " .. target .. ".") end
+    local selected = SelectCarrier(target, frame and frame.carrierGuid, focus)
+    if selected then AutoBG_Print((focus and "Focused " or "Targeted ") .. target .. ".") end
     return selected
 end
 
-function AutoBG_FocusCarrier(which)
-    local w = which and string.lower(which) or "enemy"
-    local target = nil
-
-    if w == "friendly" or w == "ffc" then
-        target = AutoBG_GetFriendlyCarrier()
-    else
-        target = AutoBG_GetEnemyCarrier()
-    end
-
-    if not target or target == "" then
-        if AutoBG_Print then AutoBG_Print("No " .. (w == "friendly" and "friendly" or "enemy") .. " flag carrier detected.") end
-        return false
-    end
-
-    local frame = (target == carrierAlliance and AllianceFC) or (target == carrierHorde and HordeFC)
-    local selected = SelectCarrier(target, frame and frame.carrierGuid, true)
-    if selected and AutoBG_Print then AutoBG_Print("Focused " .. target .. ".") end
-    return selected
-end
+function AutoBG_TargetCarrier(which) return SelectCarrierByRole(which, false) end
+function AutoBG_FocusCarrier(which) return SelectCarrierByRole(which, true) end
 
 function AutoBG_GetCarrierInfo(faction)
     local name = AutoBG_GetCarrier(faction)
