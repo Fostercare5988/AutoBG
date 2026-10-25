@@ -17,14 +17,12 @@ enemy alerts for World of Warcraft 1.12.1, build 5875.
 
 ## Requirements
 
-All four DLLs are required:
+These three DLLs are required:
 
 - [ClassicAPI v1.17.7+](https://github.com/brues-code/ClassicAPI)
 - [SuperWoW v2.2+](https://github.com/balakethelock/SuperWoW)
 - [NamPower v4.6.2+](https://github.com/Emyrk/nampower): deaths, stealth buffs
   and health by GUID
-- [UnitXP SP3 v89+](https://github.com/brues-code/UnitXP_SP3): distances for range
-  marks, Spy and flag carriers
 
 Start through a launcher that loads the required DLLs. Installing or updating
 a DLL requires a full game restart.
@@ -48,6 +46,7 @@ Enable AutoBG in the character-selection addon list.
 | Left-click an enemy or carrier | Target that player |
 | Right-click an enemy or carrier | Focus the verified loaded player |
 | Ctrl + left-click a timer | Announce its countdown in battleground chat |
+| Ctrl + left-click a flag warning | Announce who is opening which flag |
 | Drag a display header | Move that display |
 
 ## Spy alerts
@@ -56,16 +55,17 @@ The list records recent observations received by your client. It is not a count
 of everyone within a fixed distance. Five rows display by default; tracking is
 capped at 20. Hover a row for further details.
 
-Open-world sounds default to off. **Play enemy alerts** enables them. Alerts
+Open-world sounds default to off. **Alert sounds** enables them. Alerts
 share an eight-second limit; recently seen enemies and repeated stealth episodes
 stay quiet. Suppressed alerts are discarded rather than played later.
 Battleground stealth warnings have their own setting and the same burst limit.
 Discovery uses the game's minimap ping; stealth uses its raid-warning sound.
 
-**Nearby stealth alerts only** requires a visible, attackable player within
-10 yards, clear line of sight and a confirmed active stealth aura. Disabling
-this option allows open-world warnings from received stealth events at any
-distance. Battleground warnings always require nearby confirmation.
+**Only enemies I can see** requires a visible, attackable player with a
+confirmed stealth aura, at any distance your detection reaches. Turning it off
+allows open-world warnings from received stealth events. Battleground warnings
+always need you to see the enemy. Spy is off inside raids unless you turn
+**Disable in raids** off.
 
 Enemy trinket cooldowns, resurrection estimates and victory projections depend
 on observed events. Missing server telemetry can make them incomplete.

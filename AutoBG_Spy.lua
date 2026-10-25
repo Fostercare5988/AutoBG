@@ -1,7 +1,7 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Open-World Spy Module (Consolidated from BattlegroundTargets)       --
 -- Engineered natively for World of Warcraft 1.12.1 (Enhanced Engine)        --
--- Leveraging SuperWoW v2.2+, ClassicAPI v1.17.7+, UnitXP SP3                 --
+-- Leveraging SuperWoW v2.2+, ClassicAPI v1.17.7+, NamPower                    --
 -- -------------------------------------------------------------------------- --
 
 -- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
@@ -1240,7 +1240,7 @@ OnSpyTick = function()
 				if e.healthPct ~= pct then e.healthPct = pct; changed = true end
 			end
 		end
-		-- UnitXP distance; an enemy out of sight has no distance.
+		-- ClassicAPI distance; an enemy out of sight has no distance.
 		local yards
 		if visible and UnitDistanceSquared then
 			local d2, checked = UnitDistanceSquared(e.guid)
