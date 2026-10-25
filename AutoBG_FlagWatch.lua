@@ -3,10 +3,12 @@
 -- Warns when an enemy opens a flag in Arathi Basin or Alterac Valley.        --
 -- -------------------------------------------------------------------------- --
 -- An opening started from stealth never reaches your client as a cast: it
--- begins while the enemy is still invisible to you. So the watch uses what the
--- client does see: a visible enemy standing still at a flag their team does not
--- hold. Flag spots are learned in play, from the players who assault them, and
--- saved per map in AutoBG_Settings.FlagSpots.
+-- begins while the enemy is still invisible to you. What the client does see
+-- is the enemy appearing out of nowhere at a flag their team does not hold and
+-- standing there. Enemies who walk up in plain sight are left out: standing
+-- still near a flag is just as often fighting or waiting, and their Opening
+-- shows on their enemy frame's cast bar. Flag spots are learned in play, from
+-- the players who assault them, and saved per map in AutoBG_Settings.FlagSpots.
 
 local Targets = AutoBG_Targets
 if not Targets or not Targets.GetEnemy then return end
@@ -27,7 +29,7 @@ for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
 
 local active, mapID, enemyFaction, ticker, playerGUID
 local nodeHolder = {} -- node -> faction holding it or taking it
-local watch = {}      -- enemy name -> { y, x, still, node, warnedNode, warnedAt }
+local watch = {}      -- enemy name -> { y, x, still, fresh, dead, node, warnedNode, warnedAt }
 local ownOpeningAt = 0
 local openingBySpell = {} -- spell ID -> whether it is an Opening cast
 
@@ -140,10 +142,13 @@ local function Tick()
 			if w.y then
 				local dy, dx = y - w.y, x - w.x
 				moved = dy * dy + dx * dx >= STILL_SQUARED
-				if moved then w.dead = nil end
+				if moved then w.dead, w.fresh = nil, nil end
+			else
+				-- Just came into sight: out of stealth, unless they were dead.
+				w.fresh = not w.dead
 			end
 			w.y, w.x = y, x
-			if node and not moved and not w.dead and nodeHolder[node] ~= enemyFaction then
+			if node and not moved and w.fresh and nodeHolder[node] ~= enemyFaction then
 				w.still = w.still + 1
 				if w.still >= STILL_TICKS then Warn(name, node, classToken, guid, now) end
 			else
@@ -151,7 +156,8 @@ local function Tick()
 				if w.node then ClearWarning(name) end
 			end
 		elseif w then
-			w.y, w.x, w.still = nil, nil, 0
+			-- Gone from sight: when they come back the server sends where they are.
+			w.y, w.x, w.still, w.dead = nil, nil, 0, nil
 			if w.node then ClearWarning(name) end
 		end
 	end
