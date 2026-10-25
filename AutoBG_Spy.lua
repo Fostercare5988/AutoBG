@@ -593,22 +593,32 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	if Targets and Targets.activeBG then return end
 
 	local now = GetTime()
+	local idx = nameToTrackIndex[name]
+	-- A full list makes room only from an enemy unseen for a while (a dimmed
+	-- row). Pushing out someone still in view brought them straight back on
+	-- top and pushed out the next one, so crowds kept the list jumping.
+	local slot = activeEnemyCount + 1
+	if not idx and activeEnemyCount >= MAX_SPY_ENEMIES then
+		slot = 1
+		for i = 2, activeEnemyCount do
+			if trackedEnemies[i].lastSeen < trackedEnemies[slot].lastSeen then slot = i end
+		end
+		local oldest = trackedEnemies[slot]
+		if not oldest.dead and now - oldest.lastSeen <= ACTIVE_WINDOW and not Spy:IsKoS(name) then return end
+	end
 	local contact = GetContact(name, guid)
 	local recentlySeen = contact.lastSeen and now - contact.lastSeen < 120
 	contact.lastSeen = now
-	local idx = nameToTrackIndex[name]
 	local isNew = false
 
 	local e
 	if not idx then
-		if activeEnemyCount < MAX_SPY_ENEMIES then
-			activeEnemyCount = activeEnemyCount + 1
-		end
-		e = trackedEnemies[activeEnemyCount]
+		if slot > activeEnemyCount then activeEnemyCount = slot end
+		e = trackedEnemies[slot]
 		if e.name then nameToTrackIndex[e.name] = nil end
 		if e.guid and guidToName[e.guid] == e.name then guidToName[e.guid] = nil end
 		if e.name and nameToGUID[e.name] == e.guid then nameToGUID[e.name] = nil end
-		for i = activeEnemyCount, 2, -1 do
+		for i = slot, 2, -1 do
 			trackedEnemies[i] = trackedEnemies[i - 1]
 			nameToTrackIndex[trackedEnemies[i].name] = i
 		end
@@ -857,8 +867,10 @@ local function SpyRow_OnClick(self, button)
 	end
 end
 
+local hoverTimer
 local function SpyRow_OnEnter(self)
 	local b = self or this
+	Spy.hovered = true
 	if not b.targetName then return end
 	GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
 	GameTooltip:ClearLines()
@@ -914,6 +926,13 @@ end
 
 local function SpyRow_OnLeave(self)
 	GameTooltip:Hide()
+	Spy.hovered = false
+	-- Moving to the next row enters it at once; reorder only once the mouse has left.
+	if hoverTimer then hoverTimer:Cancel() end
+	hoverTimer = C_Timer.NewTimer(0.4, function()
+		hoverTimer = nil
+		if not Spy.hovered then Spy:RenderRows() end
+	end)
 end
 
 function Spy:CreateFrames()
@@ -1119,6 +1138,66 @@ end
 -- -------------------------------------------------------------------------- --
 -- Render Spy Rows                                                            --
 -- -------------------------------------------------------------------------- --
+-- Shows one tracked enemy on one row; unchanged values are not rewritten.
+local function FillRow(row, data)
+	local nameChanged = row.targetName ~= data.name
+	local classChanged = nameChanged or row.targetClass ~= data.classToken
+	local levelChanged = classChanged or row.targetLevel ~= data.level
+	local iconChanged = classChanged or row.targetStealth ~= data.isStealthed or row.targetStealthSpell ~= data.stealthSpell
+	row.targetName, row.targetGUID = data.name, data.guid
+	local contact = contactByName[data.name]
+	row.targetClass, row.targetRace = data.classToken, data.race or (contact and contact.race)
+	row.targetLevel, row.targetHealth = data.level, data.healthPct
+	row.targetStealth, row.targetStealthSpell = data.isStealthed, data.stealthSpell
+	row.targetLastSeen = data.lastSeen
+	row.targetDead = data.dead
+	local inactive = data.inactive and true or false
+	if row.inactive ~= inactive then
+		row.inactive = inactive
+		row:SetAlpha(inactive and 0.45 or 1)
+	end
+
+	if classChanged then
+		local color = Targets.GetClassColor(data.classToken)
+		row.StatusBar:SetVertexColor(color.r, color.g, color.b, 1)
+		row.Bg:SetTexture(0.12 + color.r * 0.30, 0.12 + color.g * 0.30, 0.12 + color.b * 0.30, 1)
+	end
+	if nameChanged then row.NameText:SetText(data.shortName or data.name) end
+	local pct = data.dead and 0 or (data.healthPct or 100)
+	if row.barPct ~= pct then
+		row.barPct = pct
+		row.StatusBar:SetWidth(math.max(0.01, (SPY_WIDTH) * pct / 100))
+	end
+	row.targetYards = data.yards
+	local yardsText = data.yards and (data.yards .. "y") or ""
+	if row.yardsText ~= yardsText then row.yardsText = yardsText; row.Yards:SetText(yardsText) end
+	local kos = Spy:IsKoS(data.name)
+	if row.kos ~= kos then
+		row.kos = kos
+		if kos then row.NameText:SetTextColor(1, 0.3, 0.3) else row.NameText:SetTextColor(1, 1, 1) end
+	end
+	if levelChanged then
+		local level = data.level and data.level > 0 and tostring(data.level) or "??"
+		row.Details:SetText(level .. " " .. (FormatClass(data.classToken) or ""))
+	end
+	if iconChanged then
+		if data.isStealthed then
+			local _, _, texture = Targets.CheckIsStealthName(data.stealthSpell or "Stealth")
+			row.Icon:SetTexture(texture)
+			row.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+			row.Icon:Show()
+		else
+			local uv = data.classToken and CLASS_ICON_COORDS[data.classToken]
+			if uv then
+				row.Icon:SetTexture(CLASS_ICON_TEXTURE)
+				row.Icon:SetTexCoord(uv[1], uv[2], uv[3], uv[4])
+				row.Icon:Show()
+			else row.Icon:Hide() end
+		end
+	end
+	if not row:IsShown() then row:Show() end
+end
+
 function Spy:RenderRows()
 	if renderTimer then renderTimer:Cancel(); renderTimer = nil end
 	if FlushObservations then FlushObservations() end
@@ -1128,6 +1207,18 @@ function Spy:RenderRows()
 	if not opt.Enabled or (Targets and Targets.activeBG) or Spy:IsRaidDisabled() then
 		f:Hide()
 		if not (Targets and Targets.activeBG) then Spy:HideAlert() end
+		return
+	end
+
+	-- Under the mouse the rows hold their order, so a click hits the name you
+	-- aimed at. Shown enemies still update; one who left dims, newcomers wait.
+	if Spy.hovered and f:IsShown() and (f.shownCount or 0) > 0 then
+		for i = 1, f.shownCount do
+			local row = f.rows[i]
+			local idx = row.targetName and nameToTrackIndex[row.targetName]
+			if idx then FillRow(row, trackedEnemies[idx])
+			elseif not row.inactive then row.inactive = true; row:SetAlpha(0.45) end
+		end
 		return
 	end
 
@@ -1142,65 +1233,8 @@ function Spy:RenderRows()
 	if f:GetWidth() ~= width then f:SetWidth(width) end
 	if f:GetHeight() ~= height then f:SetHeight(height) end
 
-	for i = 1, visibleCount do
-		local row, data = f.rows[i], trackedEnemies[i]
-		local nameChanged = row.targetName ~= data.name
-		local classChanged = nameChanged or row.targetClass ~= data.classToken
-		local levelChanged = classChanged or row.targetLevel ~= data.level
-		local iconChanged = classChanged or row.targetStealth ~= data.isStealthed or row.targetStealthSpell ~= data.stealthSpell
-		row.targetName, row.targetGUID = data.name, data.guid
-		local contact = contactByName[data.name]
-		row.targetClass, row.targetRace = data.classToken, data.race or (contact and contact.race)
-		row.targetLevel, row.targetHealth = data.level, data.healthPct
-		row.targetStealth, row.targetStealthSpell = data.isStealthed, data.stealthSpell
-		row.targetLastSeen = data.lastSeen
-		row.targetDead = data.dead
-		local inactive = data.inactive and true or false
-		if row.inactive ~= inactive then
-			row.inactive = inactive
-			row:SetAlpha(inactive and 0.45 or 1)
-		end
-
-		if classChanged then
-			local color = Targets.GetClassColor(data.classToken)
-			row.StatusBar:SetVertexColor(color.r, color.g, color.b, 1)
-			row.Bg:SetTexture(0.12 + color.r * 0.30, 0.12 + color.g * 0.30, 0.12 + color.b * 0.30, 1)
-		end
-		if nameChanged then row.NameText:SetText(data.shortName or data.name) end
-		local pct = data.dead and 0 or (data.healthPct or 100)
-		if row.barPct ~= pct then
-			row.barPct = pct
-			row.StatusBar:SetWidth(math.max(0.01, (SPY_WIDTH) * pct / 100))
-		end
-		row.targetYards = data.yards
-		local yardsText = data.yards and (data.yards .. "y") or ""
-		if row.yardsText ~= yardsText then row.yardsText = yardsText; row.Yards:SetText(yardsText) end
-		local kos = Spy:IsKoS(data.name)
-		if row.kos ~= kos then
-			row.kos = kos
-			if kos then row.NameText:SetTextColor(1, 0.3, 0.3) else row.NameText:SetTextColor(1, 1, 1) end
-		end
-		if levelChanged then
-			local level = data.level and data.level > 0 and tostring(data.level) or "??"
-			row.Details:SetText(level .. " " .. (FormatClass(data.classToken) or ""))
-		end
-		if iconChanged then
-			if data.isStealthed then
-				local _, _, texture = Targets.CheckIsStealthName(data.stealthSpell or "Stealth")
-				row.Icon:SetTexture(texture)
-				row.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-				row.Icon:Show()
-			else
-				local uv = data.classToken and CLASS_ICON_COORDS[data.classToken]
-				if uv then
-					row.Icon:SetTexture(CLASS_ICON_TEXTURE)
-					row.Icon:SetTexCoord(uv[1], uv[2], uv[3], uv[4])
-					row.Icon:Show()
-				else row.Icon:Hide() end
-			end
-		end
-		if not row:IsShown() then row:Show() end
-	end
+	for i = 1, visibleCount do FillRow(f.rows[i], trackedEnemies[i]) end
+	f.shownCount = visibleCount
 	for i = visibleCount + 1, MAX_SPY_ROWS do
 		if f.rows[i]:IsShown() then f.rows[i]:Hide() end
 	end

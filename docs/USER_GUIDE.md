@@ -108,7 +108,10 @@ are suppressed.
 Open `/abg spy`. The list shows recent enemy names, levels and classes.
 Hover for race, health, stealth state and observation age. New enemies enter at
 the top; further activity updates their existing row. Up to 20 enemies are
-tracked; **Enemies shown** controls the visible portion.
+tracked; when the list is full, a newcomer takes the place of an enemy you
+have not seen for a while, never one still in view. While your mouse is over
+the list it holds still, so a click hits the name you aimed at.
+**Enemies shown** controls the visible portion.
 **Forget after** expires quiet rows. **Hide when empty** hides the
 empty list. **Disable in raids** (on by default) turns the list and its alerts
 off inside raids; `/abg spy raids` toggles it. **Clear list** clears observations without resetting recent alerts.
