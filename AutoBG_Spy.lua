@@ -58,25 +58,34 @@ local SPY_DEFAULTS = {
 	Enabled = true, SoundAlert = false, StealthAlert = true, StealthProximityOnly = true,
 	AutoHide = false, Timeout = 30, MaxRows = 5, Scale = 1.0, DisableInRaids = true,
 }
+-- Defaults are filled once per settings table; every event reads the cached one.
+local spySettings
 local function GetSpySettings()
+	local saved = AutoBG_Settings and AutoBG_Settings.Spy
+	if saved and saved == spySettings then return saved end
 	if not AutoBG_Settings then AutoBG_Settings = {} end
 	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
 	for key, value in pairs(SPY_DEFAULTS) do
 		if AutoBG_Settings.Spy[key] == nil then AutoBG_Settings.Spy[key] = value end
 	end
-	return AutoBG_Settings.Spy
+	spySettings = AutoBG_Settings.Spy
+	return spySettings
 end
 
 function Spy:EnsureOptions()
 	return GetSpySettings()
 end
 
-function Spy:IsRaidDisabled()
-	local opt = GetSpySettings()
-	if not opt or not opt.DisableInRaids then return false end
-	if not IsInInstance then return false end
+-- The instance type changes only behind a loading screen; it is read on world
+-- and zone events, so the event path checks a cached flag.
+local inRaid = false
+local function UpdateInstanceState()
 	local inInstance, instanceType = IsInInstance()
-	return (inInstance and instanceType == "raid") and true or false
+	inRaid = (inInstance and instanceType == "raid") and true or false
+end
+
+function Spy:IsRaidDisabled()
+	return inRaid and GetSpySettings().DisableInRaids and true or false
 end
 
 -- Kill on sight, ignore and encounter statistics are saved account-wide, keyed
@@ -255,7 +264,7 @@ end
 
 local function MaintainTicker()
 	local opt = GetSpySettings()
-	if opt.Enabled and not Spy.isTestMode and not (Targets and Targets.activeBG) then
+	if opt.Enabled and not Spy.isTestMode and not (Targets and Targets.activeBG) and not Spy:IsRaidDisabled() then
 		if not purgeTicker then purgeTicker = C_Timer.NewTicker(1, OnSpyTick) end
 	else
 		StopTicker()
@@ -1581,7 +1590,6 @@ eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_LOGOUT")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-eventFrame:RegisterEvent("ZONE_CHANGED")
 eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 eventFrame:RegisterEvent("UNIT_CASTEVENT")
@@ -1606,17 +1614,18 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 	else
 		event, arg1, arg2, arg3, arg4, arg5 = _G.event, _G.arg1, _G.arg2, _G.arg3, _G.arg4, _G.arg5
 	end
-	if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" or event == "ZONE_CHANGED" then
-		if Spy:IsRaidDisabled() then
-			ClearObservations()
-			Spy:ClearHistory()
-			StopTicker()
-			Spy:HideAlert()
-			if Spy.Frame then Spy.Frame:Hide() end
-		else
+	if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
+		-- A loading screen starts a fresh list; a new area keeps it unless it is a
+		-- raid where Spy is off. Subzone changes never touch the list.
+		local wasDisabled = Spy:IsRaidDisabled()
+		UpdateInstanceState()
+		if event == "PLAYER_ENTERING_WORLD" then
 			Spy:ClearHistory()
 			UpdateGroupRoster()
-			if Spy.RenderRows then Spy:RenderRows() end
+		elseif Spy:IsRaidDisabled() and not wasDisabled then
+			Spy:ClearHistory()
+		else
+			Spy:RenderRows()
 		end
 		return
 	end
