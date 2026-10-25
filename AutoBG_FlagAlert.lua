@@ -64,7 +64,8 @@ end
 function FlagAlert:Show(name, classToken, guid, node)
 	if FlagAlert.isPreview then return end
 	Present(name, classToken, guid, node)
-	PlaySound("RaidWarning")
+	-- Its own sound: the stealth warning plays RaidWarning.
+	PlaySound("igPVPUpdate")
 end
 
 -- The preview keeps a sample warning up so it can be dragged into place.
