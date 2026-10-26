@@ -180,7 +180,7 @@ local defaultSettings = {
     AutoRelease = true, ABTimers = true,
     AVTimers = true, RessTimer = true, QueueTimers = true,
     FCFrame = true, WSGTimers = true,
-    TestAllTimers = false, LastPlayedBG = nil,
+    LastPlayedBG = nil,
     Positions = {}, SkipIfAFK = true,
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
     StartTimer = true,
@@ -894,8 +894,12 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
                 if AutoBG_Settings[k] == nil then AutoBG_Settings[k] = v end
             end
         end
-        -- Blood Ring was removed: OctoWoW has no queue type for it.
+        -- Blood Ring was removed: OctoWoW has no queue type for it. Thorn Gorge
+        -- has no auto-queue switch either.
         AutoBG_Settings.AutoQueue_BR = nil
+        AutoBG_Settings.AutoQueue_TG = nil
+        -- The frame preview is never kept: a reload during it starts clean.
+        AutoBG_Settings.TestAllTimers = nil
         -- Dynamic invite window clobbered by early leaves is retired.
         AutoBG_Settings.InviteWindow = nil
         -- Older/manual SavedVariables must not break queue comparisons or sliders.
@@ -918,7 +922,8 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
         end
 
         if AutoBG_Spy and AutoBG_Spy.EnsureOptions then
-            AutoBG_Spy:EnsureOptions()
+            -- A finished list-order migration left its marker behind.
+            AutoBG_Spy:EnsureOptions().StableRowsMigration = nil
         end
 
         AutoBG_MigratePositions()
@@ -1057,8 +1062,7 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
 
     elseif ev == "PLAYER_DEAD" then
         if AutoBG_Settings and AutoBG_Settings.AutoRelease and currentZonePVP then
-            local hasSS = (HasSoulstone and HasSoulstone()) or (CanUseSoulstone and CanUseSoulstone())
-            if not hasSS then
+            if not HasSoulstone() then
                 RepopMe()
                 if StaticPopup_Hide then StaticPopup_Hide("DEATH") end
             else
@@ -1259,19 +1263,14 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "reset" then
         AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg proj, /abg targets, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg targets, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
     else
-        if AutoBG_OpenOptions then
-            AutoBG_OpenOptions("general")
-        elseif AutoBG_OptionsPanel then
-            if AutoBG_OptionsPanel:IsShown() then AutoBG_OptionsPanel:Hide() else AutoBG_OptionsPanel:Show() end
-        end
+        AutoBG_OpenOptions("general")
     end
 end
 
--- Backwards-compatibility slash command: /bgt and /battlegroundtargets
+-- /bgt: enemy frames and Spy shortcuts.
 SLASH_BATTLEGROUNDTARGETS1 = "/bgt"
-SLASH_BATTLEGROUNDTARGETS2 = "/battlegroundtargets"
 SlashCmdList["BATTLEGROUNDTARGETS"] = function(msg)
     local raw = (msg and string.gsub(msg, "^%s*(.-)%s*$", "%1")) or ""
     local space = string.find(raw, " ")
@@ -1298,12 +1297,8 @@ SlashCmdList["BATTLEGROUNDTARGETS"] = function(msg)
         end
         AutoBG_Print("Enemy frames and Spy positions reset to defaults.", true)
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00BattlegroundTargets (AutoBG):|r /bgt, /bgt test [10|15|40], /bgt spy, /bgt reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG enemy frames:|r /bgt, /bgt test [10|15|40], /bgt spy, /bgt reset", true)
     else
-        if AutoBG_OpenOptions then
-            AutoBG_OpenOptions("targets")
-        elseif AutoBG_OptionsPanel then
-            if AutoBG_OptionsPanel:IsShown() then AutoBG_OptionsPanel:Hide() else AutoBG_OptionsPanel:Show() end
-        end
+        AutoBG_OpenOptions("targets")
     end
 end

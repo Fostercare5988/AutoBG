@@ -71,7 +71,6 @@ local function Seconds(value) return value .. "s" end
 -- Window and tabs                                                            --
 -- -------------------------------------------------------------------------- --
 local panel = UI.Window("AutoBG_OptionsPanel", "AutoBG", WIDTH, 446, GetAddOnMetadata("AutoBG", "Version"))
-BattlegroundTargets_OptionsFrame = panel -- Backwards compatibility alias
 
 local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", {
 	{ label = "General", height = 446 },
@@ -566,7 +565,7 @@ panel:SetScript("OnHide", function()
 end)
 
 -- -------------------------------------------------------------------------- --
--- Public API & Backward Compatibility Exports                                --
+-- Opening the window on a page (/abg, /bgt)                                  --
 -- -------------------------------------------------------------------------- --
 function AutoBG_OpenOptions(tabKey)
 	local requestedTab
@@ -591,8 +590,4 @@ function AutoBG_OpenOptions(tabKey)
 		SelectTab(selectedTab)
 		RefreshTestCaption()
 	end
-end
-
-BattlegroundTargets_ToggleOptions = function()
-	AutoBG_OpenOptions("targets")
 end
