@@ -249,8 +249,8 @@ local function Reset()
 		if w.node then Targets.SetOpening(name, nil) end
 		watch[name] = nil
 	end
-	for node in pairs(nodeHolder) do nodeHolder[node] = nil end
-	for guid in pairs(openers) do openers[guid] = nil end
+	table.wipe(nodeHolder)
+	table.wipe(openers)
 	castAt, castCount = 0, 0
 end
 
