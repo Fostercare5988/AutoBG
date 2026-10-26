@@ -1950,6 +1950,12 @@ function Targets.GetEnemy(i)
 	if e and e.name then return e.name, nameToGUID[e.name], e.classToken end
 end
 function Targets.GetGUID(name) return name and nameToGUID[name] end
+-- The enemy behind a cast's caster GUID: name and class, or nil for anyone else.
+function Targets.EnemyByGUID(guid)
+	local name = RosterNameForGUID(guid)
+	local row = name and nameToRow[name]
+	if row then return name, roster[row].classToken end
+end
 function Targets.SetOpening(name, node)
 	if not name or openingNode[name] == node then return end
 	openingNode[name] = node

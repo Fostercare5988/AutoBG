@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (148 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (161 tests).
 
 | File | Job |
 | --- | --- |
@@ -28,6 +28,8 @@ Things to know:
 - `AutoBG_SetPreview(on)` in Options is the one switch for every preview.
 - Faction colors on timers and the Arathi Basin projection are always on; their
   old settings are cleared on load.
-- A cast started from stealth never reaches the client (the caster is still
-  invisible), so the flag watch warns when an enemy comes into sight at a
-  flag and stands there. Visible openers show on their enemy frame cast bar.
+- The flag watch warns on a visible enemy's Opening cast start (UNIT_CASTEVENT,
+  no enemy frames needed). A cast started from stealth never reaches the
+  client, so it also warns when an enemy comes into sight at a flag and stands
+  there. Spots are learned only from assault messages and lone Opening casts;
+  "taken" messages teach nothing, and spots on top of each other are dropped.
