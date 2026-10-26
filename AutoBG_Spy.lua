@@ -18,10 +18,6 @@ local Targets = AutoBG_Targets
 local _, ns = ...
 local UI = ns.UI
 
--- Backwards-compatibility aliases
-if not BattlegroundTargets then BattlegroundTargets = AutoBG_Targets or {} end
-BattlegroundTargets.Spy = AutoBG_Spy
-
 local MAX_SPY_ENEMIES = 20
 local MAX_SPY_ROWS = 20
 -- Spy's Nearby model: unseen enemies dim first and are removed only after the timeout.
@@ -939,7 +935,6 @@ function Spy:CreateFrames()
 	if Spy.Frame then return end
 
 	local f = CreateFrame("Frame", "AutoBG_SpyFrame", UIParent)
-	BattlegroundTargets_SpyFrame = f -- Compatibility alias
 	f:SetWidth(SPY_WIDTH)
 	f:SetHeight(40)
 	f:SetMovable(true)
@@ -987,7 +982,6 @@ function Spy:CreateFrames()
 	f.rows = {}
 	for i = 1, MAX_SPY_ROWS do
 		local btn = CreateFrame("Button", "AutoBG_SpyRow" .. i, f)
-		_G["BattlegroundTargets_SpyRow" .. i] = btn -- Compatibility alias
 		btn:SetWidth(SPY_WIDTH)
 		btn:SetHeight(ROW_HEIGHT)
 		btn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -LIST_TOP - (i - 1) * ROW_STEP)

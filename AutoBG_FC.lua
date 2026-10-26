@@ -464,23 +464,7 @@ function AutoBG_FC_UpdateVisibility()
     SyncCarrierTicker()
 end
 
--- Public Domain API: Battlefield Flag Carrier Authority
--- Allows any external addon (e.g. BattlegroundTargets, FosterFrames, macros) to query active flag carriers passively.
-function AutoBG_GetCarrier(faction)
-    if not faction then return carrierAlliance, carrierHorde end
-    if type(faction) == "number" then
-        if faction == 0 then return carrierHorde
-        elseif faction == 1 then return carrierAlliance end
-    end
-    local f = string.lower(tostring(faction))
-    if string.find(f, "alli") or f == "a" then
-        return carrierAlliance
-    elseif string.find(f, "horde") or f == "h" then
-        return carrierHorde
-    end
-    return nil
-end
-
+-- The enemy frames read the enemy carrier; /abg efc, ffc and focus use both.
 function AutoBG_GetFriendlyCarrier()
     if UnitFactionGroup("player") == "Horde" then return carrierHorde end
     return carrierAlliance
@@ -507,18 +491,3 @@ end
 
 function AutoBG_TargetCarrier(which) return SelectCarrierByRole(which, false) end
 function AutoBG_FocusCarrier(which) return SelectCarrierByRole(which, true) end
-
-function AutoBG_GetCarrierInfo(faction)
-    local name = AutoBG_GetCarrier(faction)
-    local frame = nil
-    if name then
-        if name == carrierAlliance then frame = AllianceFC
-        elseif name == carrierHorde then frame = HordeFC end
-    end
-    if frame and frame:IsShown() then
-        local hp = frame.healthBar and frame.healthBar:GetValue() or nil
-        local distStr = frame.distText and frame.distText:GetText() or nil
-        return name, hp, distStr, frame.carrierGuid
-    end
-    return name, nil, nil, nil
-end

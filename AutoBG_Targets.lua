@@ -63,7 +63,6 @@ AutoBG_Targets = CreateFrame("Frame", "AutoBG_TargetsCoreFrame", UIParent)
 local Targets = AutoBG_Targets
 local _, ns = ...
 local UI = ns.UI
-BattlegroundTargets = AutoBG_Targets -- Backwards-compatibility alias
 
 Targets.currentSize = 10
 Targets.isConfig = false
@@ -1161,7 +1160,6 @@ function Targets:CreateFrames()
 
 	local main = CreateFrame("Frame", "AutoBG_TargetsMainFrame", UIParent)
 	Targets.MainFrame = main
-	BattlegroundTargets_MainFrame = main -- Compatibility alias
 	main:SetWidth(150)
 	main:SetHeight(20)
 	main:SetMovable(true)

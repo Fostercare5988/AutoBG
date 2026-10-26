@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (161 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (163 tests).
 
 | File | Job |
 | --- | --- |
