@@ -173,7 +173,7 @@ UI.Heading(panelTimers, "Countdowns", 28, -98)
 local cbABTimers = TimerSetting("AutoBG_Opt_ABTimers", "Arathi Basin bases",
 	"Show 60-second capture countdowns for Arathi Basin bases.", -118, "ABTimers")
 local cbAVTimers = TimerSetting("AutoBG_Opt_AVTimers", "Alterac Valley nodes",
-	"Show 5-minute capture countdowns for Alterac Valley towers, bunkers and graveyards.", -144, "AVTimers")
+	"Show 5-minute countdowns for Alterac Valley towers, bunkers, graveyards and mines.", -144, "AVTimers")
 local cbWSGTimers = TimerSetting("AutoBG_Opt_WSGTimers", "Warsong flag respawn",
 	"Show the 23-second flag respawn countdown in Warsong Gulch.", -170, "WSGTimers")
 local cbStartTimer = TimerSetting("AutoBG_Opt_StartTimer", "Match start",
