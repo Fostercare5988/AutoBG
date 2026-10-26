@@ -82,14 +82,13 @@ list out of combat; in combat it stays locked, so a stray click cannot move it.
 - **Raid icons:** skull, cross and the other raid icons your group sets.
 - **Who's on them:** an orange number beside the health shows how many of your
   group, you included, target that enemy.
-- **Flag warnings:** in Arathi Basin and Alterac Valley, an enemy who comes
-  out of stealth at a flag their team does not hold gets a warning ("Opening
-  Blacksmith"), its own sound and a red OPENING on their row. An opening
-  started from stealth sends no cast bar, so this is the only sign of it. An
-  enemy who walks up in plain sight gets no warning; their Opening shows on
-  their enemy frame's cast bar. AutoBG learns where
-  each flag is from the players who assault it, so it needs a game or two
-  first; in Alterac Valley it learns from your own assaults. The warning has
+- **Flag warnings:** in Arathi Basin and Alterac Valley, an enemy you can see
+  starting an Opening gets a warning ("Opening Blacksmith"), its own sound and
+  a red OPENING on their row, with or without enemy frames. An opening started
+  from stealth sends no cast, so an enemy who comes out of stealth at a flag
+  their team does not hold and stands there warns too. AutoBG learns where
+  each flag is from the players who assault it and from Opening casts it sees,
+  so a flag it has not learned yet shows as "Opening a flag". The warning has
   its own popup, apart from the stealth warning, so you can place each. Its
   icon is the Opening spell, learned the first time AutoBG sees one cast
   (a question mark until then). Ctrl + left-click the popup, or a row marked
