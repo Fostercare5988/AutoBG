@@ -46,7 +46,10 @@ independent controls. These controls do not govern Spy alerts.
 
 The Timers page controls AB and AV captures (AV mines count 5 minutes from the
 moment they are taken), WSG flag respawns, gate opening,
-queue waits, spirit-healer waves and AB victory estimates. Adjust countdown width,
+queue waits, spirit-healer waves and AB victory estimates. Every timer is a bar
+with its side's banner (red Horde, blue Alliance), the time first ("21" under a
+minute, "1:51" above, gold in the last seconds) and the name after it. Queue
+bars fill toward the estimated wait. Adjust countdown width,
 height, scale and opacity there. Ctrl + left-click a timer announces its remaining
 time to battleground chat.
 

@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (163 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (169 tests).
 
 | File | Job |
 | --- | --- |
@@ -14,7 +14,7 @@ Regression tests: `regressions/AutoBG` in VanillaForge (163 tests).
 | `AutoBG_AlertCard.lua` | The popup card kit (`ns.CreateAlertCard`); the stealth and flag warnings each own one |
 | `AutoBG_Spy.lua` | Enemy list and stealth alerts outside battlegrounds; off in raids by default |
 | `AutoBG_FlagAlert.lua` | The flag warning card, Ctrl+click announce; learns the Opening spell (`AutoBG_Settings.OpeningSpell`) |
-| `AutoBG_FlagWatch.lua` | AB/AV watch: a visible enemy standing still at a flag; learns flag spots per map (`AutoBG_Settings.FlagSpots`) |
+| `AutoBG_FlagWatch.lua` | AB/AV watch: enemy Opening casts and enemies out of stealth at a flag; learns flag spots per map (`AutoBG_Settings.FlagSpots`) |
 | `AutoBG_Options.lua` | Settings window, tabs General, Timers, Enemy frames, Spy |
 
 Things to know:
@@ -28,6 +28,11 @@ Things to know:
 - `AutoBG_SetPreview(on)` in Options is the one switch for every preview.
 - Faction colors on timers and the Arathi Basin projection are always on; their
   old settings are cleared on load.
+- Every timer (objectives, match start, respawn, queues) is a row from one
+  factory in `AutoBG_Timers.lua`: banner icon (`INV_BannerPVP_01` Horde,
+  `_02` Alliance), `Textures\Gloss.tga` bar, cast-bar spark, BigWigs clock
+  ("21", "1:51"). Rows drain and change their text in `OnUpdate`; the logic
+  ticker runs once a second. The frame preview is never saved.
 - The flag watch warns on a visible enemy's Opening cast start (UNIT_CASTEVENT,
   no enemy frames needed). A cast started from stealth never reaches the
   client, so it also warns when an enemy comes into sight at a flag and stands

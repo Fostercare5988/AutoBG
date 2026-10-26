@@ -70,23 +70,34 @@ local RAID_UNITS = {}
 for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
 
 -- =========================================================
--- Shared Bar Timer Frame Factory
+-- Timer bars: one look for every countdown
 -- =========================================================
-local FONT             = "Fonts\\FRIZQT__.TTF"
-local BAR_TEXTURE      = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
-local ALLIANCE_FLAG_TEX = "Interface\\WorldStateFrame\\AllianceFlag"
-local HORDE_FLAG_TEX   = "Interface\\WorldStateFrame\\HordeFlag"
-
-local NEUTRAL_ICON     = "Interface\\Icons\\INV_Misc_PocketWatch_01"
-local BAR_ROW_GAP      = 2
-local BAR_TITLE_H      = 15
+-- Each row: the side's banner as its icon, then a glossy bar in the side's
+-- color that drains with a spark at its edge, the time in a fixed column on
+-- the left and the name after it. A one-pixel black line frames icon and bar.
+-- Objectives, the match start, the respawn wave and queue waits all use it.
+local FONT          = "Fonts\\FRIZQT__.TTF"
+local NAME_FONT     = "Fonts\\ARIALN.TTF"
+local BAR_TEXTURE   = [[Interface\AddOns\AutoBG\Textures\Gloss]]
+local SPARK_TEXTURE = "Interface\\CastingBar\\UI-CastingBar-Spark"
+local ALLIANCE_ICON = "Interface\\Icons\\INV_BannerPVP_02"
+local HORDE_ICON    = "Interface\\Icons\\INV_BannerPVP_01"
+local NEUTRAL_ICON  = "Interface\\Icons\\INV_Misc_PocketWatch_01"
+local RESPAWN_ICON  = "Interface\\Icons\\Spell_Holy_Resurrection"
+local BAR_ROW_GAP   = 2
+local BAR_TITLE_H   = 15
 local BAR_COLORS = {
-    Alliance = { 0.20, 0.46, 0.86 },
-    Horde    = { 0.80, 0.20, 0.17 },
-    neutral  = { 0.80, 0.62, 0.18 },
+    Alliance = { 0.18, 0.42, 0.95 },
+    Horde    = { 0.88, 0.17, 0.15 },
+    neutral  = { 0.86, 0.64, 0.16 },
+    spirit   = { 0.38, 0.76, 0.95 },
 }
+local TRACK_SHADE  = 0.22 -- the empty part of a bar: its own color, dark
+local TIME_COLOR   = { 1, 1, 1 }
+local URGENT_COLOR = { 1, 0.80, 0.25 }
 
--- Icon tile on the left, slim draining bar on the right; one dark frame around both.
+local RenderTimers -- forward declaration: a row that runs out re-sorts its group
+
 local function LayoutTimerRow(row, width, height)
     row:SetWidth(width)
     row:SetHeight(height)
@@ -95,15 +106,23 @@ local function LayoutTimerRow(row, width, height)
     row.bar:ClearAllPoints()
     row.bar:SetPoint("TOPLEFT", row, "TOPLEFT", height, -1)
     row.bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 1)
-    local fontSize = math.max(9, math.min(14, math.floor(height * 0.52)))
-    row.labelFs:SetFont(FONT, fontSize, "OUTLINE")
-    row.timeFs:SetFont(FONT, fontSize, "OUTLINE")
+    row.barWidth = width - height - 1
+    row.spark:SetWidth(math.floor(height * 0.9))
+    row.spark:SetHeight(height * 2)
+    local fontSize = math.max(9, math.min(15, math.floor(height * 0.5)))
+    local timeWidth = math.floor(fontSize * 2.8)
+    row.timeFs:SetFont(FONT, fontSize)
+    row.timeFs:SetWidth(timeWidth)
+    row.labelFs:SetFont(NAME_FONT, fontSize + 2)
+    row.labelFs:SetPoint("LEFT", row.bar, "LEFT", timeWidth + 8, 0)
+    row.displaySec = nil
 end
 
--- Presentation settings affect objective groups only; stored anchors remain unchanged.
+-- Presentation settings; stored anchors remain unchanged. widthScale makes
+-- the respawn and queue bars narrower than the objective groups.
 local function ApplyObjectiveAppearance(frame)
     local settings = AutoBG_Settings or {}
-    local width = math.max(180, math.min(420, tonumber(settings.ObjectiveWidth) or 225))
+    local width = math.floor(math.max(180, math.min(420, tonumber(settings.ObjectiveWidth) or 225)) * frame.widthScale)
     local height = math.max(18, math.min(32, tonumber(settings.ObjectiveHeight) or 25))
     local scale = math.max(0.60, math.min(1.50, tonumber(settings.ObjectiveScale) or 1))
     local opacity = math.max(0.20, math.min(1, tonumber(settings.ObjectiveOpacity) or 0.9))
@@ -111,6 +130,7 @@ local function ApplyObjectiveAppearance(frame)
         frame:SetWidth(width)
         frame.rowHeight = height
         frame.appearanceWidth = width
+        frame.displayHeight = nil
         for i = 1, #frame.rows do
             LayoutTimerRow(frame.rows[i], width, height)
         end
@@ -119,21 +139,152 @@ local function ApplyObjectiveAppearance(frame)
     if frame.appearanceOpacity ~= opacity then frame:SetAlpha(opacity); frame.appearanceOpacity = opacity end
 end
 
--- This render-only handler runs only while its group is shown.
--- Event/timer logic still owns expiry, sorting, labels and announcements.
-local function AnimateObjectiveFill()
+-- Moves the fill and its spark; runs every frame while a bar drains.
+local function SetRowValue(row, value)
+    row.bar:SetValue(value)
+    local share = (row.fillDuration and row.fillDuration > 0) and value / row.fillDuration or 0
+    if share > 0.01 and share < 0.99 then
+        row.spark:SetPoint("CENTER", row.bar, "LEFT", row.barWidth * share, 0)
+        if not row.sparkShown then row.spark:Show(); row.sparkShown = true end
+    elseif row.sparkShown then
+        row.spark:Hide()
+        row.sparkShown = false
+    end
+end
+
+-- "21" under a minute, "1:51" from a minute up, as BigWigs shows them.
+local function FormatClock(seconds)
+    if seconds < 60 then return tostring(seconds) end
+    local m = math.floor(seconds / 60)
+    local s = seconds - m * 60
+    return (s < 10) and (m .. ":0" .. s) or (m .. ":" .. s)
+end
+
+-- Rewrites the time only when the shown second changes.
+local function SetRowClock(row, seconds)
+    local sec = row.roundUp and math.ceil(seconds) or math.floor(seconds)
+    if sec < 0 then sec = 0 end
+    if row.displaySec == sec then return end
+    row.displaySec = sec
+    local text = FormatClock(sec)
+    row.timeFs:SetText((row.clockPrefix or "") .. text)
+    local urgent = (row.urgentAt and sec <= row.urgentAt) and true or false
+    if row.displayUrgent ~= urgent then
+        local c = urgent and URGENT_COLOR or TIME_COLOR
+        row.timeFs:SetTextColor(c[1], c[2], c[3])
+        row.displayUrgent = urgent
+    end
+    row.announceText = (row.announceName or "") .. ": " .. text
+end
+
+-- Animation only: the shown rows drain every frame. A row that runs out asks
+-- for one render, which drops it or starts its next cycle.
+local function AnimateTimerRows()
     local frame = this
     local now = GetTime()
-    for i = 1, #frame.rows do
+    for i = 1, frame.activeCount or 0 do
         local row = frame.rows[i]
-        if row:IsShown() and row.fillExpiry then
-            row.bar:SetValue(math.max(0, row.fillExpiry - now))
+        local expiry = row.fillExpiry
+        if expiry then
+            local remaining = expiry - now
+            if remaining <= 0 then
+                if RenderTimers then RenderTimers() end
+                return
+            end
+            SetRowValue(row, remaining)
+            SetRowClock(row, remaining)
         end
     end
 end
 
-local function CreateBarTimerFrame(name, titleText, xOffset, yOffset, maxRows, defaultIcon)
-    local width, rowHeight = 260, 22
+local function OnRowEnter()
+    if not this.announceText or this.announceText == "" then return end
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    GameTooltip:SetText(this.announceText, 1, 1, 1)
+    if this.estText then GameTooltip:AddLine(this.estText, 0.9, 0.9, 0.5) end
+    GameTooltip:AddLine("Ctrl-click: announce in chat", 0.7, 0.7, 0.7)
+    GameTooltip:Show()
+end
+
+local function OnRowLeave() GameTooltip:Hide() end
+
+local function OnRowClick()
+    if IsControlKeyDown() and this.announceText then AutoBG_SendAnnouncement(this.announceText) end
+end
+
+local function CreateTimerRow(frame, name)
+    local row = CreateFrame("Button", name, frame)
+    row:EnableMouse(true)
+    row:RegisterForClicks("LeftButtonUp")
+    row:RegisterForDrag("LeftButton")
+    row:SetScript("OnDragStart", function()
+        GameTooltip:Hide()
+        frame:StartMoving()
+    end)
+    row:SetScript("OnDragStop", function()
+        frame:StopMovingOrSizing()
+        if AutoBG_SavePosition then AutoBG_SavePosition(frame, frame:GetName()) end
+    end)
+    row:SetScript("OnClick", OnRowClick)
+    row:SetScript("OnEnter", OnRowEnter)
+    row:SetScript("OnLeave", OnRowLeave)
+
+    -- Black behind everything: the frame line and the gap between icon and bar.
+    local back = row:CreateTexture(nil, "BACKGROUND")
+    back:SetAllPoints(row)
+    back:SetTexture(0, 0, 0, 0.85)
+
+    local icon = row:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", row, "TOPLEFT", 1, -1)
+    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    row.icon = icon
+
+    local bar = CreateFrame("StatusBar", name .. "Bar", row)
+    bar:SetStatusBarTexture(BAR_TEXTURE)
+    bar:SetMinMaxValues(0, 1)
+    bar:SetValue(1)
+    bar:EnableMouse(false)
+    row.bar = bar
+
+    local track = bar:CreateTexture(nil, "BACKGROUND")
+    track:SetAllPoints(bar)
+    track:SetTexture(BAR_TEXTURE)
+    row.track = track
+
+    -- Spark and text sit on their own layer above the fill.
+    local top = CreateFrame("Frame", nil, bar)
+    top:SetAllPoints(bar)
+
+    local spark = top:CreateTexture(nil, "ARTWORK")
+    spark:SetTexture(SPARK_TEXTURE)
+    spark:SetBlendMode("ADD")
+    spark:SetAlpha(0.8)
+    spark:Hide()
+    row.spark, row.sparkShown = spark, false
+
+    local timeFs = top:CreateFontString(nil, "OVERLAY")
+    timeFs:SetPoint("LEFT", bar, "LEFT", 5, 0)
+    timeFs:SetJustifyH("LEFT")
+    timeFs:SetShadowOffset(1, -1)
+    timeFs:SetShadowColor(0, 0, 0, 1)
+    row.timeFs = timeFs
+
+    local labelFs = top:CreateFontString(nil, "OVERLAY")
+    labelFs:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
+    labelFs:SetJustifyH("LEFT")
+    labelFs:SetShadowOffset(1, -1)
+    labelFs:SetShadowColor(0, 0, 0, 1)
+    row.labelFs = labelFs
+
+    LayoutTimerRow(row, frame:GetWidth(), frame.rowHeight)
+    timeFs:SetTextColor(1, 1, 1)
+    labelFs:SetTextColor(1, 1, 1)
+    row:Hide()
+    return row
+end
+
+local function CreateBarTimerFrame(name, titleText, xOffset, yOffset, maxRows, defaultIcon, widthScale)
+    local width, rowHeight = 225, 25
     local titleHeight = titleText and BAR_TITLE_H or 0
     local frame = CreateFrame("Frame", name, UIParent)
     frame:SetWidth(width)
@@ -141,6 +292,7 @@ local function CreateBarTimerFrame(name, titleText, xOffset, yOffset, maxRows, d
     frame.rowHeight = rowHeight
     frame.headerHeight = titleHeight
     frame.defaultIcon = defaultIcon or NEUTRAL_ICON
+    frame.widthScale = widthScale or 1
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
@@ -154,290 +306,102 @@ local function CreateBarTimerFrame(name, titleText, xOffset, yOffset, maxRows, d
     frame:Hide()
 
     if titleText then
-        local titleFs = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        titleFs:SetFont(FONT, 10, "OUTLINE")
-        titleFs:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+        local titleFs = frame:CreateFontString(nil, "OVERLAY")
+        titleFs:SetFont(NAME_FONT, 12)
+        titleFs:SetShadowOffset(1, -1)
+        titleFs:SetShadowColor(0, 0, 0, 1)
+        titleFs:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, 0)
         titleFs:SetJustifyH("LEFT")
+        titleFs:SetTextColor(0.95, 0.82, 0.55)
         titleFs:SetText(titleText)
-        titleFs:SetTextColor(0.86, 0.84, 0.78)
         frame.titleFs = titleFs
     end
 
     frame.rows = {}
     for i = 1, maxRows do
-        local row = CreateFrame("Button", name .. "Row" .. i, frame)
+        local row = CreateTimerRow(frame, name .. "Row" .. i)
         if i == 1 then
             row:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -titleHeight)
         else
             row:SetPoint("TOPLEFT", frame.rows[i - 1], "BOTTOMLEFT", 0, -BAR_ROW_GAP)
         end
-        row:EnableMouse(true)
-        row:RegisterForClicks("LeftButtonUp")
-        row:RegisterForDrag("LeftButton")
-        row:SetScript("OnDragStart", function()
-            GameTooltip:Hide()
-            frame:StartMoving()
-        end)
-        row:SetScript("OnDragStop", function()
-            frame:StopMovingOrSizing()
-            if AutoBG_SavePosition then AutoBG_SavePosition(frame, name) end
-        end)
-        row:SetScript("OnClick", function()
-            if IsControlKeyDown() and this.announceText then AutoBG_SendAnnouncement(this.announceText) end
-        end)
-        row:SetScript("OnEnter", function()
-            if this.announceText and this.announceText ~= "" then
-                GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-                GameTooltip:SetText(this.announceText, 1, 1, 1)
-                GameTooltip:AddLine("|cFF7CD8FFCTRL+LeftClick:|r Announce timer to /bg", 0.7, 0.7, 0.7)
-                GameTooltip:Show()
-            end
-        end)
-        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-        -- The row button owns the full click area; textures and font strings do not take mouse input.
-        local frameBg = row:CreateTexture(nil, "BACKGROUND")
-        frameBg:SetAllPoints(row)
-        frameBg:SetTexture(0, 0, 0, 0.70)
-
-        local icon = row:CreateTexture(nil, "ARTWORK")
-        icon:SetPoint("LEFT", row, "LEFT", 1, 0)
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        row.icon = icon
-
-        local bar = CreateFrame("StatusBar", name .. "Row" .. i .. "Bar", row)
-        bar:SetStatusBarTexture(BAR_TEXTURE)
-        bar:SetMinMaxValues(0, 1)
-        bar:SetValue(1)
-        bar:EnableMouse(false)
-        row.bar = bar
-
-        local track = bar:CreateTexture(nil, "BACKGROUND")
-        track:SetAllPoints(bar)
-        track:SetTexture(BAR_TEXTURE)
-        track:SetVertexColor(0.13, 0.13, 0.15, 0.90)
-
-        local hover = row:CreateTexture(nil, "HIGHLIGHT")
-        hover:SetAllPoints(row)
-        hover:SetTexture(1, 1, 1, 0.07)
-
-        local labelFs = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        labelFs:SetPoint("LEFT", bar, "LEFT", 5, 0)
-        labelFs:SetPoint("RIGHT", bar, "RIGHT", -46, 0)
-        labelFs:SetJustifyH("LEFT")
-        labelFs:SetTextColor(1, 1, 1, 1)
-        row.labelFs = labelFs
-
-        local timeFs = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        timeFs:SetPoint("RIGHT", bar, "RIGHT", -5, 0)
-        timeFs:SetJustifyH("RIGHT")
-        timeFs:SetTextColor(1, 1, 1, 1)
-        row.timeFs = timeFs
-
-        LayoutTimerRow(row, width, rowHeight)
-        row:Hide()
         frame.rows[i] = row
     end
 
-    frame:SetScript("OnUpdate", AnimateObjectiveFill)
+    frame:SetScript("OnUpdate", AnimateTimerRows)
     return frame
 end
 
--- =========================================================
--- Respawn Frame (Spirit Healer 30s Wave)
--- =========================================================
-local function CreateRespawnFrame(name, xOffset, yOffset)
-    local frame = CreateFrame("Button", name, UIParent)
-    frame:SetWidth(110)
-    frame:SetHeight(38)
-    frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
-    frame:SetBackdrop({
-        bgFile  = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 }
-    })
-    frame:SetBackdropColor(0, 0, 0, 0.80)
-    frame:SetBackdropBorderColor(0.35, 0.10, 0.10, 0.90)
-    frame:EnableMouse(true)
-    frame:SetClampedToScreen(true)
-    frame:SetMovable(true)
-    frame:RegisterForClicks("LeftButtonUp")
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function() this:StartMoving() end)
-    frame:SetScript("OnDragStop", function()
-        this:StopMovingOrSizing()
-        if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
-    end)
-    frame:SetScript("OnClick", function()
-        if IsControlKeyDown() and this.announceText then AutoBG_SendAnnouncement(this.announceText) end
-    end)
-    frame:SetScript("OnEnter", function()
-        if this.announceText and this.announceText ~= "" then
-            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-            GameTooltip:SetText(this.announceText, 1, 1, 1)
-            GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce to chat", 0.7, 0.7, 0.7)
-            GameTooltip:Show()
-        end
-    end)
-    frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    frame:Hide()
-
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    title:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -6)
-    title:SetText("Respawn")
-    title:SetTextColor(0.90, 0.20, 0.20)
-
-    local timeText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    timeText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -6)
-    timeText:SetText("0:30")
-
-    local bar = CreateFrame("StatusBar", name .. "Bar", frame)
-    bar:SetPoint("BOTTOMLEFT",  frame, "BOTTOMLEFT",   8, 7)
-    bar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 7)
-    bar:SetHeight(8)
-    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    bar:SetMinMaxValues(0, 30)
-    bar:SetValue(30)
-    bar:SetStatusBarColor(0.1, 0.85, 0.1)
-    bar:EnableMouse(false)
-
-    local barBg = bar:CreateTexture(nil, "BACKGROUND")
-    barBg:SetAllPoints(bar)
-    barBg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    barBg:SetVertexColor(0.2, 0.2, 0.2, 0.8)
-
-    frame.title    = title
-    frame.timeText = timeText
-    frame.bar      = bar
-    return frame
+-- Shows the first count rows of a group and fits its height to them.
+local function ShowRows(frame, count)
+    frame.activeCount = count
+    for i = count + 1, #frame.rows do
+        local row = frame.rows[i]
+        row.fillExpiry = nil
+        if row:IsShown() then row:Hide() end
+    end
+    if count > 0 then
+        local height = frame.headerHeight + count * frame.rowHeight + (count - 1) * BAR_ROW_GAP
+        if frame.displayHeight ~= height then frame:SetHeight(height); frame.displayHeight = height end
+        if not frame:IsShown() then frame:Show() end
+    elseif frame:IsShown() then
+        frame:Hide()
+    end
 end
 
--- =========================================================
--- Draggable Text Timer Frame Factory (BG Queues)
--- =========================================================
-local function CreateDraggableTimerFrame(name, titleText, xOffset, yOffset, minWidth)
-    local frame = CreateFrame("Frame", name, UIParent)
-    frame:SetWidth(minWidth or 130)
-    frame:SetHeight(30)
-    frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
-    frame:SetBackdrop({
-        bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile     = true, tileSize = 16, edgeSize = 16,
-        insets   = { left = 4, right = 4, top = 4, bottom = 4 }
-    })
-    frame:SetBackdropColor(0, 0, 0, 0.75)
-    frame:SetBackdropBorderColor(0.35, 0.10, 0.10, 0.90)
-    frame:EnableMouse(true)
-    frame:SetClampedToScreen(true)
-    frame:SetMovable(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function() this:StartMoving() end)
-    frame:SetScript("OnDragStop", function()
-        this:StopMovingOrSizing()
-        if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
-    end)
-    frame:Hide()
+local function PaintRow(row, colorKey)
+    if row.displayColor == colorKey then return end
+    local c = BAR_COLORS[colorKey]
+    row.bar:SetStatusBarColor(c[1], c[2], c[3])
+    row.track:SetVertexColor(c[1] * TRACK_SHADE, c[2] * TRACK_SHADE, c[3] * TRACK_SHADE, 0.9)
+    row.displayColor = colorKey
+end
 
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOP", 0, -8)
-    title:SetText(titleText)
-    title:SetTextColor(0.85, 0.70, 0.10)
-    frame.title = title
-    frame.activeRows = {}
-
-    function frame:GetOrCreateRow(index)
-        if not self.activeRows[index] then
-            local btn = CreateFrame("Button", self:GetName() .. "Row" .. index, self)
-            btn:SetHeight(14)
-            btn:SetWidth(self:GetWidth() - 16)
-            if index == 1 then
-                btn:SetPoint("TOP", self, "TOP", 0, -26)
-            else
-                btn:SetPoint("TOP", self.activeRows[index-1], "BOTTOM", 0, -2)
-            end
-            btn:EnableMouse(true)
-            btn:RegisterForClicks("LeftButtonUp")
-            btn:RegisterForDrag("LeftButton")
-            btn:SetScript("OnDragStart", function() this:GetParent():StartMoving() end)
-            btn:SetScript("OnDragStop", function()
-                this:GetParent():StopMovingOrSizing()
-                if AutoBG_SavePosition then AutoBG_SavePosition(this:GetParent(), this:GetParent():GetName()) end
-            end)
-            btn:SetScript("OnClick", function()
-                if IsControlKeyDown() and this.announceText then
-                    AutoBG_SendAnnouncement(this.announceText)
-                end
-            end)
-            btn:SetScript("OnEnter", function()
-                if this.announceText and this.announceText ~= "" then
-                    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-                    GameTooltip:SetText(this.announceText, 1, 1, 1)
-                    if this.estText and this.estText ~= "" then
-                        GameTooltip:AddLine(this.estText, 0.9, 0.9, 0.5)
-                    end
-                    GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce to chat", 0.7, 0.7, 0.7)
-                    GameTooltip:Show()
-                end
-            end)
-            btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-            local icon = btn:CreateTexture(nil, "OVERLAY")
-            icon:SetWidth(12)
-            icon:SetHeight(12)
-            icon:SetPoint("LEFT", btn, "LEFT", 4, 0)
-            icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-            btn.icon = icon
-
-            local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            fs:SetPoint("LEFT", icon, "RIGHT", 4, 0)
-            btn.fs = fs
-            self.activeRows[index] = btn
-        end
-        return self.activeRows[index]
+local function SetRowIcon(row, icon)
+    if row.displayIcon ~= icon then
+        row.icon:SetTexture(icon)
+        row.displayIcon = icon
     end
+end
 
-    function frame:UpdateSize(index)
-        local maxWidth = self.title:GetStringWidth() + 30
-        local count = #self.activeRows
-        for i = index, count do
-            if self.activeRows[i]:IsShown() then self.activeRows[i]:Hide() end
-        end
-
-        for i = 1, index - 1 do
-            local w = self.activeRows[i].fs:GetStringWidth() + 38
-            if w > maxWidth then maxWidth = w end
-        end
-
-        if index > 1 then
-            local width = math.max(minWidth or 130, maxWidth)
-            if self.displayWidth ~= width or self.displayCount ~= index - 1 then
-                self:SetWidth(width)
-                self:SetHeight(30 + (index - 1) * 16)
-                for i = 1, index - 1 do
-                    self.activeRows[i]:SetWidth(width - 16)
-                end
-                self.displayWidth, self.displayCount = width, index - 1
-            end
-            if not self:IsShown() then self:Show() end
-        else
-            if self:IsShown() then self:Hide() end
-        end
+-- name is shown; announceName starts the Ctrl-click line ("<announceName>: 1:51").
+local function SetRowName(row, name, announceName)
+    if row.displayName ~= name then
+        row.labelFs:SetText(name)
+        row.displayName = name
     end
+    if row.announceName ~= announceName then
+        row.announceName = announceName
+        row.displaySec = nil
+    end
+end
 
-    return frame
+local function SetRowDuration(row, duration)
+    if row.fillDuration ~= duration then
+        row.bar:SetMinMaxValues(0, duration)
+        row.fillDuration = duration
+    end
 end
 
 -- =========================================================
 -- Frame Instantiation
 -- =========================================================
-local QueueFrame   = CreateDraggableTimerFrame("AutoBG_QueueFrame", "BG Queues", -220, -100, 130)
-local RespawnFrame = CreateRespawnFrame("AutoBG_RespawnFrame", 0, -100)
-local StartTimerFrame = CreateBarTimerFrame("AutoBG_StartTimerFrame", nil,              0,   -60, 1)
-local NodeBarFrame = CreateBarTimerFrame("AutoBG_NodeFrame",    "Arathi Basin",   220, -100, 5)
-local AVNodeFrame  = CreateBarTimerFrame("AutoBG_AVNodeFrame",  "Alterac Valley", 220, -150, 8)
-local WSGFlagFrame = CreateBarTimerFrame("AutoBG_WSGFlagFrame", "Warsong Gulch", -110, -150, 2)
+local QueueFrame      = CreateBarTimerFrame("AutoBG_QueueFrame",      "Queues",         -220, -100, 3, nil, 0.85)
+local RespawnFrame    = CreateBarTimerFrame("AutoBG_RespawnFrame",    nil,                 0, -100, 1, RESPAWN_ICON, 0.7)
+local StartTimerFrame = CreateBarTimerFrame("AutoBG_StartTimerFrame", nil,                 0,  -60, 1)
+local NodeBarFrame    = CreateBarTimerFrame("AutoBG_NodeFrame",       "Arathi Basin",    220, -100, 5)
+local AVNodeFrame     = CreateBarTimerFrame("AutoBG_AVNodeFrame",     "Alterac Valley",  220, -150, 10)
+local WSGFlagFrame    = CreateBarTimerFrame("AutoBG_WSGFlagFrame",    "Warsong Gulch",  -110, -150, 2)
+
+-- The respawn bar is always the same row: the spirit healer's 30-second wave.
+do
+    local row = RespawnFrame.rows[1]
+    row.roundUp, row.urgentAt = true, 5
+    SetRowIcon(row, RESPAWN_ICON)
+    SetRowName(row, "Respawn", "Ress")
+    PaintRow(row, "spirit")
+    SetRowDuration(row, 30)
+end
 
 -- =========================================================
 -- Arathi Basin Score Projection Frame (Sleek 2-Row Dual-Column Layout)
@@ -592,28 +556,6 @@ function AutoBG_ResetTimerPositions()
 end
 
 -- =========================================================
--- Time Utilities
--- =========================================================
-local function FormatTime(seconds)
-    local m = math.floor(seconds / 60)
-    local s = math.floor(seconds - m * 60)
-    return (s < 10) and (m .. ":0" .. s) or (m .. ":" .. s)
-end
-
-local function FormatQueueTime(seconds)
-    local h = math.floor(seconds / 3600)
-    local m = math.floor((seconds - h * 3600) / 60)
-    local s = math.floor(seconds - h * 3600 - m * 60)
-    if h > 0 then
-        return string.format("%d %s %d %s", h, (h == 1 and "Hr" or "Hrs"), m, (m == 1 and "Min" or "Mins"))
-    elseif m > 0 then
-        return string.format("%d %s %d %s", m, (m == 1 and "Min" or "Mins"), s, (s == 1 and "Sec" or "Secs"))
-    else
-        return string.format("%d %s", s, (s == 1 and "Sec" or "Secs"))
-    end
-end
-
--- =========================================================
 -- Static Test Data Tables
 -- =========================================================
 local AB_TEST_DATA = {
@@ -634,56 +576,24 @@ local START_TEST_DATA = {
 
 -- =========================================================
 -- Countdown Bar Row Renderer (Match Start / AB / AV / WSG)
--- Rows take their faction's color; colorMode = "faction" also derives the
--- faction from a WSG flag name.
+-- Rows take their faction's color and banner; colorMode = "faction" also
+-- derives the faction from a WSG flag name. expiry is nil for preview rows,
+-- which stand still.
 -- =========================================================
-local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMode, defaultIcon)
-    -- WSG live timers store a flag name and expiry; the row presentation supplies its faction.
+local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMode, defaultIcon, expiry)
     if colorMode == "faction" and not faction then
         if name == "Alliance Flag" then faction = "Alliance"
         elseif name == "Horde Flag" then faction = "Horde" end
     end
     local colorKey = BAR_COLORS[faction or ""] and faction or "neutral"
-
-    local icon = (faction == "Alliance" and ALLIANCE_FLAG_TEX) or (faction == "Horde" and HORDE_FLAG_TEX) or defaultIcon
-    if row.displayIcon ~= icon then
-        row.icon:SetTexture(icon)
-        if icon == defaultIcon then row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        else row.icon:SetTexCoord(0, 1, 0, 1) end
-        row.displayIcon = icon
-    end
-
-    if row.displayName ~= name then
-        row.labelFs:SetText(name)
-        row.displayName = name
-    end
-
-    local timeStr = FormatTime(remaining)
-    if row.displayTime ~= timeStr then
-        row.timeFs:SetText(timeStr)
-        row.displayTime = timeStr
-    end
-    local urgent = remaining <= 10
-    if row.displayUrgent ~= urgent then
-        if urgent then row.timeFs:SetTextColor(1, 0.45, 0.35)
-        else row.timeFs:SetTextColor(1, 1, 1) end
-        row.displayUrgent = urgent
-    end
-
-    row.fillExpiry = (not (AutoBG_Settings and AutoBG_Settings.TestAllTimers)) and (GetTime() + remaining) or nil
-    if row.fillDuration ~= maxTime then
-        row.bar:SetMinMaxValues(0, maxTime)
-        row.fillDuration = maxTime
-    end
-    row.bar:SetValue(remaining)
-    if row.displayColor ~= colorKey then
-        local c = BAR_COLORS[colorKey]
-        row.bar:SetStatusBarColor(c[1], c[2], c[3])
-        row.displayColor = colorKey
-    end
-
-    local facText = faction and (" (" .. faction .. ")") or ""
-    row.announceText = name .. facText .. ": " .. timeStr
+    SetRowIcon(row, (faction == "Alliance" and ALLIANCE_ICON) or (faction == "Horde" and HORDE_ICON) or defaultIcon)
+    SetRowName(row, name, faction and (name .. " (" .. faction .. ")") or name)
+    PaintRow(row, colorKey)
+    SetRowDuration(row, maxTime)
+    row.urgentAt = 10
+    row.fillExpiry = expiry
+    SetRowValue(row, remaining)
+    SetRowClock(row, remaining)
     if not row:IsShown() then row:Show() end
 end
 
@@ -699,9 +609,8 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
         if isTestAll and testData then
             activeCount = math.min(#testData, maxRows)
             for i = 1, activeCount do
-                local d   = testData[i]
-                local row = frame.rows[i]
-                ApplyTimerRowData(row, d.name, d.faction, d.remaining, maxTime, colorMode, frame.defaultIcon)
+                local d = testData[i]
+                ApplyTimerRowData(frame.rows[i], d.name, d.faction, d.remaining, maxTime, colorMode, frame.defaultIcon, nil)
             end
         else
             local sortCount = 0
@@ -709,8 +618,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
                 local expireTime = (type(data) == "table" and data.expire) or data
                 local faction    = (type(data) == "table" and data.faction) or nil
                 local rowMax     = (type(data) == "table" and data.max) or maxTime
-                local remaining  = expireTime - now
-                if remaining > 0 then
+                if expireTime - now > 0 then
                     sortCount = sortCount + 1
                     local item = activeSortBuffer[sortCount]
                     if not item then item = {}; activeSortBuffer[sortCount] = item end
@@ -733,35 +641,36 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
                     activeSortBuffer[j + 1] = key
                 end
             end
-            local displayCount = 0
-            local limit = math.min(sortCount, maxRows)
-            for i = 1, limit do
-                local item      = activeSortBuffer[i]
-                local remaining = item.expire - now
-                if remaining > 0 then
-                    displayCount = displayCount + 1
-                    local row = frame.rows[displayCount]
-                    ApplyTimerRowData(row, item.name, item.faction, remaining, item.maxTime or maxTime, colorMode, frame.defaultIcon)
-                    row.fillExpiry = item.expire
-                end
+            activeCount = math.min(sortCount, maxRows)
+            for i = 1, activeCount do
+                local item = activeSortBuffer[i]
+                ApplyTimerRowData(frame.rows[i], item.name, item.faction, item.expire - now,
+                    item.maxTime or maxTime, colorMode, frame.defaultIcon, item.expire)
             end
-            activeCount = displayCount
         end
     else
         if not isTestAll then table.wipe(timerTable) end
     end
 
-    for i = activeCount + 1, maxRows do
-        frame.rows[i].fillExpiry = nil
-        if frame.rows[i]:IsShown() then frame.rows[i]:Hide() end
-    end
-    if activeCount > 0 then
-        local height = frame.headerHeight + activeCount * frame.rowHeight + (activeCount - 1) * BAR_ROW_GAP
-        if frame.displayHeight ~= height then frame:SetHeight(height); frame.displayHeight = height end
-        if not frame:IsShown() then frame:Show() end
-    else
-        if frame:IsShown() then frame:Hide() end
-    end
+    ShowRows(frame, activeCount)
+end
+
+-- A queue row counts up: the time waited, the bar filling toward the
+-- estimated wait (full and still without an estimate).
+local QUEUE_ABBREV = { ["Warsong Gulch"] = "WSG", ["Arathi Basin"] = "AB", ["Alterac Valley"] = "AV", ["Thorn Gorge"] = "TG" }
+
+local function ApplyQueueRow(row, mapName, waited, estimate)
+    mapName = mapName or "Battleground"
+    SetRowIcon(row, (AutoBG_GetBGIcon and AutoBG_GetBGIcon(mapName)) or NEUTRAL_ICON)
+    SetRowName(row, mapName, (QUEUE_ABBREV[mapName] or mapName) .. " queue")
+    PaintRow(row, "neutral")
+    local full = estimate > 0 and estimate or 1
+    SetRowDuration(row, full)
+    row.fillExpiry = nil
+    SetRowValue(row, estimate > 0 and math.min(waited, estimate) or full)
+    SetRowClock(row, waited)
+    row.estText = estimate > 0 and ("Estimated: " .. FormatClock(estimate)) or nil
+    if not row:IsShown() then row:Show() end
 end
 
 -- =========================================================
@@ -1079,7 +988,7 @@ local function UpdateABProjection(isTestAll, isAB)
 end
 
 -- =========================================================
--- Main 10 Hz Update Ticker
+-- Timer logic, once a second (the rows animate themselves)
 -- =========================================================
 local function UpdateAllTimers()
     if not AutoBG_Settings then return end
@@ -1090,146 +999,81 @@ local function UpdateAllTimers()
     -- 0. Match Start Timer (Pre-game gate countdown)
     RenderCountdownBars(StartTimerFrame, timers.Global, AutoBG_Settings.StartTimer ~= false, inPVP, 120, START_TEST_DATA, "time")
 
-    -- 1. AB Nodes: faction bars when Faction Node Colors is on (60s cap)
+    -- 1. AB bases (60 s)
     RenderCountdownBars(NodeBarFrame, timers.AB, AutoBG_Settings.ABTimers, isAB, 60, AB_TEST_DATA, "time")
 
     -- 1b. AB Projected Score Overlay (Aligned 2-row dual-column HUD)
     UpdateABProjection(isTestAll, isAB)
 
-    -- 2. AV Nodes: faction bars when Faction Node Colors is on (300s cap)
+    -- 2. AV towers, graveyards and mines (300 s)
     RenderCountdownBars(AVNodeFrame, timers.AV, AutoBG_Settings.AVTimers, isAV, 300, AV_TEST_DATA, "time")
 
-    -- 3. WSG Flags: fixed faction colors — Alliance=blue, Horde=red (23s cap)
+    -- 3. WSG flag returns (23 s), colored by flag
     RenderCountdownBars(WSGFlagFrame, timers.WSG, AutoBG_Settings.WSGTimers, isWSG, 23, WSG_TEST_DATA, "faction")
 
-    -- 4. Respawn Timer (Spirit Healer 30s Wave)
-    if inPVP and AutoBG_Settings.RessTimer then
-        local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
-        if healerTime > 0 then SyncSpiritWave(now - (30 - healerTime)) end
-        if spiritHealerSyncTime == 0 then spiritHealerSyncTime = now end
-        -- Learn who is a ghost once a second; UNIT_HEALTH times their revival.
-        if now >= nextGhostScan then
-            nextGhostScan = now + 1
-            for i = 1, GetNumRaidMembers() do
-                local unit = RAID_UNITS[i]
-                if UnitIsGhost(unit) then raidGhosts[unit] = true end
+    -- 4. Respawn: the spirit healer's 30-second wave
+    local respawnRow = RespawnFrame.rows[1]
+    if (inPVP or isTestAll) and AutoBG_Settings.RessTimer then
+        ApplyObjectiveAppearance(RespawnFrame)
+        local remaining, prefix, expiry = 24, "", nil
+        if inPVP then
+            local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
+            if healerTime > 0 then SyncSpiritWave(now - (30 - healerTime)) end
+            if spiritHealerSyncTime == 0 then spiritHealerSyncTime = now end
+            -- Learn who is a ghost once a second; UNIT_HEALTH times their revival.
+            if now >= nextGhostScan then
+                nextGhostScan = now + 1
+                for i = 1, GetNumRaidMembers() do
+                    local unit = RAID_UNITS[i]
+                    if UnitIsGhost(unit) then raidGhosts[unit] = true end
+                end
             end
+            remaining = 30 - ((now - spiritHealerSyncTime) % 30)
+            -- "~" until a wave has been seen: the countdown is a guess.
+            prefix = spiritHealerSynced and "" or "~"
+            expiry = now + remaining
         end
-
-        local elapsed      = now - spiritHealerSyncTime
-        local remaining    = 30 - (elapsed % 30)
-        local numRemaining = math.ceil(remaining)
-        if numRemaining <= 0 then numRemaining = 30 end
-
-        local pct = numRemaining / 30
-        local r = (pct > 0.33 and 0.10) or (pct > 0.17 and 1.00) or 1.00
-        local g = (pct > 0.33 and 0.90) or (pct > 0.17 and 0.85) or 0.15
-        local b = (pct > 0.33 and 0.20) or 0.00
-        local colorCode = (pct > 0.33 and "|cFF00FF00") or (pct > 0.17 and "|cFFFFFF00") or (pct > 0.07 and "|cFFFF8000") or "|cFFFF2020"
-
-        RespawnFrame.bar:SetValue(remaining)
-        if RespawnFrame.displayR ~= r or RespawnFrame.displayG ~= g or RespawnFrame.displayB ~= b then
-            RespawnFrame.bar:SetStatusBarColor(r, g, b)
-            RespawnFrame.displayR, RespawnFrame.displayG, RespawnFrame.displayB = r, g, b
+        if respawnRow.clockPrefix ~= prefix then
+            respawnRow.clockPrefix = prefix
+            respawnRow.displaySec = nil
         end
-        local timeText = colorCode .. (spiritHealerSynced and "" or "~") .. FormatTime(numRemaining) .. "|r"
-        if RespawnFrame.displayText ~= timeText then
-            RespawnFrame.timeText:SetText(timeText)
-            RespawnFrame.displayText = timeText
-        end
-        RespawnFrame.announceText = "Ress: " .. FormatTime(numRemaining)
-        if not RespawnFrame:IsShown() then RespawnFrame:Show() end
-    elseif isTestAll and AutoBG_Settings.RessTimer then
-        if RespawnFrame.displayText ~= "|cFF00FF000:24|r" then
-            RespawnFrame.timeText:SetText("|cFF00FF000:24|r")
-            RespawnFrame.displayText = "|cFF00FF000:24|r"
-        end
-        RespawnFrame.bar:SetValue(24)
-        RespawnFrame.bar:SetStatusBarColor(0.1, 0.9, 0.2)
-        RespawnFrame.displayR, RespawnFrame.displayG, RespawnFrame.displayB = 0.1, 0.9, 0.2
-        RespawnFrame.announceText = "Ress: 0:24"
-        if not RespawnFrame:IsShown() then RespawnFrame:Show() end
+        respawnRow.fillExpiry = expiry
+        SetRowValue(respawnRow, remaining)
+        SetRowClock(respawnRow, remaining)
+        if not respawnRow:IsShown() then respawnRow:Show() end
+        ShowRows(RespawnFrame, 1)
     else
-        if RespawnFrame:IsShown() then RespawnFrame:Hide() end
+        ShowRows(RespawnFrame, 0)
     end
 
-    -- 5. Queue Timers (Original Blizzard format numbers + Visual Icons)
+    -- 5. Queue waits, once a second
     local queueSecond = math.floor(now)
     if lastQueueSecond ~= queueSecond or lastQueuePreview ~= isTestAll or lastQueueEnabled ~= AutoBG_Settings.QueueTimers then
-    lastQueueSecond, lastQueuePreview, lastQueueEnabled = queueSecond, isTestAll, AutoBG_Settings.QueueTimers
-    local qIndex = 1
-    if AutoBG_Settings.QueueTimers then
-        if isTestAll then
-            local r1 = QueueFrame:GetOrCreateRow(1)
-            if AutoBG_GetBGIcon then
-                r1.icon:SetTexture(AutoBG_GetBGIcon("wsg"))
-                r1.icon:Show()
-                r1.fs:SetPoint("LEFT", r1.icon, "RIGHT", 4, 0)
+        lastQueueSecond, lastQueuePreview, lastQueueEnabled = queueSecond, isTestAll, AutoBG_Settings.QueueTimers
+        local shown = 0
+        if AutoBG_Settings.QueueTimers then
+            ApplyObjectiveAppearance(QueueFrame)
+            if isTestAll then
+                ApplyQueueRow(QueueFrame.rows[1], "Warsong Gulch", 75, 0)
+                ApplyQueueRow(QueueFrame.rows[2], "Arathi Basin", 272, 360)
+                shown = 2
             else
-                r1.icon:Hide()
-                r1.fs:SetPoint("CENTER", r1, "CENTER", 0, 0)
-            end
-            r1.fs:SetText("WSG: 1:15")
-            r1.announceText = "WSG Queue: 1:15"
-            r1.estText = nil
-            r1:Show()
-
-            local r2 = QueueFrame:GetOrCreateRow(2)
-            if AutoBG_GetBGIcon then
-                r2.icon:SetTexture(AutoBG_GetBGIcon("ab"))
-                r2.icon:Show()
-                r2.fs:SetPoint("LEFT", r2.icon, "RIGHT", 4, 0)
-            else
-                r2.icon:Hide()
-                r2.fs:SetPoint("CENTER", r2, "CENTER", 0, 0)
-            end
-            r2.fs:SetText("AB: 4:32")
-            r2.announceText = "AB Queue: 4:32"
-            r2.estText = nil
-            r2:Show()
-            qIndex = 3
-        else
-            for queueIndex = 1, queuedCount do
-                local queue = queuedBattlegrounds[queueIndex]
-                local i, mapName = queue.id, queue.map
-                    local waitTime = (GetBattlefieldTimeWaited and GetBattlefieldTimeWaited(i)) or 0
-                    local estTime  = (GetBattlefieldEstimatedWaitTime and GetBattlefieldEstimatedWaitTime(i)) or 0
-                    local sec      = math.floor(waitTime / 1000)
-                    local row      = QueueFrame:GetOrCreateRow(qIndex)
-                    local abbrev   = (mapName == "Warsong Gulch" and "WSG") or (mapName == "Arathi Basin" and "AB") or
-                                     (mapName == "Alterac Valley" and "AV")  or (mapName == "Thorn Gorge"  and "TG") or mapName or "BG"
-                    local bgIcon   = (AutoBG_GetBGIcon and AutoBG_GetBGIcon(mapName))
-                    if row.displayIcon ~= (bgIcon or false) then
-                        row.displayIcon = bgIcon or false
-                    if bgIcon then
-                        row.icon:SetTexture(bgIcon)
-                        row.icon:Show()
-                        row.fs:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
-                    else
-                        row.icon:Hide()
-                        row.fs:SetPoint("CENTER", row, "CENTER", 0, 0)
-                    end
-                    end
-                    local displayText = abbrev .. ": " .. FormatQueueTime(sec)
-                    if row.displayText ~= displayText then
-                        row.fs:SetText(displayText)
-                        row.displayText = displayText
-                    end
-                    row.announceText = abbrev .. " Queue: " .. FormatQueueTime(sec)
-                    if estTime > 0 then
-                        row.estText = "Estimated: " .. FormatQueueTime(math.floor(estTime / 1000))
-                    else
-                        row.estText = nil
-                    end
-                    if not row:IsShown() then row:Show() end
-                    qIndex = qIndex + 1
+                for queueIndex = 1, math.min(queuedCount, #QueueFrame.rows) do
+                    local queue = queuedBattlegrounds[queueIndex]
+                    local waited = (GetBattlefieldTimeWaited and GetBattlefieldTimeWaited(queue.id)) or 0
+                    local estimate = (GetBattlefieldEstimatedWaitTime and GetBattlefieldEstimatedWaitTime(queue.id)) or 0
+                    shown = shown + 1
+                    ApplyQueueRow(QueueFrame.rows[shown], queue.map, math.floor(waited / 1000), math.floor(estimate / 1000))
+                end
             end
         end
-    end
-    QueueFrame:UpdateSize(qIndex)
+        ShowRows(QueueFrame, shown)
     end
 end
+RenderTimers = UpdateAllTimers
 
+-- Text changes once a second and the bars animate on their own, so the
+-- logic (expiry, sorting, spirit sync, queues, AB projection) runs at 1 Hz.
 SyncUpdateTicker = function()
     local s = AutoBG_Settings
     -- Test mode always shows the AB projection, so it always needs the ticker.
@@ -1242,7 +1086,7 @@ SyncUpdateTicker = function()
          (isWSG and s.WSGTimers and next(timers.WSG)))))
     if needed and not updateTicker then
         local ticker
-        ticker = C_Timer.NewTicker(0.1, function()
+        ticker = C_Timer.NewTicker(1, function()
             if updateTicker ~= ticker then return end
             UpdateAllTimers()
             SyncUpdateTicker()
