@@ -1057,12 +1057,12 @@ end
 -- Stealth warning look per kind: icon and rim color. Shapes repaint by table,
 -- so these stay fixed.
 local ALERT_LOOK = {
-	Stealth      = { texture = "Interface\Icons\Ability_Stealth", edge = { 0.2, 0.8, 1.0, 0.95 } },
+	Stealth      = { texture = "Interface\\Icons\\Ability_Stealth", edge = { 0.2, 0.8, 1.0, 0.95 } },
 	Prowl        = { texture = PROWL_TEXTURE, edge = { 1.0, 0.5, 0.0, 0.95 } },
-	Shadowmeld   = { texture = "Interface\Icons\Ability_Racial_ShadowMeld", edge = { 0.7, 0.4, 0.9, 0.95 } },
-	Vanish       = { texture = "Interface\Icons\Ability_Stealth", edge = { 0.3, 0.9, 1.0, 0.95 } },
-	Invisibility = { texture = "Interface\Icons\Spell_Nature_Invisibilty", edge = { 0.5, 0.8, 1.0, 0.95 } },
-	Cloaking     = { texture = "Interface\Icons\INV_Misc_EngGizmos_04", edge = { 0.9, 0.9, 0.2, 0.95 } },
+	Shadowmeld   = { texture = "Interface\\Icons\\Ability_Racial_ShadowMeld", edge = { 0.7, 0.4, 0.9, 0.95 } },
+	Vanish       = { texture = "Interface\\Icons\\Ability_Stealth", edge = { 0.3, 0.9, 1.0, 0.95 } },
+	Invisibility = { texture = "Interface\\Icons\\Spell_Nature_Invisibilty", edge = { 0.5, 0.8, 1.0, 0.95 } },
+	Cloaking     = { texture = "Interface\\Icons\\INV_Misc_EngGizmos_04", edge = { 0.9, 0.9, 0.2, 0.95 } },
 }
 
 -- Left-click targets the stealthed enemy, right-click focuses them.

@@ -1268,14 +1268,22 @@ local AV_NODES = {
     "Iceblood Tower", "Tower Point", "East Frostwolf Tower", "West Frostwolf Tower",
     "Stonehearth Bunker", "Icewing Bunker", "Dun Baldar North Bunker", "Dun Baldar South Bunker",
     "Frostwolf Relief Hut", "Snowfall Graveyard", "Stormpike Graveyard", "Iceblood Graveyard",
-    "Frostwolf Graveyard", "Stonehearth Graveyard", "Stormpike Aid Station"
+    "Frostwolf Graveyard", "Stonehearth Graveyard", "Stormpike Aid Station",
+    "Irondeep Mine", "Coldtooth Mine",
 }
+-- A mine changes hands when its boss dies: "The Horde has taken the Irondeep
+-- Mine! ..." (the line BigWigs' Alterac Valley module matches). 5 minutes from
+-- that line, as BigWigs counts it; confirmed right for OctoWoW by the player,
+-- 2026-10-26. Mines are not flags, so the flag watch never hears of them.
+local AV_MINES = { ["Irondeep Mine"] = true, ["Coldtooth Mine"] = true }
 
 local function MatchNodeName(msg, nodeList)
     local lower = string.lower(msg)
     for i = 1, #nodeList do
         if string.find(lower, string.lower(nodeList[i])) then return nodeList[i] end
     end
+    -- Short Arathi Basin names ("the mine", "the mill") only mean Arathi Basin bases.
+    if nodeList ~= AB_NODES then return nil end
     if     string.find(lower, "mine")   then return "Gold Mine"
     elseif string.find(lower, "mill")   then return "Lumber Mill"
     elseif string.find(lower, "smith")  then return "Blacksmith"
@@ -1318,7 +1326,7 @@ local function ParseCombatMessage(msg, ev)
     -- The flag watch learns from the same messages where flags stand and who holds them.
     if AutoBG_FlagWatch and (isAB or isAV) then
         local node = MatchNodeName(msg, isAB and AB_NODES or AV_NODES)
-        if node then AutoBG_FlagWatch:OnNodeMessage(node, msg, faction) end
+        if node and not AV_MINES[node] then AutoBG_FlagWatch:OnNodeMessage(node, msg, faction) end
     end
 
     -- 1. AB Nodes: 60s on OctoWoW (confirmed in play, 2026-10-21)
@@ -1336,7 +1344,11 @@ local function ParseCombatMessage(msg, ev)
     -- 2. AV Nodes (300s)
     if AutoBG_Settings.AVTimers and isAV then
         local node = MatchNodeName(msg, AV_NODES)
-        if node then
+        if node and AV_MINES[node] then
+            if string.find(lower, "has taken") then
+                timers.AV[node] = { expire = GetTime() + 300, faction = faction }
+            end
+        elseif node then
             -- 5 min on OctoWoW (confirmed in play, 2026-10-21)
             if string.find(lower, "claims") or string.find(lower, "assaulted") or string.find(lower, "under attack") then
                 timers.AV[node] = { expire = GetTime() + 300, faction = faction }
