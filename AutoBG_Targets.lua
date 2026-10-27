@@ -881,6 +881,10 @@ local function UpdateRowStatus()
 		local btn = Targets.TargetButton[i]
 		local name = btn.targetName
 		if name and btn:IsShown() then
+			-- Rows (and their cast bars) are unit buttons once the GUID is known.
+			local bound = not Targets.isConfig and (nameToGUID[name] or btn.targetGUID) or nil
+			Targets.BindUnit(btn, bound)
+			Targets.BindUnit(btn.Cast, bound)
 			local near, raidIndex, count
 			if Targets.isConfig then
 				local sample = previewStatus[i]
@@ -1116,35 +1120,62 @@ local function MainFrame_OnMouseUp(self)
 	Targets:Frame_SavePosition("AutoBG_TargetsMainFrame")
 end
 
--- Validate cached identity before selecting it. A departed object must not
--- prevent a fresh exact-name lookup, and an unrelated object must never be used.
+-- The loaded unit is the named enemy: same name, and the same realm when both
+-- carry one. A departed or unrelated object is never used.
+local function IsNamed(unit, name)
+	local loaded = unit and UnitExists(unit) and UnitName(unit)
+	if not loaded or StripRealm(loaded) ~= StripRealm(name) then return false end
+	if string.find(name, "-", 1, true) and string.find(loaded, "-", 1, true) then return loaded == name end
+	return true
+end
+
+-- ClassicAPI unit buttons. A frame bound to an enemy's GUID targets it on left
+-- click (a spell or item on the cursor goes to the enemy instead), focuses it
+-- on right click and is the mouseover while hovered. Ctrl and Shift clicks
+-- name a verb ClassicAPI does not know, so they fall through to the frame's
+-- own OnClick, as does every click while no GUID is known.
+local OWN_CLICKS = { "ctrl-type1", "ctrl-type2", "shift-type1", "shift-type2" }
+function Targets.BindUnit(frame, guid)
+	local unit = type(guid) == "string" and string.find(guid, "^0x%x+$") and guid or nil
+	if not frame or frame:GetAttribute("unit") == unit then return end
+	frame:SetAttribute("unit", unit)
+	frame:SetAttribute("type1", unit and "target" or nil)
+	frame:SetAttribute("type2", unit and "focus" or nil)
+	if unit and not frame:GetAttribute("ctrl-type1") then
+		for i = 1, #OWN_CLICKS do frame:SetAttribute(OWN_CLICKS[i], "own") end
+	end
+end
+
+-- Selects a named enemy from anything that is not bound itself (Spy rows, the
+-- warning cards, slash commands, a row whose GUID is not known yet): one
+-- off-screen unit button, so a click acts as on a unit frame. Returns whether
+-- the enemy is now the target (or focus).
+local selector
 function Targets.SelectEnemy(name, guid, button)
-	if not name then return end
-	local cleanName = StripRealm(name)
-	local loadedName = guid and UnitExists(guid) and UnitName(guid)
-	local validGUID = loadedName and StripRealm(loadedName) == cleanName
-	if validGUID and string.find(name, "-", 1, true) and string.find(loadedName, "-", 1, true) then
-		validGUID = loadedName == name
+	if not name then return false end
+	local unit = IsNamed(guid, name) and guid or UnitTokenFromName(name, true)
+	if not IsNamed(unit, name) then unit = UnitTokenFromName(StripRealm(name), true) end
+	if not IsNamed(unit, name) then return false end
+	if not selector then
+		selector = CreateFrame("Button", "AutoBG_EnemySelector", UIParent)
+		selector:SetWidth(1)
+		selector:SetHeight(1)
+		selector:SetPoint("BOTTOMRIGHT", UIParent, "TOPLEFT", -10, 10)
+		selector:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+		selector:SetAttribute("type1", "target")
+		selector:SetAttribute("type2", "focus")
 	end
-	if button == "RightButton" then
-		if validGUID then FocusUnit(guid)
-		else
-			TargetByName(cleanName, true)
-			local selected = UnitName("target")
-			local validTarget = selected and StripRealm(selected) == cleanName
-			if validTarget and string.find(name, "-", 1, true) and string.find(selected, "-", 1, true) then
-				validTarget = selected == name
-			end
-			if UnitExists("target") and validTarget then FocusUnit("target") end
-		end
-	else
-		if validGUID then TargetUnit(guid) else TargetByName(cleanName, true) end
-	end
+	local focus = button == "RightButton"
+	selector:SetAttribute("unit", unit)
+	selector:Click(focus and "RightButton" or "LeftButton")
+	selector:SetAttribute("unit", nil)
+	return UnitIsUnit(focus and "focus" or "target", unit) and true or false
 end
 
 local function TargetButton_OnClick(self, button)
 	local b = self or this
-	local btn = button or arg1
+	b = b.owner or b -- the cast bar acts for its row
+	local btn = button or GetMouseButtonClicked()
 	local node = b.targetName and openingNode[b.targetName]
 	if node and btn == "LeftButton" and IsControlKeyDown() and AutoBG_FlagAlert then
 		AutoBG_FlagAlert:Announce(b.targetName, node)
@@ -1155,10 +1186,6 @@ end
 
 local function TargetButton_OnEnter(self)
 	local b = self or this
-	local guid = b.targetGUID or (b.targetName and nameToGUID[b.targetName])
-	if guid and type(guid) == "string" and string.sub(guid, 1, 2) == "0x" and SetMouseoverUnit then
-		pcall(SetMouseoverUnit, guid)
-	end
 	local node = b.targetName and openingNode[b.targetName]
 	if node then
 		GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
@@ -1169,15 +1196,7 @@ local function TargetButton_OnEnter(self)
 end
 
 local function TargetButton_OnLeave(self)
-	if SetMouseoverUnit then
-		pcall(SetMouseoverUnit)
-	end
 	GameTooltip:Hide()
-end
-
-local function Cast_OnClick(self, button)
-	local c = self or this
-	TargetButton_OnClick(c.owner, button or arg1)
 end
 
 local function Cast_OnEnter(self)
@@ -1298,7 +1317,7 @@ function Targets:CreateFrames()
 		cast:SetScript("OnUpdate", Cast_OnUpdate)
 		cast:EnableMouse(true)
 		cast:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-		cast:SetScript("OnClick", Cast_OnClick)
+		cast:SetScript("OnClick", TargetButton_OnClick)
 		cast:SetScript("OnEnter", Cast_OnEnter)
 		cast:SetScript("OnLeave", TargetButton_OnLeave)
 

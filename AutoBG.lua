@@ -41,9 +41,6 @@ function AutoBG_TimerAfter(delay, func)
 end
 
 -- Pre-allocated static Unit ID arrays
-local RAID_UNITS, PARTY_UNITS = {}, {}
-for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
-for i = 1, 4 do PARTY_UNITS[i] = "party" .. i end
 
 -- Cached Zone State
 local currentZoneText = ""
@@ -294,37 +291,25 @@ function AutoBG_GetClassColorRGB(classOrToken)
     return AutoBG_CLASS_COLORS[token] or FALLBACK_CLASS_COLOR
 end
 
+-- ClassicAPI's player cache knows you, your group (in range or not), players
+-- near you and everyone met this session; an enemy never seen near you is
+-- only on the scoreboard.
 function AutoBG_FindPlayerClass(playerName)
     if not playerName or playerName == "" then return nil end
     local clean = string.gsub(playerName, "-.*$", "")
     clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
+    if UnitName("player") == clean then
+        local _, token = UnitClass("player"); return token
+    end
+    local _, token = C_PlayerCache.GetPlayerInfoByName(clean)
+    if token then return token end
 
     local numScores = (GetNumBattlefieldScores and GetNumBattlefieldScores()) or 0
     for i = 1, numScores do
-        local name, _, _, _, _, _, _, _, locClass, token = GetBattlefieldScore(i)
+        local name, _, _, _, _, _, _, _, locClass, classToken = GetBattlefieldScore(i)
         if name and string.gsub(name, "-.*$", "") == clean then
-            return token or locClass
+            return classToken or locClass
         end
-    end
-
-    local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
-    if numRaid > 0 then
-        for i = 1, numRaid do
-            if UnitName(RAID_UNITS[i]) == clean then
-                local _, token = UnitClass(RAID_UNITS[i]); return token
-            end
-        end
-    else
-        local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
-        for i = 1, numParty do
-            if UnitName(PARTY_UNITS[i]) == clean then
-                local _, token = UnitClass(PARTY_UNITS[i]); return token
-            end
-        end
-    end
-
-    if UnitName("player") == clean then
-        local _, token = UnitClass("player"); return token
     end
     return nil
 end

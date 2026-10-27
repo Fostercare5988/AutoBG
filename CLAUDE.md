@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (181 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (195 tests).
 
 | File | Job |
 | --- | --- |
@@ -56,3 +56,14 @@ Things to know:
   it with its list off. Aura listeners take `UNIT_AURA_DELTA` (1.17.10) and
   skip refresh-only changes (only updated IDs), which never change stealth
   or Deserter.
+- Enemy rows, their cast bars and the carrier cards are ClassicAPI unit
+  buttons (`Targets.BindUnit`) once the GUID is known: type1 target, type2
+  focus, hover is the mouseover. Ctrl and Shift clicks carry the unknown verb
+  "own" so they reach the frame's OnClick (Ctrl-click announce). Anything
+  unbound (Spy rows, warning cards, `/abg efc`, a row before its GUID) goes
+  through `Targets.SelectEnemy`: an exact-name `UnitTokenFromName` lookup and
+  one off-screen unit button. No TargetUnit, FocusUnit, TargetByName or
+  SetMouseoverUnit is left.
+- Names resolve through ClassicAPI, not roster walks: `UnitTokenFromName` (flag
+  watch, base message faction) and `C_PlayerCache.GetPlayerInfoByName`
+  (carrier class; the scoreboard only for enemies never seen).

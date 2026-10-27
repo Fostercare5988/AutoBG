@@ -1167,21 +1167,19 @@ local function GetFactionFromMessage(msg, ev)
     if string.find(lower, "horde")    or ev == "CHAT_MSG_BG_SYSTEM_HORDE"    then return "Horde"    end
     if string.find(lower, "alliance") or ev == "CHAT_MSG_BG_SYSTEM_ALLIANCE" then return "Alliance" end
 
-    local _, _, player = string.find(msg, "^([^%s!]+)%s+[ha]s?%s*claims?")
-    if not player then _, _, player = string.find(msg, "^([^%s!]+)%s+assaulted") end
+    -- "Grom claims the Stables!", "Grom has assaulted the Blacksmith!" (the
+    -- flag watch reads the same two forms).
+    local _, _, player = string.find(msg, "^(%S+) claims")
+    if not player then _, _, player = string.find(msg, "^(%S+) has assaulted") end
 
     if player then
         local myFaction  = UnitFactionGroup("player")
-        local isFriendly = (string.lower(UnitName("player") or "") == string.lower(player))
+        -- ClassicAPI finds the named player in the group or around you; a
+        -- player it cannot find is taken for an enemy.
+        local isFriendly = string.lower(UnitName("player") or "") == string.lower(player)
         if not isFriendly then
-            local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
-            for i = 1, numRaid do
-                local u = RAID_UNITS[i]
-                if u and string.lower(UnitName(u) or "") == string.lower(player) then
-                    isFriendly = true
-                    break
-                end
-            end
+            local unit = UnitTokenFromName(player, true)
+            isFriendly = unit and UnitFactionGroup(unit) == myFaction
         end
         return isFriendly and myFaction or ((myFaction == "Horde") and "Alliance" or "Horde")
     end

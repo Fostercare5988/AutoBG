@@ -25,9 +25,6 @@ local SAME_SPOT_SQUARED = 15 * 15
 local REPEAT = 15               -- seconds before the same enemy at the same flag warns again
 local UNKNOWN_FLAG = "a flag"   -- an opening at a flag whose spot is not learned yet
 
-local RAID_UNITS = {}
-for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
-
 local active, mapID, enemyFaction, ticker, cleaned
 local nodeHolder = {} -- node -> faction holding it or taking it
 local watch = {}      -- enemy name -> { y, x, still, fresh, dead, casting, node, warnedNode, warnedAt }
@@ -95,12 +92,10 @@ local function Learn(node, y, x)
 	spot.n = n + 1
 end
 
+-- ClassicAPI looks through the group and every unit around you.
 local function UnitForName(name)
 	if name == UnitName("player") then return "player" end
-	for i = 1, GetNumRaidMembers() do
-		if UnitName(RAID_UNITS[i]) == name then return RAID_UNITS[i] end
-	end
-	return Targets.GetGUID(name)
+	return UnitTokenFromName(name, true) or Targets.GetGUID(name)
 end
 
 local function ClearWarning(name)
