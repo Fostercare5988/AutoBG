@@ -335,7 +335,7 @@ local cbTgtRaidIcons = RowFeature("AutoBG_Tgt_RaidIcons", "Raid icons",
 local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
 	"Show how many of your group, you included, target each enemy, in orange beside the health.", -310, "ShowTargetCount")
 local cbTgtFlagWatch = RowFeature("AutoBG_Tgt_FlagWatch", "Flag warnings",
-	"In Arathi Basin and Alterac Valley, warn when an enemy starts opening a flag, or comes out of stealth at one. Flag spots are learned as flags are assaulted. Ctrl-click the warning to announce it.", -336, "FlagWatch")
+	"In Arathi Basin, warn when an enemy starts opening a flag, or comes out of stealth at one. Flag spots are learned as flags are assaulted. Ctrl-click the warning to announce it.", -336, "FlagWatch")
 
 local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, store, rerender, format)
 	return UI.Slider(name, panelTargets, text, x, y, width, minValue, maxValue, step, function(value)

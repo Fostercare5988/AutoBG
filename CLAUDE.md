@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (173 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (171 tests).
 
 | File | Job |
 | --- | --- |
@@ -14,7 +14,7 @@ Regression tests: `regressions/AutoBG` in VanillaForge (173 tests).
 | `AutoBG_AlertCard.lua` | The popup card kit (`ns.CreateAlertCard`); the stealth and flag warnings each own one |
 | `AutoBG_Spy.lua` | Enemy list and stealth alerts outside battlegrounds; off in raids by default |
 | `AutoBG_FlagAlert.lua` | The flag warning card, Ctrl+click announce; learns the Opening spell (`AutoBG_Settings.OpeningSpell`) |
-| `AutoBG_FlagWatch.lua` | AB/AV watch: enemy Opening casts and enemies out of stealth at a flag; learns flag spots per map (`AutoBG_Settings.FlagSpots`) |
+| `AutoBG_FlagWatch.lua` | Arathi Basin only: enemy Opening casts and enemies out of stealth at a flag; learns flag spots per map (`AutoBG_Settings.FlagSpots`) |
 | `AutoBG_Options.lua` | Settings window, tabs General, Timers, Enemy frames, Spy |
 
 Things to know:
@@ -36,11 +36,13 @@ Things to know:
   Alliance). `Textures\Gloss.tga` bar, cast-bar spark, BigWigs clock
   ("21", "1:51"). Rows drain and change their text in `OnUpdate`; the logic
   ticker runs once a second. The frame preview is never saved.
-- The flag watch warns on a visible enemy's Opening cast start (UNIT_CASTEVENT,
-  no enemy frames needed). A cast started from stealth never reaches the
-  client, so it also warns when an enemy comes into sight at a flag and stands
-  there. Spots are learned only from assault messages and lone Opening casts;
-  "taken" messages teach nothing, and spots on top of each other are dropped.
+- The flag watch runs in Arathi Basin only; in Alterac Valley it was noise
+  (player's call, 2026-10-27), and saved spots for other maps are dropped on
+  load. It warns on a visible enemy's Opening cast start (UNIT_CASTEVENT, no
+  enemy frames needed). A cast started from stealth never reaches the client,
+  so it also warns when an enemy comes into sight at a flag and stands there.
+  Spots are learned only from named assault and defend messages; "taken"
+  messages teach nothing.
 - The game start timer reads only lines about the battle beginning ("1 minute
   until the battle for Alterac Valley begins."). "This game will close in 30
   seconds" (too few players) once started it by mistake.
