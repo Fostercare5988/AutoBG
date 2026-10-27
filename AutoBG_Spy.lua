@@ -1,11 +1,11 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Open-World Spy Module (Consolidated from BattlegroundTargets)       --
 -- Engineered natively for World of Warcraft 1.12.1 (Enhanced Engine)        --
--- Leveraging SuperWoW v2.2+, ClassicAPI v1.17.10+, NamPower                    --
+-- Leveraging SuperWoW v2.2+, ClassicAPI v1.17.11+, NamPower                    --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.10+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11710
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.11+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11711
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then

@@ -1,9 +1,9 @@
 ## X-Maintainer: Fostercare5988
 ## Interface: 11200
-## X-ClassicAPI-Min-Version: 1.17.10
+## X-ClassicAPI-Min-Version: 1.17.11
 ## Dependencies: !!!ClassicAPI
 ## Title: |cffff9e38AutoBG|r |cffffd6a8[Fostercare5988]|r
-## Notes: BG timers, enemy frames and open-world Spy for WoW 1.12.1. Requires ClassicAPI v1.17.10+, SuperWoW v2.2+ and NamPower v4.6.2+.
+## Notes: BG timers, enemy frames and open-world Spy for WoW 1.12.1. Requires ClassicAPI v1.17.11+, SuperWoW v2.2+ and NamPower v4.6.2+.
 ## Author: Fostercare5988
 ## Version: 1.0.0
 ## SavedVariables: AutoBG_Settings
