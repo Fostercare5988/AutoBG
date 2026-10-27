@@ -5,8 +5,8 @@
 -- color. Each card has its own saved position and hides itself after a while.--
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7 & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11707
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.10 & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11710
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then

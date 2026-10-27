@@ -1,11 +1,11 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Open-World Spy Module (Consolidated from BattlegroundTargets)       --
 -- Engineered natively for World of Warcraft 1.12.1 (Enhanced Engine)        --
--- Leveraging SuperWoW v2.2+, ClassicAPI v1.17.7+, NamPower                    --
+-- Leveraging SuperWoW v2.2+, ClassicAPI v1.17.10+, NamPower                    --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11707
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.10+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11710
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then
@@ -253,12 +253,40 @@ local function StopTicker()
 	if purgeTicker then purgeTicker:Cancel(); purgeTicker = nil end
 end
 
+-- Spy's sightings are registered only while the list works: not in a
+-- battleground (the enemy frames give the stealth alert there), not in a raid
+-- it is off in, not while switched off. Aura changes come only for the tokens
+-- an enemy can be on, not for every raid or party member.
+local TELEMETRY_EVENTS = {
+	"UNIT_CASTEVENT", "NAME_PLATE_UNIT_ADDED", "UPDATE_MOUSEOVER_UNIT",
+	"PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED",
+	-- NamPower: exact stealth gain/loss and deaths by GUID (Emyrk/nampower EVENTS.md).
+	"BUFF_ADDED_OTHER", "BUFF_REMOVED_OTHER", "UNIT_DIED",
+}
+local ENEMY_UNIT_EVENTS = { "UNIT_AURA_DELTA", "UNIT_SPELLCAST_SUCCEEDED" }
+local ENEMY_UNITS = { "target", "focus", "mouseover" }
+for i = 1, 40 do ENEMY_UNITS[3 + i] = "nameplate" .. i end
+local telemetryFrame, telemetryOn
+local function SyncTelemetry(on)
+	if telemetryOn == on or not telemetryFrame then return end
+	telemetryOn = on
+	for i = 1, #TELEMETRY_EVENTS do
+		if on then telemetryFrame:RegisterEvent(TELEMETRY_EVENTS[i]) else telemetryFrame:UnregisterEvent(TELEMETRY_EVENTS[i]) end
+	end
+	for i = 1, #ENEMY_UNIT_EVENTS do
+		if on then telemetryFrame:RegisterUnitEvent(ENEMY_UNIT_EVENTS[i], unpack(ENEMY_UNITS))
+		else telemetryFrame:UnregisterEvent(ENEMY_UNIT_EVENTS[i]) end
+	end
+end
+
 local function MaintainTicker()
 	local opt = GetSpySettings()
 	if opt.Enabled and not Spy.isTestMode and not (Targets and Targets.activeBG) and not Spy:IsRaidDisabled() then
 		if not purgeTicker then purgeTicker = C_Timer.NewTicker(1, OnSpyTick) end
+		SyncTelemetry(true)
 	else
 		StopTicker()
+		SyncTelemetry(false)
 	end
 end
 
@@ -1370,7 +1398,7 @@ function Spy:OnBattlegroundChanged(inBG)
 	Spy.inBattleground = inBG
 	if inBG then
 		ClearObservations()
-		StopTicker()
+		MaintainTicker()
 		if renderTimer then renderTimer:Cancel(); renderTimer = nil end
 		Spy:HideAlert()
 		if Spy.Frame and Spy.Frame:IsShown() then
@@ -1454,17 +1482,9 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
-eventFrame:RegisterEvent("UNIT_CASTEVENT")
-eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-eventFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
-eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
-eventFrame:RegisterEvent("PLAYER_FOCUS_CHANGED")
-eventFrame:RegisterEvent("UNIT_AURA")
--- NamPower: exact stealth gain/loss and deaths by GUID (Emyrk/nampower EVENTS.md).
-eventFrame:RegisterEvent("BUFF_ADDED_OTHER")
-eventFrame:RegisterEvent("BUFF_REMOVED_OTHER")
-eventFrame:RegisterEvent("UNIT_DIED")
+-- Sightings start on; MaintainTicker turns them off where Spy does not work.
+telemetryFrame = eventFrame
+SyncTelemetry(true)
 
 local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 	-- Accept frame/event arguments, event-first arguments and native 1.12 globals.
@@ -1589,7 +1609,10 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 		local unit = event == "PLAYER_TARGET_CHANGED" and "target" or (event == "PLAYER_FOCUS_CHANGED" and "focus" or "mouseover")
 		QueueObservation(unit)
 
-	elseif event == "UNIT_AURA" then
+	elseif event == "UNIT_AURA_DELTA" then
+		-- ClassicAPI 1.17.10: a refresh alone (only updated IDs) never starts or
+		-- ends stealth; the second-by-second check keeps a shown enemy current.
+		if arg2 and not (arg2.isFullUpdate or arg2.addedAuraInstanceIDs or arg2.removedAuraInstanceIDs) then return end
 		QueueObservation(arg1)
 	end
 end
