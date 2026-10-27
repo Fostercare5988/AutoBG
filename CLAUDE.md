@@ -23,7 +23,7 @@ Things to know:
   (10, 15, 40). In a match the settings page edits the size being played.
 - Invites run out after about 80 seconds. The enter delay tops out at 78; an
   invite that ends before the scheduled enter is reported in chat.
-- Requires ClassicAPI 1.17.10+ (guards check `11710`), SuperWoW and
+- Requires ClassicAPI 1.17.11+ (guards check `11711`), SuperWoW and
   NamPower. UnitXP is no longer used.
 - `AutoBG_SetPreview(on)` in Options is the one switch for every preview.
 - Faction colors on timers and the Arathi Basin projection are always on; their
