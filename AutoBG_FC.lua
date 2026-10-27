@@ -37,24 +37,16 @@ end
 local CarrierNameMatches
 local OnCarrierDebuff
 
+-- The frames are ClassicAPI unit buttons (AutoBG_Targets.BindUnit) once the
+-- carrier's GUID is known; until then, and for /abg efc, ffc and focus, the
+-- enemy frames' selector finds the carrier by name.
 local function SelectCarrier(name, guid, focus)
-    if not name or name == "" then return false end
-    local unit = CarrierNameMatches(guid, name) and guid or nil
-    if not unit then
-        local resolved = UnitTokenFromName(name, true)
-        if CarrierNameMatches(resolved, name) then unit = resolved end
-    end
-    if not unit then
-        TargetByName(string.gsub(name, "%-.*$", ""), true)
-        if not CarrierNameMatches("target", name) then return false end
-        unit = "target"
-    end
-    if focus then
-        FocusUnit(unit)
-        return UnitIsUnit("focus", unit)
-    end
-    TargetUnit(unit)
-    return UnitIsUnit("target", unit)
+    if not name or name == "" or not AutoBG_Targets then return false end
+    return AutoBG_Targets.SelectEnemy(name, guid, focus and "RightButton" or "LeftButton")
+end
+
+local function BindCarrier(frame, guid)
+    if AutoBG_Targets and AutoBG_Targets.BindUnit then AutoBG_Targets.BindUnit(frame, guid) end
 end
 
 local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
@@ -79,17 +71,13 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     end)
     frame:Hide()
 
-    -- SuperWoW Hybrid Targeting & Focus (Rule B9, C2, D1, AP-03, AP-08)
+    -- Bound, ClassicAPI targets and focuses; this handles a carrier not yet seen.
     frame:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     frame:SetScript("OnClick", function()
-        SelectCarrier(this.carrierName, this.carrierGuid, arg1 == "RightButton")
+        SelectCarrier(this.carrierName, this.carrierGuid, GetMouseButtonClicked() == "RightButton")
     end)
 
-    -- SuperWoW Native Mouseover & Tooltip (Rule D1)
     frame:SetScript("OnEnter", function()
-        if this.carrierGuid and type(this.carrierGuid) == "string" and this.carrierGuid:sub(1, 2) == "0x" and SetMouseoverUnit then
-            pcall(SetMouseoverUnit, this.carrierGuid)
-        end
         GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
         GameTooltip:SetText(this.carrierName or titleText, 1, 1, 1)
         GameTooltip:AddLine("|cFF00FF00Left-Click:|r Target Flag Carrier", 0.7, 0.7, 0.7)
@@ -97,9 +85,6 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
         GameTooltip:Show()
     end)
     frame:SetScript("OnLeave", function()
-        if SetMouseoverUnit then
-            pcall(SetMouseoverUnit)
-        end
         GameTooltip:Hide()
     end)
 
@@ -182,6 +167,7 @@ end
 local function UpdateFCButton(frame, carrierName)
     frame.carrierName = carrierName
     frame.carrierGuid, frame.stackGuid = nil, nil
+    BindCarrier(frame, nil)
     frame.displayHealth, frame.displayHP, frame.displayDistance, frame.displayStacks = nil, nil, nil, nil
     if carrierName and carrierName ~= "" and (not AutoBG_Settings or AutoBG_Settings.FCFrame ~= false) then
         local color = (AutoBG_FindPlayerClass and AutoBG_GetClassColor and AutoBG_GetClassColor(AutoBG_FindPlayerClass(carrierName)))
@@ -350,6 +336,7 @@ local function ScanCarrier(carrierName, frame, flagType)
     local u = ResolveCarrierUnit(carrierName, frame.carrierGuid)
     if u then
             frame.carrierGuid = (UnitGUID and UnitGUID(u)) or nil
+            BindCarrier(frame, frame.carrierGuid)
             local hp, maxHp = ReadCarrierHealth(u)
 
             if maxHp > 0 then
@@ -395,6 +382,7 @@ local function ScanCarrier(carrierName, frame, flagType)
     end
     -- Lost identity must not leave the previous carrier's health on screen.
     frame.carrierGuid, frame.stackGuid = nil, nil
+    BindCarrier(frame, nil)
     SetCarrierText(frame, "displayHP", frame.hpText, "???")
     SetCarrierText(frame, "displayDistance", frame.distText, "|cFF808080? yd|r")
     if frame.debuffText then SetCarrierText(frame, "displayStacks", frame.debuffText, "") end

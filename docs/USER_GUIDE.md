@@ -55,8 +55,9 @@ bars fill toward the estimated wait. Adjust countdown width,
 height, scale and opacity there. Ctrl + left-click a timer announces its remaining
 time to battleground chat.
 
-Left-click a carrier card to target the player. Right-click focuses a currently
-loaded, verified carrier. Carrier cards also support mouseover casting.
+Left-click a carrier card to target the player, right-click to focus them. With
+a spell on the cursor, a left-click casts it on the carrier. Carrier cards also
+support mouseover casting.
 Distance colors indicate up to 30 yards, 31–50, 51–80 and over 80 yards; `?` means
 distance is unavailable. Timers and projections remain estimates when the server
 does not provide enough information.
@@ -97,8 +98,9 @@ list out of combat; in combat it stays locked, so a stray click cannot move it.
   icon is the Opening spell, learned the first time AutoBG sees one cast
   (a question mark until then). Ctrl + left-click the popup, or a row marked
   OPENING, to tell your battleground who is opening which flag. The trinket icon can sit on either side; its 180-second countdown
-estimates cooldown from observed activations. Left-click targets; right-click
-focuses a verified loaded player.
+estimates cooldown from observed activations. Left-click targets (or casts the
+spell on your cursor at the enemy); right-click focuses. Hovering a row makes
+the enemy your mouseover, for mouseover macros.
 
 **Stealth warnings in BGs**, on the Spy tab, controls nearby confirmed warnings. Duplicate casts,
 aura updates and immediate stealth re-entry do not restart warning sounds.
