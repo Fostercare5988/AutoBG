@@ -1,11 +1,11 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Enemy Target Frames Module (Consolidated from BattlegroundTargets)  --
 -- Engineered natively for World of Warcraft 1.12.1 (Enhanced Engine)        --
--- ClassicAPI v1.17.7+, SuperWoW v2.2+, NamPower                             --
+-- ClassicAPI v1.17.10+, SuperWoW v2.2+, NamPower                             --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11707
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.10+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11710
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then
@@ -964,9 +964,39 @@ local function AutoScoreboardTicker()
 	if activeBG and not Targets.isConfig then RequestBattlefieldScoreData() end
 end
 
+-- Match events are registered only in a battleground or the preview, so raids,
+-- cities and the open world never run this module for every cast and buff.
+-- Stealth alerts in a battleground come from here, frames shown or not.
+local MATCH_EVENTS = {
+	"UNIT_TARGET", "UPDATE_MOUSEOVER_UNIT", "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED",
+	"RAID_TARGET_UPDATE", "NAME_PLATE_UNIT_ADDED", "UNIT_CASTEVENT",
+	-- NamPower GUID events: health, death and buffs for every loaded enemy, not only
+	-- those on a target/mouseover/nameplate token (Emyrk/nampower EVENTS.md).
+	"UNIT_HEALTH_GUID", "UNIT_DIED", "BUFF_ADDED_OTHER", "BUFF_REMOVED_OTHER",
+	"PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
+}
+-- An enemy is only ever on these tokens; the raid's own health, auras and casts
+-- are dropped by the engine before Lua runs (ClassicAPI RegisterUnitEvent).
+local ENEMY_UNIT_EVENTS = { "UNIT_AURA_DELTA", "UNIT_HEALTH", "UNIT_NAME_UPDATE", "UNIT_SPELLCAST_SUCCEEDED" }
+local ENEMY_UNITS = { "target", "focus", "mouseover" }
+for i = 1, 40 do ENEMY_UNITS[3 + i] = "nameplate" .. i end
+local matchEventsOn = false
+local function SyncMatchEvents(on)
+	if matchEventsOn == on then return end
+	matchEventsOn = on
+	for i = 1, #MATCH_EVENTS do
+		if on then Targets:RegisterEvent(MATCH_EVENTS[i]) else Targets:UnregisterEvent(MATCH_EVENTS[i]) end
+	end
+	for i = 1, #ENEMY_UNIT_EVENTS do
+		if on then Targets:RegisterUnitEvent(ENEMY_UNIT_EVENTS[i], unpack(ENEMY_UNITS))
+		else Targets:UnregisterEvent(ENEMY_UNIT_EVENTS[i]) end
+	end
+end
+
 -- ClassicAPI handles own their callbacks. Retain them only while their feature
 -- needs work; a preview animates local rows without polling the scoreboard.
 local function SyncTargetTimers()
+	SyncMatchEvents((activeBG or Targets.isConfig) and true or false)
 	if activeBG and not Targets.isConfig then
 		if not scoreboardTicker then scoreboardTicker = C_Timer.NewTicker(3.0, AutoScoreboardTicker) end
 	elseif scoreboardTicker then
@@ -1966,25 +1996,7 @@ Targets:RegisterEvent("PLAYER_ENTERING_WORLD")
 Targets:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 Targets:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 Targets:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
-Targets:RegisterEvent("UNIT_AURA")
-Targets:RegisterEvent("UNIT_HEALTH")
-Targets:RegisterEvent("UNIT_TARGET")
-Targets:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
-Targets:RegisterEvent("PLAYER_TARGET_CHANGED")
-Targets:RegisterEvent("PLAYER_FOCUS_CHANGED")
-Targets:RegisterEvent("RAID_TARGET_UPDATE")
-Targets:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-Targets:RegisterEvent("UNIT_NAME_UPDATE")
-Targets:RegisterEvent("UNIT_CASTEVENT")
-Targets:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
--- NamPower GUID events: health, death and buffs for every loaded enemy, not only
--- those on a target/mouseover/nameplate token (Emyrk/nampower EVENTS.md).
-Targets:RegisterEvent("UNIT_HEALTH_GUID")
-Targets:RegisterEvent("UNIT_DIED")
-Targets:RegisterEvent("PLAYER_REGEN_DISABLED")
-Targets:RegisterEvent("PLAYER_REGEN_ENABLED")
-Targets:RegisterEvent("BUFF_ADDED_OTHER")
-Targets:RegisterEvent("BUFF_REMOVED_OTHER")
+-- The match events follow activeBG (SyncMatchEvents).
 
 local TARGETS_LIFECYCLE_EVENTS = {
 	PLAYER_LOGIN = true,
@@ -2030,7 +2042,10 @@ local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, a
 	elseif ev == "UNIT_HEALTH" then
 		ObserveUnit(a1, false)
 
-	elseif ev == "UNIT_AURA" then
+	elseif ev == "UNIT_AURA_DELTA" then
+		-- ClassicAPI 1.17.10: a refresh alone (only updated IDs) never starts or
+		-- ends stealth; anything added, removed or a full update is read again.
+		if a2 and not (a2.isFullUpdate or a2.addedAuraInstanceIDs or a2.removedAuraInstanceIDs) then return end
 		ObserveUnit(a1)
 
 	elseif ev == "UNIT_TARGET" then

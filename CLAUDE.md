@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (171 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (181 tests).
 
 | File | Job |
 | --- | --- |
@@ -23,7 +23,7 @@ Things to know:
   (10, 15, 40). In a match the settings page edits the size being played.
 - Invites run out after about 80 seconds. The enter delay tops out at 78; an
   invite that ends before the scheduled enter is reported in chat.
-- Requires ClassicAPI 1.17.7+ (guards check `11707`), SuperWoW and
+- Requires ClassicAPI 1.17.10+ (guards check `11710`), SuperWoW and
   NamPower. UnitXP is no longer used.
 - `AutoBG_SetPreview(on)` in Options is the one switch for every preview.
 - Faction colors on timers and the Arathi Basin projection are always on; their
@@ -46,3 +46,13 @@ Things to know:
 - The game start timer reads only lines about the battle beginning ("1 minute
   until the battle for Alterac Valley begins."). "This game will close in 30
   seconds" (too few players) once started it by mistake.
+- Events are registered only where they are used. Enemy frames: match events
+  only in a battleground or the preview (`SyncMatchEvents`). Spy: sightings
+  only while its list works (`SyncTelemetry` in `MaintainTicker`). Unit events
+  use `RegisterUnitEvent` for the tokens that matter (target, focus,
+  mouseover, nameplates; `player` for Deserter; raid tokens for revivals, in
+  battlegrounds only). In a battleground the stealth alert comes from the
+  enemy frames' roster, with the frames for that size on or off, and Spy shows
+  it with its list off. Aura listeners take `UNIT_AURA_DELTA` (1.17.10) and
+  skip refresh-only changes (only updated IDs), which never change stealth
+  or Deserter.

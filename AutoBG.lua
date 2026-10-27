@@ -1,14 +1,14 @@
 -- AutoBG for World of Warcraft 1.12.1 (Vanilla Enhanced)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI v1.17.7+, SuperWoW 2.2+, NamPower
+-- Built natively for ClassicAPI v1.17.10+, SuperWoW 2.2+, NamPower
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11707
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.10+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11710
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI (v1.17.7+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI (v1.17.10+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
     end
     return
 end
@@ -799,7 +799,9 @@ frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
 frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_ALLIANCE")
 frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 frame:RegisterEvent("CHAT_MSG_SYSTEM")
-frame:RegisterEvent("UNIT_AURA")
+-- Only your own auras matter (the Deserter debuff); other units never reach Lua.
+-- ClassicAPI 1.17.10 UNIT_AURA_DELTA says what changed, so refreshes cost nothing.
+frame:RegisterUnitEvent("UNIT_AURA_DELTA", "player")
 
 -- An invite runs out after about 80 seconds (measured in play: one ran out at
 -- 79s, 2026-10-21), so the enter delay tops out at 78, a second to spare. A
@@ -883,9 +885,10 @@ local function ProcessBattlefieldQueue(id)
     end
 end
 
-frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
+frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param, arg4_param)
     local ev = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
     local a1 = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
+    local a2 = (type(arg1_param) == "string" and (arg3_param or arg2)) or arg4_param or arg2
 
     if ev == "ADDON_LOADED" and a1 == addonName then
         if not AutoBG_Settings then AutoBG_Settings = defaultSettings
@@ -1097,7 +1100,9 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
             end
         end
 
-    elseif ev == "UNIT_AURA" and (not a1 or a1 == "player") then
+    elseif ev == "UNIT_AURA_DELTA" then
+        -- A refresh only (a2 lists updated IDs alone) cannot add or remove Deserter.
+        if a2 and not (a2.isFullUpdate or a2.addedAuraInstanceIDs or a2.removedAuraInstanceIDs) then return end
         local hasDes, rem = AutoBG_HasDeserter()
         if hasDes then
             if not hadDeserterDebuff then

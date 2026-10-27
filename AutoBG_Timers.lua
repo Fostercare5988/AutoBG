@@ -1,9 +1,9 @@
 -- AutoBG objective countdowns, resurrection waves and score projection.
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI v1.17.7+, SuperWoW 2.2+, NamPower
+-- Built natively for ClassicAPI v1.17.10+, SuperWoW 2.2+, NamPower
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.7+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11707
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.10+ & SuperWoW v2.2+)
+local MIN_CLASSIC_API = 11710
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
    CLASSIC_API_VERSION < MIN_CLASSIC_API then
@@ -1273,7 +1273,6 @@ EventFrame:RegisterEvent("ADDON_LOADED")
 EventFrame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 EventFrame:RegisterEvent("UPDATE_WORLD_STATES")
 EventFrame:RegisterEvent("PLAYER_UNGHOST")
-EventFrame:RegisterEvent("UNIT_HEALTH")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 EventFrame:RegisterEvent("ZONE_CHANGED")
 EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
@@ -1298,6 +1297,9 @@ EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
     end
     if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
         UpdateZoneCache()
+        -- Revivals are timed only in a battleground, and only raid members count.
+        if inPVP then EventFrame:RegisterUnitEvent("UNIT_HEALTH", unpack(RAID_UNITS))
+        else EventFrame:UnregisterEvent("UNIT_HEALTH") end
         worldStateDirty = true
         if not isAB then
             table.wipe(timers.AB)
