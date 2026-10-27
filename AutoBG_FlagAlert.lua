@@ -1,6 +1,6 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: flag alert                                                         --
--- The warning for an enemy opening a flag in Arathi Basin or Alterac Valley. --
+-- The warning for an enemy opening a flag in Arathi Basin.                  --
 -- It has its own card, apart from the stealth warning, so each can sit where --
 -- the player wants it and one never hides the other.                         --
 -- -------------------------------------------------------------------------- --
@@ -18,7 +18,7 @@ local UNKNOWN_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 local card
 
 -- The Opening spell is learned from the first Opening cast seen in Arathi
--- Basin or Alterac Valley (AutoBG_FlagWatch) and saved, so the icon comes from
+-- Basin (AutoBG_FlagWatch) and saved, so the icon comes from
 -- the client and no spell ID is hardcoded.
 function FlagAlert:LearnOpening(spellId)
 	if spellId and AutoBG_Settings then AutoBG_Settings.OpeningSpell = spellId end

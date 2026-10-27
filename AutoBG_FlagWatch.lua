@@ -1,14 +1,15 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Flag watch                                                         --
--- Warns when an enemy opens a flag in Arathi Basin or Alterac Valley.        --
+-- Warns when an enemy opens a flag in Arathi Basin (only there).            --
 -- -------------------------------------------------------------------------- --
 -- An enemy in sight who starts an Opening cast warns at once (SuperWoW
 -- UNIT_CASTEVENT START), with or without enemy frames. An opening started
 -- from stealth never reaches your client as a cast: it begins while the enemy
 -- is still invisible to you. What the client does see is the enemy appearing
 -- out of nowhere at a flag their team does not hold and standing there, so
--- that warns too. Flag spots are learned in play, from the players who assault
--- them and from Opening casts, and saved per map in AutoBG_Settings.FlagSpots.
+-- that warns too. Flag spots are learned in play from the players who assault
+-- them (every Arathi Basin assault names one) and saved per map in
+-- AutoBG_Settings.FlagSpots.
 
 local Targets = AutoBG_Targets
 if not Targets or not Targets.GetEnemy then return end
@@ -22,19 +23,17 @@ local STILL_SQUARED = 0.5 * 0.5 -- moved under half a yard since the last check
 local STILL_TICKS = 2           -- still for half a second
 local SAME_SPOT_SQUARED = 15 * 15
 local REPEAT = 15               -- seconds before the same enemy at the same flag warns again
-local LEARN_WINDOW = 1.5        -- an unnamed assault message this soon after one Opening came from it
 local UNKNOWN_FLAG = "a flag"   -- an opening at a flag whose spot is not learned yet
 
 local RAID_UNITS = {}
 for i = 1, 40 do RAID_UNITS[i] = "raid" .. i end
 
-local active, mapID, enemyFaction, ticker, playerGUID, cleaned
+local active, mapID, enemyFaction, ticker, cleaned
 local nodeHolder = {} -- node -> faction holding it or taking it
 local watch = {}      -- enemy name -> { y, x, still, fresh, dead, casting, node, warnedNode, warnedAt }
 local openers = {}    -- caster GUID -> enemy name, while their Opening cast runs
 local openingBySpell = {} -- spell ID -> whether it is an Opening cast
--- The last finished Opening cast seen, and how many finished in its window.
-local castAt, castY, castX, castCount = 0, nil, nil, 0
+local AB_BASES = { ["Gold Mine"] = true, ["Lumber Mill"] = true, ["Blacksmith"] = true, ["Farm"] = true, ["Stables"] = true }
 
 local function Enabled()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
@@ -54,22 +53,18 @@ local function Spots(create)
 	return spots
 end
 
--- Older versions could save one spot under two flags (a "was taken" message
--- right after your own Opening). Such spots cannot be trusted; drop them so
--- the flags are learned again.
-local function DropMixedSpots()
+-- Older versions also watched Alterac Valley and learned its flags from the
+-- Opening casts before an unnamed message; those spots are dropped. (That
+-- learning also caused the spots saved on top of each other, which were
+-- cleared before.)
+local function DropOtherSpots()
 	local all = AutoBG_Settings and AutoBG_Settings.FlagSpots
 	if not all then return end
-	for _, spots in pairs(all) do
-		for node, spot in pairs(spots) do
-			for other, o in pairs(spots) do
-				local dy, dx = spot.y - o.y, spot.x - o.x
-				if other ~= node and dy * dy + dx * dx <= SAME_SPOT_SQUARED then spot.mixed = true end
-			end
+	for map, spots in pairs(all) do
+		for node in pairs(spots) do
+			if not AB_BASES[node] then spots[node] = nil end
 		end
-		for node, spot in pairs(spots) do
-			if spot.mixed then spots[node] = nil end
-		end
+		if not next(spots) then all[map] = nil end
 	end
 end
 
@@ -206,23 +201,13 @@ local function OnOpeningStart(guid)
 	watch[name].casting = true
 end
 
--- A finished Opening, anyone's, is where the next assault message's flag stands.
-local function OnOpeningDone(guid)
-	local now = GetTime()
-	local y, x, _, map = UnitPosition(guid == playerGUID and "player" or guid)
-	if y and map == mapID then
-		if now - castAt > LEARN_WINDOW then castCount = 0 end
-		castAt, castY, castX, castCount = now, y, x, castCount + 1
-	end
-end
-
--- Called by AutoBG_Timers for every Arathi Basin and Alterac Valley node message.
+-- Called by AutoBG_Timers for every Arathi Basin base message.
 function FlagWatch:OnNodeMessage(node, msg, faction)
 	if not active then return end
 	local lower = string.lower(msg)
-	local assault = string.find(lower, "claims") or string.find(lower, "assaulted") or string.find(lower, "claimed") or string.find(lower, "under attack")
+	local assault = string.find(lower, "claims") or string.find(lower, "assaulted") or string.find(lower, "claimed")
 	local defended = string.find(lower, "defended")
-	local held = defended or string.find(lower, "taken") or string.find(lower, "captured") or string.find(lower, "destroyed")
+	local held = defended or string.find(lower, "taken") or string.find(lower, "captured")
 	if not (assault or held) then return end
 	if faction then nodeHolder[node] = faction end
 	-- A player named in the message stood at the flag.
@@ -230,17 +215,13 @@ function FlagWatch:OnNodeMessage(node, msg, faction)
 	if not who then _, _, who = string.find(msg, "^(%S+) has assaulted") end
 	if not who then _, _, who = string.find(msg, "^(%S+) has defended") end
 	if who and watch[who] and watch[who].node then ClearWarning(who) end
-	-- "Taken", "captured" and "destroyed" report a holder: nobody need be at
-	-- the flag, so they teach no spot.
+	-- "Taken" and "captured" report a holder: nobody need be at the flag, so
+	-- they teach no spot.
 	if not (assault or defended) then return end
 	local unit = who and UnitForName(who)
 	if unit then
 		local y, x, _, map = UnitPosition(unit)
 		if y and map == mapID then Learn(node, y, x) end
-	elseif not who and castCount == 1 and GetTime() - castAt <= LEARN_WINDOW then
-		-- Alterac Valley names nobody; a lone Opening just before it was this flag.
-		Learn(node, castY, castX)
-		castCount = 0
 	end
 end
 
@@ -251,21 +232,19 @@ local function Reset()
 	end
 	table.wipe(nodeHolder)
 	table.wipe(openers)
-	castAt, castCount = 0, 0
 end
 
 local function UpdateZone()
 	local inInstance, instanceType = IsInInstance()
 	local zone = string.lower(GetRealZoneText() or "")
 	local want = inInstance and instanceType == "pvp"
-		and (string.find(zone, "arathi") or string.find(zone, "alterac")) and true or false
+		and string.find(zone, "arathi") and true or false
 	if want == active then return end
 	active = want
 	Reset()
 	if active then
-		if not cleaned then DropMixedSpots(); cleaned = true end
+		if not cleaned then DropOtherSpots(); cleaned = true end
 		ReadMap()
-		playerGUID = UnitGUID("player")
 		enemyFaction = UnitFactionGroup("player") == "Horde" and "Alliance" or "Horde"
 		FlagWatch:RegisterEvent("UNIT_CASTEVENT")
 		if not ticker then ticker = C_Timer.NewTicker(TICK, Tick) end
@@ -302,8 +281,7 @@ FlagWatch:SetScript("OnEvent", function(p1, p2, p3, p4, p5, p6)
 			if opening and AutoBG_FlagAlert then AutoBG_FlagAlert:LearnOpening(a4) end
 		end
 		if not opening then return end
-		if a3 == "START" then OnOpeningStart(a1)
-		elseif a3 == "CAST" then OnOpeningDone(a1) end
+		if a3 == "START" then OnOpeningStart(a1) end
 	else
 		UpdateZone()
 	end
