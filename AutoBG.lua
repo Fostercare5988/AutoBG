@@ -1170,8 +1170,8 @@ local toggleCommands = {
     t = { key = "TestAllTimers", label = "Test Mode (All Timers)" },
     test = { key = "TestAllTimers", label = "Test Mode (All Timers)" },
     autoqueue = { key = "AutoQueueLogin", label = "Auto-Queue on Login" },
-    start = { key = "StartTimer", label = "Match Start Timer" },
-    starttimer = { key = "StartTimer", label = "Match Start Timer" },
+    start = { key = "StartTimer", label = "Game Start Timer" },
+    starttimer = { key = "StartTimer", label = "Game Start Timer" },
 }
 
 SLASH_AUTOBG1 = "/abg"

@@ -84,6 +84,27 @@ local ALLIANCE_ICON = "Interface\\Icons\\INV_BannerPVP_02"
 local HORDE_ICON    = "Interface\\Icons\\INV_BannerPVP_01"
 local NEUTRAL_ICON  = "Interface\\Icons\\INV_Misc_PocketWatch_01"
 local RESPAWN_ICON  = "Interface\\Icons\\Spell_Holy_Resurrection"
+-- Objectives wear our own pictures (Textures\Nodes) on their side's color:
+-- every Arathi Basin base its own, Alterac Valley bunkers and towers a keep,
+-- graveyards (relief hut and aid station too) a headstone, mines a pick.
+local NODE_KINDS = {
+    ["Gold Mine"] = "GoldMine", ["Lumber Mill"] = "LumberMill", ["Blacksmith"] = "Blacksmith",
+    ["Farm"] = "Farm", ["Stables"] = "Stables",
+    ["Iceblood Tower"] = "Tower", ["Tower Point"] = "Tower",
+    ["East Frostwolf Tower"] = "Tower", ["West Frostwolf Tower"] = "Tower",
+    ["Stonehearth Bunker"] = "Tower", ["Icewing Bunker"] = "Tower",
+    ["Dun Baldar North Bunker"] = "Tower", ["Dun Baldar South Bunker"] = "Tower",
+    ["Frostwolf Relief Hut"] = "Grave", ["Snowfall Graveyard"] = "Grave",
+    ["Stormpike Graveyard"] = "Grave", ["Iceblood Graveyard"] = "Grave",
+    ["Frostwolf Graveyard"] = "Grave", ["Stonehearth Graveyard"] = "Grave",
+    ["Stormpike Aid Station"] = "Grave",
+    ["Irondeep Mine"] = "Mine", ["Coldtooth Mine"] = "Mine",
+}
+local NODE_ICONS = {} -- [node name][Alliance|Horde|Neutral] = texture path
+for node, kind in pairs(NODE_KINDS) do
+    local path = "Interface\\AddOns\\AutoBG\\Textures\\Nodes\\" .. kind .. "_"
+    NODE_ICONS[node] = { Alliance = path .. "Alliance", Horde = path .. "Horde", Neutral = path .. "Neutral" }
+end
 local BAR_ROW_GAP   = 2
 local BAR_TITLE_H   = 15
 local BAR_COLORS = {
@@ -571,11 +592,11 @@ local WSG_TEST_DATA = {
     { name = "Horde Flag",    remaining = 17, faction = "Horde"    },
 }
 local START_TEST_DATA = {
-    { name = "Match Starts",  remaining = 45, faction = nil },
+    { name = "Game Starts",  remaining = 45, faction = nil },
 }
 
 -- =========================================================
--- Countdown Bar Row Renderer (Match Start / AB / AV / WSG)
+-- Countdown Bar Row Renderer (Game Start / AB / AV / WSG)
 -- Rows take their faction's color and banner; colorMode = "faction" also
 -- derives the faction from a WSG flag name. expiry is nil for preview rows,
 -- which stand still.
@@ -586,7 +607,12 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
         elseif name == "Horde Flag" then faction = "Horde" end
     end
     local colorKey = BAR_COLORS[faction or ""] and faction or "neutral"
-    SetRowIcon(row, (faction == "Alliance" and ALLIANCE_ICON) or (faction == "Horde" and HORDE_ICON) or defaultIcon)
+    local nodeIcons = NODE_ICONS[name]
+    if nodeIcons then
+        SetRowIcon(row, nodeIcons[faction or ""] or nodeIcons.Neutral)
+    else
+        SetRowIcon(row, (faction == "Alliance" and ALLIANCE_ICON) or (faction == "Horde" and HORDE_ICON) or defaultIcon)
+    end
     SetRowName(row, name, faction and (name .. " (" .. faction .. ")") or name)
     PaintRow(row, colorKey)
     SetRowDuration(row, maxTime)
@@ -996,7 +1022,7 @@ local function UpdateAllTimers()
     local now         = GetTime()
     local isTestAll   = AutoBG_Settings.TestAllTimers
 
-    -- 0. Match Start Timer (Pre-game gate countdown)
+    -- 0. Game start (pre-game gate countdown)
     RenderCountdownBars(StartTimerFrame, timers.Global, AutoBG_Settings.StartTimer ~= false, inPVP, 120, START_TEST_DATA, "time")
 
     -- 1. AB bases (60 s)
@@ -1162,6 +1188,19 @@ local function GetFactionFromMessage(msg, ev)
     return nil
 end
 
+-- Seconds left in a start announcement: "1 minute until the battle for
+-- Alterac Valley begins.", "The battle begins in 30 seconds!". The caller
+-- checks the line is about the start; "This game will close in 30 seconds"
+-- is the empty-game warning and must not count.
+local START_WORDS = { one = 1, two = 2, fifteen = 15, thirty = 30 }
+local function StartCountdown(lower)
+    local _, _, n, unit = string.find(lower, "(%w+)%s+(m)in")
+    if not n then _, _, n, unit = string.find(lower, "(%w+)%s+(s)ec") end
+    n = n and (tonumber(n) or START_WORDS[n])
+    if not n then return nil end
+    return unit == "m" and n * 60 or n
+end
+
 local function ParseCombatMessage(msg, ev)
     if not AutoBG_Settings or not msg or not inPVP then return end
     local lower = string.lower(msg)
@@ -1202,31 +1241,13 @@ local function ParseCombatMessage(msg, ev)
         end
     end
 
-    -- 3. Gate Pre-Match Announcements
-    local _, _, m = string.find(lower, "begins? in (%d+)%s*min")
-    if not m then _, _, m = string.find(lower, "begin in (%d+)%s*min") end
-    if not m then _, _, m = string.find(lower, "starts? in (%d+)%s*min") end
-    if not m then _, _, m = string.find(lower, "opens? in (%d+)%s*min") end
-    if not m and string.find(lower, "two minute") then m = "2" end
-    if not m and string.find(lower, "one minute") then m = "1" end
-
-    if m then
-        local sec = tonumber(m) * 60
-        timers.Global["Match Starts"] = { expire = GetTime() + sec, max = sec }
-    else
-        local _, _, s = string.find(lower, "begins? in (%d+)%s*sec")
-        if not s then _, _, s = string.find(lower, "begin in (%d+)%s*sec") end
-        if not s then _, _, s = string.find(lower, "starts? in (%d+)%s*sec") end
-        if not s then _, _, s = string.find(lower, "opens? in (%d+)%s*sec") end
-        if not s and string.find(lower, "30 second") then s = "30" end
-        if not s and string.find(lower, "15 second") then s = "15" end
-
-        if s then
-            local sec = tonumber(s)
-            timers.Global["Match Starts"] = { expire = GetTime() + sec, max = sec }
-        elseif string.find(lower, "begun") or string.find(lower, "let the battle begin") or string.find(lower, "gates? (.-)open") or string.find(lower, "gates have opened") then
-            timers.Global["Match Starts"] = nil
-        end
+    -- 3. Game start: only a line about the battle beginning counts.
+    local sec = (string.find(lower, "begin") or string.find(lower, "start") or string.find(lower, "open"))
+        and StartCountdown(lower)
+    if sec then
+        timers.Global["Game Starts"] = { expire = GetTime() + sec, max = sec }
+    elseif string.find(lower, "begun") or string.find(lower, "let the battle begin") or string.find(lower, "gates? (.-)open") then
+        timers.Global["Game Starts"] = nil
     end
 
     -- 4. WSG Flag Respawns: 23s on OctoWoW (confirmed in play, 2026-10-21)
