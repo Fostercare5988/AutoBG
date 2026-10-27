@@ -175,8 +175,8 @@ local cbAVTimers = TimerSetting("AutoBG_Opt_AVTimers", "Alterac Valley nodes",
 	"Show 5-minute countdowns for Alterac Valley towers, bunkers, graveyards and mines.", -144, "AVTimers")
 local cbWSGTimers = TimerSetting("AutoBG_Opt_WSGTimers", "Warsong flag respawn",
 	"Show the 23-second flag respawn countdown in Warsong Gulch.", -170, "WSGTimers")
-local cbStartTimer = TimerSetting("AutoBG_Opt_StartTimer", "Match start",
-	"Count down until the match starts.", -196, "StartTimer")
+local cbStartTimer = TimerSetting("AutoBG_Opt_StartTimer", "Game start",
+	"Count down until the game starts.", -196, "StartTimer")
 local cbRessTimer = TimerSetting("AutoBG_Opt_RessTimer", "Spirit healer waves",
 	"Show the synced 30-second Spirit Healer resurrection wave.", -222, "RessTimer")
 local cbQueueTimers = TimerSetting("AutoBG_Opt_QueueTimers", "Queue wait time",

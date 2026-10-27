@@ -2,13 +2,13 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (169 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (173 tests).
 
 | File | Job |
 | --- | --- |
 | `ForgeUI.lua` | The shared settings kit (ForgeUI) |
 | `AutoBG.lua` | Settings and defaults, queue pops and auto-enter, match end, auto-rejoin, `/abg` commands |
-| `AutoBG_Timers.lua` | Base and node countdowns, match start, spirit healer waves, queue times, Arathi Basin projection |
+| `AutoBG_Timers.lua` | Base and node countdowns, game start, spirit healer waves, queue times, Arathi Basin projection |
 | `AutoBG_FC.lua` | Warsong Gulch flag carrier frames |
 | `AutoBG_Targets.lua` | Enemy frames: health, cast bars, range fading, raid icons, trinkets, stealth |
 | `AutoBG_AlertCard.lua` | The popup card kit (`ns.CreateAlertCard`); the stealth and flag warnings each own one |
@@ -28,9 +28,12 @@ Things to know:
 - `AutoBG_SetPreview(on)` in Options is the one switch for every preview.
 - Faction colors on timers and the Arathi Basin projection are always on; their
   old settings are cleared on load.
-- Every timer (objectives, match start, respawn, queues) is a row from one
-  factory in `AutoBG_Timers.lua`: banner icon (`INV_BannerPVP_01` Horde,
-  `_02` Alliance), `Textures\Gloss.tga` bar, cast-bar spark, BigWigs clock
+- Every timer (objectives, game start, respawn, queues) is a row from one
+  factory in `AutoBG_Timers.lua`. Objectives use our own icons
+  (`Textures\Nodes\<Kind>_<Alliance|Horde|Neutral>.tga`, 64x64 TGA): one per
+  AB base, a keep for AV bunkers and towers, a headstone for graveyards, a
+  pick for mines. WSG flags keep the banners (`INV_BannerPVP_01` Horde, `_02`
+  Alliance). `Textures\Gloss.tga` bar, cast-bar spark, BigWigs clock
   ("21", "1:51"). Rows drain and change their text in `OnUpdate`; the logic
   ticker runs once a second. The frame preview is never saved.
 - The flag watch warns on a visible enemy's Opening cast start (UNIT_CASTEVENT,
@@ -38,3 +41,6 @@ Things to know:
   client, so it also warns when an enemy comes into sight at a flag and stands
   there. Spots are learned only from assault messages and lone Opening casts;
   "taken" messages teach nothing, and spots on top of each other are dropped.
+- The game start timer reads only lines about the battle beginning ("1 minute
+  until the battle for Alterac Valley begins."). "This game will close in 30
+  seconds" (too few players) once started it by mistake.
