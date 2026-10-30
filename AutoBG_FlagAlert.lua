@@ -27,7 +27,7 @@ end
 local function OpeningIcon()
 	local id = AutoBG_Settings and AutoBG_Settings.OpeningSpell
 	if not id then return UNKNOWN_ICON end
-	local _, _, icon = SpellInfo(id)
+	local _, _, icon = GetSpellInfo(id)
 	return icon or UNKNOWN_ICON
 end
 

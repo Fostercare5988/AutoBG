@@ -387,7 +387,7 @@ local raceBySpell = {}
 local function RaceForSpell(spellId)
 	local race = raceBySpell[spellId]
 	if race == nil then
-		race = RACIAL_SPELLS[SpellInfo(spellId) or ""] or false
+		race = RACIAL_SPELLS[GetSpellInfo(spellId) or ""] or false
 		raceBySpell[spellId] = race
 	end
 	return race or nil

@@ -321,11 +321,11 @@ local function SetCarrierStacks(frame, stacks)
     SetCarrierText(frame, "displayStacks", frame.debuffText, stacks > 0 and ("|cFFFF2020[" .. stacks .. "]|r") or "")
 end
 
--- SuperWoW SpellInfo names the spell, so OctoWoW's spell IDs need not be known.
+-- GetSpellInfo names the spell, so OctoWoW's spell IDs need not be known.
 OnCarrierDebuff = function(guid, spellId, stacks, state)
-    if not guid or not SpellInfo then return end
+    if not guid then return end
     local frame = (guid == AllianceFC.carrierGuid and AllianceFC) or (guid == HordeFC.carrierGuid and HordeFC)
-    if not frame or not ASSAULT_DEBUFFS[SpellInfo(spellId) or ""] then return end
+    if not frame or not ASSAULT_DEBUFFS[GetSpellInfo(spellId) or ""] then return end
     SetCarrierStacks(frame, state == 1 and 0 or (stacks or 1))
 end
 
