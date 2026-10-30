@@ -1,14 +1,12 @@
 -- AutoBG for World of Warcraft 1.12.1 (Vanilla Enhanced)
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI v1.17.11+, SuperWoW 2.2+, NamPower
+-- Built natively for ClassicAPI, SuperWoW 2.2+, NamPower
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.11+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11711
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI & SuperWoW v2.2+)
 
-if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
-   CLASSIC_API_VERSION < MIN_CLASSIC_API then
+if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION then
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI (v1.17.11+) & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
     end
     return
 end

@@ -19,7 +19,7 @@ enemy alerts for World of Warcraft 1.12.1, build 5875.
 
 These three DLLs are required:
 
-- [ClassicAPI v1.17.11+](https://github.com/brues-code/ClassicAPI)
+- [ClassicAPI](https://github.com/brues-code/ClassicAPI)
 - [SuperWoW v2.2+](https://github.com/balakethelock/SuperWoW)
 - [NamPower v4.6.2+](https://github.com/Emyrk/nampower): deaths, stealth buffs
   and health by GUID
