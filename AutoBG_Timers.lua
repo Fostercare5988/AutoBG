@@ -193,7 +193,7 @@ local function SetRowClock(row, seconds)
         row.timeFs:SetTextColor(c[1], c[2], c[3])
         row.displayUrgent = urgent
     end
-    row.announceText = (row.announceName or "") .. ": " .. text
+    row.announceText = (row.announceName or "") .. (row.announceJoin or ": ") .. text
 end
 
 -- Animation only: the shown rows drain every frame. A row that runs out asks
@@ -384,7 +384,9 @@ local function SetRowIcon(row, icon)
 end
 
 -- name is shown; announceName starts the Ctrl-click line ("<announceName>: 1:51").
-local function SetRowName(row, name, announceName)
+-- join replaces ": " when the name ends in a preposition ("Ress in 10").
+local function SetRowName(row, name, announceName, join)
+    row.announceJoin = join
     if row.displayName ~= name then
         row.labelFs:SetText(name)
         row.displayName = name
@@ -411,13 +413,15 @@ local StartTimerFrame = CreateBarTimerFrame("AutoBG_StartTimerFrame", nil,      
 local NodeBarFrame    = CreateBarTimerFrame("AutoBG_NodeFrame",       "Arathi Basin",    220, -100, 5)
 local AVNodeFrame     = CreateBarTimerFrame("AutoBG_AVNodeFrame",     "Alterac Valley",  220, -150, 10)
 local WSGFlagFrame    = CreateBarTimerFrame("AutoBG_WSGFlagFrame",    "Warsong Gulch",  -110, -150, 2)
+StartTimerFrame.announceStyle, WSGFlagFrame.announceStyle = "start", "flag"
+NodeBarFrame.announceStyle, AVNodeFrame.announceStyle = "node", "node"
 
 -- The respawn bar is always the same row: the spirit healer's 30-second wave.
 do
     local row = RespawnFrame.rows[1]
     row.roundUp, row.urgentAt = true, 5
     SetRowIcon(row, RESPAWN_ICON)
-    SetRowName(row, "Respawn", "Ress in")
+    SetRowName(row, "Respawn", "Ress in", " ")
     PaintRow(row, "spirit")
     SetRowDuration(row, 30)
 end
@@ -599,7 +603,7 @@ local START_TEST_DATA = {
 -- derives the faction from a WSG flag name. expiry is nil for preview rows,
 -- which stand still.
 -- =========================================================
-local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMode, defaultIcon, expiry)
+local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMode, defaultIcon, expiry, announceStyle)
     if colorMode == "faction" and not faction then
         if name == "Alliance Flag" then faction = "Alliance"
         elseif name == "Horde Flag" then faction = "Horde" end
@@ -611,7 +615,11 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
     else
         SetRowIcon(row, (faction == "Alliance" and ALLIANCE_ICON) or (faction == "Horde" and HORDE_ICON) or defaultIcon)
     end
-    SetRowName(row, name, faction and (name .. " (" .. faction .. ")") or name)
+    local announce, join = faction and (name .. " (" .. faction .. ")") or name, nil
+    if announceStyle == "start" then announce, join = "Game starts in", " "
+    elseif announceStyle == "flag" then announce, join = name .. " back in", " "
+    elseif announceStyle == "node" and not string.find(name, "Mine$") then announce, join = announce .. " captured in", " " end
+    SetRowName(row, name, announce, join)
     PaintRow(row, colorKey)
     SetRowDuration(row, maxTime)
     row.urgentAt = 10
@@ -634,7 +642,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
             activeCount = math.min(#testData, maxRows)
             for i = 1, activeCount do
                 local d = testData[i]
-                ApplyTimerRowData(frame.rows[i], d.name, d.faction, d.remaining, maxTime, colorMode, frame.defaultIcon, nil)
+                ApplyTimerRowData(frame.rows[i], d.name, d.faction, d.remaining, maxTime, colorMode, frame.defaultIcon, nil, frame.announceStyle)
             end
         else
             local sortCount = 0
@@ -669,7 +677,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
             for i = 1, activeCount do
                 local item = activeSortBuffer[i]
                 ApplyTimerRowData(frame.rows[i], item.name, item.faction, item.expire - now,
-                    item.maxTime or maxTime, colorMode, frame.defaultIcon, item.expire)
+                    item.maxTime or maxTime, colorMode, frame.defaultIcon, item.expire, frame.announceStyle)
             end
         end
     else
@@ -686,7 +694,7 @@ local QUEUE_ABBREV = { ["Warsong Gulch"] = "WSG", ["Arathi Basin"] = "AB", ["Alt
 local function ApplyQueueRow(row, mapName, waited, estimate)
     mapName = mapName or "Battleground"
     SetRowIcon(row, (AutoBG_GetBGIcon and AutoBG_GetBGIcon(mapName)) or NEUTRAL_ICON)
-    SetRowName(row, mapName, (QUEUE_ABBREV[mapName] or mapName) .. " queue")
+    SetRowName(row, mapName, "In " .. (QUEUE_ABBREV[mapName] or mapName) .. " queue for", " ")
     PaintRow(row, "neutral")
     local full = estimate > 0 and estimate or 1
     SetRowDuration(row, full)
