@@ -38,7 +38,7 @@ Things to know:
   ticker runs once a second. The frame preview is never saved.
 - The flag watch runs in Arathi Basin only; in Alterac Valley it was noise
   (player's call, 2026-10-27), and saved spots for other maps are dropped on
-  load. It warns on a visible enemy's Opening cast start (UNIT_CASTEVENT, no
+  load. It warns on a visible enemy's Opening cast start (NamPower SPELL_START_OTHER, no
   enemy frames needed). A cast started from stealth never reaches the client,
   so it also warns when an enemy comes into sight at a flag and stands there.
   Spots are learned only from named assault and defend messages; "taken"
