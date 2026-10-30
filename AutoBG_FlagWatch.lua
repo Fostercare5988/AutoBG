@@ -2,8 +2,8 @@
 -- AutoBG: Flag watch                                                         --
 -- Warns when an enemy opens a flag in Arathi Basin (only there).            --
 -- -------------------------------------------------------------------------- --
--- An enemy in sight who starts an Opening cast warns at once (SuperWoW
--- UNIT_CASTEVENT START), with or without enemy frames. An opening started
+-- An enemy in sight who starts an Opening cast warns at once (NamPower
+-- SPELL_START_OTHER), with or without enemy frames. An opening started
 -- from stealth never reaches your client as a cast: it begins while the enemy
 -- is still invisible to you. What the client does see is the enemy appearing
 -- out of nowhere at a flag their team does not hold and standing there, so
@@ -18,6 +18,7 @@ local FlagWatch = CreateFrame("Frame", "AutoBG_FlagWatchFrame")
 AutoBG_FlagWatch = FlagWatch
 
 local TICK = 0.25
+local CAST_EVENTS = { "SPELL_START_OTHER", "SPELL_GO_OTHER", "SPELL_FAILED_OTHER" }
 local NEAR_SQUARED = 10 * 10   -- a flag is opened from a few yards; spots are averages
 local STILL_SQUARED = 0.5 * 0.5 -- moved under half a yard since the last check
 local STILL_TICKS = 2           -- still for half a second
@@ -241,11 +242,11 @@ local function UpdateZone()
 		if not cleaned then DropOtherSpots(); cleaned = true end
 		ReadMap()
 		enemyFaction = UnitFactionGroup("player") == "Horde" and "Alliance" or "Horde"
-		FlagWatch:RegisterEvent("UNIT_CASTEVENT")
+		for _, name in ipairs(CAST_EVENTS) do FlagWatch:RegisterEvent(name) end
 		if not ticker then ticker = C_Timer.NewTicker(TICK, Tick) end
 	else
 		mapID = nil
-		FlagWatch:UnregisterEvent("UNIT_CASTEVENT")
+		for _, name in ipairs(CAST_EVENTS) do FlagWatch:UnregisterEvent(name) end
 		if ticker then ticker:Cancel(); ticker = nil end
 	end
 end
@@ -253,30 +254,33 @@ end
 FlagWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
 FlagWatch:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 FlagWatch:SetScript("OnEvent", function(p1, p2, p3, p4, p5, p6)
-	local ev, a1, a3, a4
-	if type(p1) == "string" then ev, a1, a3, a4 = p1, p2, p4, p5
-	elseif type(p2) == "string" then ev, a1, a3, a4 = p2, p3, p5, p6
-	else ev, a1, a3, a4 = event, arg1, arg3, arg4 end
-	if ev == "UNIT_CASTEVENT" then
-		-- SuperWoW: caster GUID, target GUID, event type, spell ID. Casts arrive
-		-- for everyone nearby; name each spell ID once.
-		if not a1 then return end
-		local name = openers[a1]
-		if name and (a3 == "CAST" or a3 == "FAIL") then
-			openers[a1] = nil
+	local ev, a1, a2, a3
+	if type(p1) == "string" then ev, a1, a2, a3 = p1, p2, p3, p4
+	elseif type(p2) == "string" then ev, a1, a2, a3 = p2, p3, p4, p5
+	else ev, a1, a2, a3 = event, arg1, arg2, arg3 end
+	if ev == "SPELL_START_OTHER" or ev == "SPELL_GO_OTHER" or ev == "SPELL_FAILED_OTHER" then
+		-- NamPower: START and GO give itemId, spellId, casterGuid; FAILED gives
+		-- casterGuid, spellId. Casts arrive for everyone nearby; name each
+		-- spell ID once.
+		local guid, spellId = a3, a2
+		if ev == "SPELL_FAILED_OTHER" then guid, spellId = a1, a2 end
+		if not guid then return end
+		local name = openers[guid]
+		if name and ev ~= "SPELL_START_OTHER" then
+			openers[guid] = nil
 			ClearWarning(name)
 		end
-		if not a4 then return end
-		local opening = openingBySpell[a4]
+		if not spellId then return end
+		local opening = openingBySpell[spellId]
 		if opening == nil then
-			local spell = GetSpellInfo(a4)
+			local spell = GetSpellInfo(spellId)
 			-- UNVERIFIED: test in game that flags are opened with a spell named "Opening".
 			opening = spell and string.find(spell, "^Opening") and true or false
-			openingBySpell[a4] = opening
-			if opening and AutoBG_FlagAlert then AutoBG_FlagAlert:LearnOpening(a4) end
+			openingBySpell[spellId] = opening
+			if opening and AutoBG_FlagAlert then AutoBG_FlagAlert:LearnOpening(spellId) end
 		end
 		if not opening then return end
-		if a3 == "START" then OnOpeningStart(a1) end
+		if ev == "SPELL_START_OTHER" then OnOpeningStart(guid) end
 	else
 		UpdateZone()
 	end
