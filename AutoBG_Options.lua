@@ -1,13 +1,11 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Options window (VanillaForge ForgeUI layout, Ember palette)         --
--- World of Warcraft 1.12.1, ClassicAPI v1.17.11+, SuperWoW v2.2+                --
+-- World of Warcraft 1.12.1, ClassicAPI, SuperWoW v2.2+                --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI v1.17.11+ & SuperWoW v2.2+)
-local MIN_CLASSIC_API = 11711
+-- Strict Engine Dependency Guard (Mandatory ClassicAPI & SuperWoW v2.2+)
 
-if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or
-   CLASSIC_API_VERSION < MIN_CLASSIC_API then
+if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION then
 	return
 end
 
