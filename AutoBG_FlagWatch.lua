@@ -269,7 +269,7 @@ FlagWatch:SetScript("OnEvent", function(p1, p2, p3, p4, p5, p6)
 		if not a4 then return end
 		local opening = openingBySpell[a4]
 		if opening == nil then
-			local spell = SpellInfo(a4)
+			local spell = GetSpellInfo(a4)
 			-- UNVERIFIED: test in game that flags are opened with a spell named "Opening".
 			opening = spell and string.find(spell, "^Opening") and true or false
 			openingBySpell[a4] = opening

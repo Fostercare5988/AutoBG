@@ -160,7 +160,7 @@ end
 
 -- Cast and aura IDs, checked on octowow.st/db, 2026-10-21. Duration 0 lasts
 -- until the aura is removed or the unit attacks. The frames show the spell's
--- own icon from SpellInfo; these textures are the fallback.
+-- own icon from GetSpellInfo; these textures are the fallback.
 local STEALTH_SPELLS = {
 	-- Rogue Stealth, ranks 1-4
 	[1784] = { name = "Stealth", texture = "Interface\\Icons\\Ability_Stealth", duration = 0 },
@@ -213,7 +213,7 @@ local function CheckIsStealthSpell(spellId)
 	local def = stealthBySpell[spellId]
 	if def == nil then
 		local spellName, _, icon
-		if SpellInfo then spellName, _, icon = SpellInfo(spellId) end
+		spellName, _, icon = GetSpellInfo(spellId)
 		local base = STEALTH_SPELLS[spellId] or STEALTH_NAMES[spellName or ""]
 		def = false
 		if base then
@@ -782,7 +782,7 @@ local function RefreshCast(row, fallbackSpell, fallbackMs, fallbackChannel)
 	local spell, texture, startMs, endMs, channel, locked = ReadCast(guid)
 	local fromEvent
 	if not spell and fallbackSpell and fallbackMs and fallbackMs > 0 then
-		local name, _, icon = SpellInfo(fallbackSpell)
+		local name, _, icon = GetSpellInfo(fallbackSpell)
 		if name then
 			spell, texture, channel, fromEvent = name, icon, fallbackChannel, true
 			startMs = GetTime() * 1000
@@ -1013,11 +1013,11 @@ local function SyncTargetTimers()
 	end
 end
 
--- By spell ID, with SuperWoW SpellInfo names as the fallback for unlisted ranks.
+-- By spell ID, with GetSpellInfo names as the fallback for unlisted ranks.
 local function IsTrinketSpell(spellId)
 	if not spellId then return false end
 	if TRINKET_SPELL_IDS[spellId] then return true end
-	local sName = SpellInfo and SpellInfo(spellId)
+	local sName = GetSpellInfo(spellId)
 	return sName and TRINKET_SPELL_NAMES[sName] and true or false
 end
 
