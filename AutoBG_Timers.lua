@@ -417,7 +417,7 @@ do
     local row = RespawnFrame.rows[1]
     row.roundUp, row.urgentAt = true, 5
     SetRowIcon(row, RESPAWN_ICON)
-    SetRowName(row, "Respawn", "Ress")
+    SetRowName(row, "Respawn", "Ress in")
     PaintRow(row, "spirit")
     SetRowDuration(row, 30)
 end
