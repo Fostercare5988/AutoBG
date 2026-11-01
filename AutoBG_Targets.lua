@@ -2058,7 +2058,8 @@ local function Targets_OnEvent()
 		ObserveUnit(a1)
 
 	elseif ev == "UNIT_TARGET" then
-		if a1 then ObserveUnit(GetUnitTargetToken(a1)) end
+		-- "npc" (the gossip NPC) also sends UNIT_TARGET; "npctarget" is not a unit.
+		if a1 and a1 ~= "npc" then ObserveUnit(GetUnitTargetToken(a1)) end
 
 	elseif ev == "UPDATE_MOUSEOVER_UNIT" then
 		ObserveUnit("mouseover")
