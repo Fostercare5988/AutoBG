@@ -106,11 +106,12 @@ local statsSize
 local function NoteEncounter(name, classToken, level)
 	local stats, key = SavedList("Stats"), string.lower(name)
 	local entry = stats[key]
+	-- Counted on the first encounter of a session, known name or not.
+	if not statsSize then
+		statsSize = 0
+		for _ in pairs(stats) do statsSize = statsSize + 1 end
+	end
 	if not entry then
-		if not statsSize then
-			statsSize = 0
-			for _ in pairs(stats) do statsSize = statsSize + 1 end
-		end
 		entry = { first = time(), seen = 0 }
 		stats[key] = entry
 		statsSize = statsSize + 1
