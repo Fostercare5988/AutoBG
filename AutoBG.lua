@@ -359,8 +359,8 @@ local function AutoBG_HideBattlefieldWindow()
         HideUIPanel(BattlefieldFrame)
         BattlefieldFrame:Hide()
     end
-    if CloseBattlefield then pcall(CloseBattlefield) end
-    if CloseDropDownMenus then pcall(CloseDropDownMenus) end
+    CloseBattlefield()
+    CloseDropDownMenus()
 end
 
 if BattlefieldFrame then
@@ -451,7 +451,7 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
         end)
         finderTimer = timer
     end
-    if CloseDropDownMenus then CloseDropDownMenus() end
+    CloseDropDownMenus()
 
     -- UNVERIFIED: test in game. JoinBattlegroundQueue is not in the references;
     -- without it the minimap dropdown path below is used.
@@ -868,10 +868,8 @@ local function ProcessBattlefieldQueue(id)
     end
 end
 
-frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param, arg4_param)
-    local ev = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
-    local a1 = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
-    local a2 = (type(arg1_param) == "string" and (arg3_param or arg2)) or arg4_param or arg2
+frame:SetScript("OnEvent", function()
+    local ev, a1, a2 = event, arg1, arg2
 
     if ev == "ADDON_LOADED" and a1 == addonName then
         if not AutoBG_Settings then AutoBG_Settings = defaultSettings
@@ -1011,8 +1009,8 @@ frame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param, arg4_par
                 request.phase = "queue"
                 request.deadline = GetTime() + 1.5
             end
-            if SetSelectedBattlefield then pcall(SetSelectedBattlefield, 0) end
-            pcall(JoinBattlefield, 0)
+            SetSelectedBattlefield(0)
+            JoinBattlefield(0)
 
             suppressBattlefieldFrameUntil = GetTime() + 4.0
             suppressedBattlefieldBG = bgTitle

@@ -1281,9 +1281,8 @@ EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 EventFrame:RegisterEvent("ZONE_CHANGED")
 EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 
-EventFrame:SetScript("OnEvent", function(arg1_param, arg2_param, arg3_param)
-    local ev  = (type(arg1_param) == "string" and arg1_param) or arg2_param or event
-    local msg = (type(arg1_param) == "string" and (arg2_param or arg1)) or arg3_param or arg1
+EventFrame:SetScript("OnEvent", function()
+    local ev, msg = event, arg1
     if ev == "UNIT_HEALTH" then
         if raidGhosts[msg] and not UnitIsDeadOrGhost(msg) then
             raidGhosts[msg] = nil
