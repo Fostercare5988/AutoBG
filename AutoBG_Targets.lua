@@ -590,9 +590,8 @@ local stealthWatcher = CreateFrame("Frame", "AutoBG_TargetsStealthWatcher", UIPa
 stealthWatcher:Hide()
 local stealthWatcherElapsed = 0
 
-local function StealthWatcher_OnUpdate(arg1_param, arg2_param)
-	local dt = (type(arg1_param) == "number" and arg1_param) or (type(arg2_param) == "number" and arg2_param) or arg1 or 0
-	stealthWatcherElapsed = stealthWatcherElapsed + dt
+local function StealthWatcher_OnUpdate()
+	stealthWatcherElapsed = stealthWatcherElapsed + arg1
 	if stealthWatcherElapsed < 0.25 then return end
 	stealthWatcherElapsed = 0
 
@@ -2023,15 +2022,8 @@ local TARGETS_LIFECYCLE_EVENTS = {
 	UPDATE_BATTLEFIELD_SCORE = true,
 }
 
-local function Targets_OnEvent(arg1_param, arg2_param, arg3_param, arg4_param, arg5_param, arg6_param, arg7_param)
-	local ev, a1, a2, a3, a4, a5
-	if type(arg1_param) == "string" then
-		ev, a1, a2, a3, a4, a5 = arg1_param, arg2_param, arg3_param, arg4_param, arg5_param, arg6_param
-	elseif type(arg2_param) == "string" then
-		ev, a1, a2, a3, a4, a5 = arg2_param, arg3_param, arg4_param, arg5_param, arg6_param, arg7_param
-	else
-		ev, a1, a2, a3, a4, a5 = event, arg1, arg2, arg3, arg4, arg5
-	end
+local function Targets_OnEvent()
+	local ev, a1, a2, a3, a4, a5 = event, arg1, arg2, arg3, arg4, arg5
 	if not (activeBG or Targets.isConfig) and not TARGETS_LIFECYCLE_EVENTS[ev] then
 		return
 	end
