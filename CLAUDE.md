@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (195 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (203 tests).
 
 | File | Job |
 | --- | --- |
@@ -34,8 +34,10 @@ Things to know:
   AB base, a keep for AV bunkers and towers, a headstone for graveyards, a
   pick for mines. WSG flags keep the banners (`INV_BannerPVP_01` Horde, `_02`
   Alliance). `Textures\Gloss.tga` bar, cast-bar spark, BigWigs clock
-  ("21", "1:51"). Rows drain and change their text in `OnUpdate`; the logic
-  ticker runs once a second. The frame preview is never saved.
+  ("21", "1:51"). Rows with an expiry drain by themselves (`SetTimerDuration`, ClassicAPI
+  1.19; the spark rides the bar texture); `OnUpdate` only rewrites the clock when
+  the second changes. Preview and queue rows hold a value. The logic ticker runs
+  once a second. The frame preview is never saved.
 - The flag watch runs in Arathi Basin only; in Alterac Valley it was noise
   (player's call, 2026-10-27), and saved spots for other maps are dropped on
   load. It warns on a visible enemy's Opening cast start (NamPower SPELL_START_OTHER, no

@@ -125,7 +125,6 @@ local function LayoutTimerRow(row, width, height)
     row.bar:ClearAllPoints()
     row.bar:SetPoint("TOPLEFT", row, "TOPLEFT", height, -1)
     row.bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 1)
-    row.barWidth = width - height - 1
     row.spark:SetWidth(math.floor(height * 0.9))
     row.spark:SetHeight(height * 2)
     local fontSize = math.max(9, math.min(15, math.floor(height * 0.5)))
@@ -158,17 +157,43 @@ local function ApplyObjectiveAppearance(frame)
     if frame.appearanceOpacity ~= opacity then frame:SetAlpha(opacity); frame.appearanceOpacity = opacity end
 end
 
--- Moves the fill and its spark; runs every frame while a bar drains.
-local function SetRowValue(row, value)
-    row.bar:SetValue(value)
-    local share = (row.fillDuration and row.fillDuration > 0) and value / row.fillDuration or 0
+-- The spark rides the bar's texture, so it follows the fill by itself; it is
+-- hidden only when the bar is nearly full or empty.
+local function SetSpark(row, value)
+    local duration = row.fillDuration
+    local share = (duration and duration > 0) and value / duration or 0
     if share > 0.01 and share < 0.99 then
-        row.spark:SetPoint("CENTER", row.bar, "LEFT", row.barWidth * share, 0)
         if not row.sparkShown then row.spark:Show(); row.sparkShown = true end
     elseif row.sparkShown then
         row.spark:Hide()
         row.sparkShown = false
     end
+end
+
+-- Sets the fill. A row with an expiry drains by itself (SetTimerDuration,
+-- ClassicAPI): the bar follows the time span with no write per frame. A row
+-- without one (preview, queue) holds a value.
+local function SetRowFill(row, value, expiry)
+    local duration = row.fillDuration
+    if expiry then
+        local start = expiry - duration
+        if row.timerStart ~= start or row.timerEnd ~= expiry then
+            row.timerStart, row.timerEnd = start, expiry
+            row.timer:SetTimeSpan(start, expiry)
+        end
+        if row.fillMode ~= "timer" then
+            row.fillMode = "timer"
+            row.bar:SetTimerDuration(row.timer, Enum.StatusBarInterpolation.Immediate,
+                Enum.StatusBarTimerDirection.RemainingTime)
+        end
+    else
+        if row.fillMode ~= "value" or row.valueMax ~= duration then
+            row.fillMode, row.valueMax = "value", duration
+            row.bar:SetMinMaxValues(0, duration)
+        end
+        row.bar:SetValue(value)
+    end
+    SetSpark(row, value)
 end
 
 -- "21" under a minute, "1:51" from a minute up, as BigWigs shows them.
@@ -183,7 +208,7 @@ end
 local function SetRowClock(row, seconds)
     local sec = row.roundUp and math.ceil(seconds) or math.floor(seconds)
     if sec < 0 then sec = 0 end
-    if row.displaySec == sec then return end
+    if row.displaySec == sec then return false end
     row.displaySec = sec
     local text = FormatClock(sec)
     row.timeFs:SetText((row.clockPrefix or "") .. text)
@@ -194,10 +219,12 @@ local function SetRowClock(row, seconds)
         row.displayUrgent = urgent
     end
     row.announceText = (row.announceName or "") .. (row.announceJoin or ": ") .. text
+    return true
 end
 
--- Animation only: the shown rows drain every frame. A row that runs out asks
--- for one render, which drops it or starts its next cycle.
+-- Animation only: the clock text of the shown rows, written when the second
+-- changes. A row that runs out asks for one render, which drops it or starts
+-- its next cycle.
 local function AnimateTimerRows()
     local frame = this
     local now = GetTime()
@@ -210,8 +237,7 @@ local function AnimateTimerRows()
                 if RenderTimers then RenderTimers() end
                 return
             end
-            SetRowValue(row, remaining)
-            SetRowClock(row, remaining)
+            if SetRowClock(row, remaining) then SetSpark(row, remaining) end
         end
     end
 end
@@ -280,6 +306,8 @@ local function CreateTimerRow(frame, name)
     spark:SetAlpha(0.8)
     spark:Hide()
     row.spark, row.sparkShown = spark, false
+    spark:SetPoint("CENTER", bar:GetStatusBarTexture(), "RIGHT", 0, 0)
+    row.timer = C_DurationUtil.CreateDuration()
 
     local timeFs = top:CreateFontString(nil, "OVERLAY")
     timeFs:SetPoint("LEFT", bar, "LEFT", 5, 0)
@@ -398,10 +426,7 @@ local function SetRowName(row, name, announceName, join)
 end
 
 local function SetRowDuration(row, duration)
-    if row.fillDuration ~= duration then
-        row.bar:SetMinMaxValues(0, duration)
-        row.fillDuration = duration
-    end
+    row.fillDuration = duration
 end
 
 -- =========================================================
@@ -624,7 +649,7 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
     SetRowDuration(row, maxTime)
     row.urgentAt = 10
     row.fillExpiry = expiry
-    SetRowValue(row, remaining)
+    SetRowFill(row, remaining, expiry)
     SetRowClock(row, remaining)
     if not row:IsShown() then row:Show() end
 end
@@ -699,7 +724,7 @@ local function ApplyQueueRow(row, mapName, waited, estimate)
     local full = estimate > 0 and estimate or 1
     SetRowDuration(row, full)
     row.fillExpiry = nil
-    SetRowValue(row, estimate > 0 and math.min(waited, estimate) or full)
+    SetRowFill(row, estimate > 0 and math.min(waited, estimate) or full, nil)
     SetRowClock(row, waited)
     row.estText = estimate > 0 and ("Estimated: " .. FormatClock(estimate)) or nil
     if not row:IsShown() then row:Show() end
@@ -1070,7 +1095,7 @@ local function UpdateAllTimers()
             respawnRow.displaySec = nil
         end
         respawnRow.fillExpiry = expiry
-        SetRowValue(respawnRow, remaining)
+        SetRowFill(respawnRow, remaining, expiry)
         SetRowClock(respawnRow, remaining)
         if not respawnRow:IsShown() then respawnRow:Show() end
         ShowRows(RespawnFrame, 1)
