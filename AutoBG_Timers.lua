@@ -58,8 +58,8 @@ local function UpdateZoneCache()
     isAB  = inPVP and string.find(cachedZone, "arathi")  ~= nil
     isAV  = inPVP and string.find(cachedZone, "alterac") ~= nil
     isWSG = inPVP and string.find(cachedZone, "warsong") ~= nil
-    -- An arena has no spirit healer. UNVERIFIED: its instance type on OctoWoW.
-    isArena = inInstance and instanceType == "arena" or false
+    -- An arena has no spirit healer.
+    isArena = AutoBG_IsArenaZone and AutoBG_IsArenaZone() or false
     for i = 1, MAX_BATTLEFIELD_QUEUES do
         local status, map = GetBattlefieldStatus(i)
         if status == "active" and map == ARENA then isArena = true end

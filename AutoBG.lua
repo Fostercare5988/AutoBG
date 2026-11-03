@@ -41,13 +41,21 @@ local function ActiveBattlefieldMap()
     end
 end
 
+-- The arena zones (2v2, 3v3, 5v5). The one place that names them; Timers,
+-- Targets and Spy ask AutoBG_IsArenaZone. UNVERIFIED: the third zone name
+-- ("Circle of Blood") and the instance type an arena reports; test in the
+-- arena with /run print(GetRealZoneText(), IsInInstance()).
+local ARENA_ZONES = { ["lordaeron arena"] = true, ["sunstrider court"] = true, ["circle of blood"] = true }
+function AutoBG_IsArenaZone()
+    local inInstance, instanceType = IsInInstance()
+    return (inInstance and instanceType == "arena") or ARENA_ZONES[string.lower(GetRealZoneText() or "")] == true
+end
+
 local function UpdateZoneCache()
     currentZoneText = GetRealZoneText() or ""
     local inInstance, instanceType = IsInInstance()
-    -- UNVERIFIED: test in game which instance type an OctoWoW arena reports
-    -- (/run print(IsInInstance())); the queue status names it either way.
-    currentArena = (inInstance and instanceType == "arena") or ActiveBattlefieldMap() == ARENA
-    currentZonePVP = (inInstance and (instanceType == "pvp" or instanceType == "arena")) and true or false
+    currentArena = AutoBG_IsArenaZone() or ActiveBattlefieldMap() == ARENA
+    currentZonePVP = ((inInstance and instanceType == "pvp") or currentArena) and true or false
 end
 
 -- What the match you are in queues as again: the battleground, or ARENA.
