@@ -253,11 +253,8 @@ end
 
 FlagWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
 FlagWatch:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-FlagWatch:SetScript("OnEvent", function(p1, p2, p3, p4, p5, p6)
-	local ev, a1, a2, a3
-	if type(p1) == "string" then ev, a1, a2, a3 = p1, p2, p3, p4
-	elseif type(p2) == "string" then ev, a1, a2, a3 = p2, p3, p4, p5
-	else ev, a1, a2, a3 = event, arg1, arg2, arg3 end
+FlagWatch:SetScript("OnEvent", function()
+	local ev, a1, a2, a3 = event, arg1, arg2, arg3
 	if ev == "SPELL_START_OTHER" or ev == "SPELL_GO_OTHER" or ev == "SPELL_FAILED_OTHER" then
 		-- NamPower: START and GO give itemId, spellId, casterGuid; FAILED gives
 		-- casterGuid, spellId. Casts arrive for everyone nearby; name each
