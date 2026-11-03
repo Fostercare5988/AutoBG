@@ -30,11 +30,29 @@ local FinishRejoin
 
 local currentZoneText = ""
 local currentZonePVP = false
+local currentArena = false
+
+-- The map of the battlefield you are in: its name, or ARENA ("Arena") in an
+-- arena, as the queue status names it.
+local function ActiveBattlefieldMap()
+    for i = 1, MAX_BATTLEFIELD_QUEUES do
+        local status, map = GetBattlefieldStatus(i)
+        if status == "active" then return map end
+    end
+end
 
 local function UpdateZoneCache()
     currentZoneText = GetRealZoneText() or ""
     local inInstance, instanceType = IsInInstance()
-    currentZonePVP = (inInstance and instanceType == "pvp")
+    -- UNVERIFIED: test in game which instance type an OctoWoW arena reports
+    -- (/run print(IsInInstance())); the queue status names it either way.
+    currentArena = (inInstance and instanceType == "arena") or ActiveBattlefieldMap() == ARENA
+    currentZonePVP = (inInstance and (instanceType == "pvp" or instanceType == "arena")) and true or false
+end
+
+-- What the match you are in queues as again: the battleground, or ARENA.
+local function MatchName()
+    return currentArena and ARENA or currentZoneText
 end
 
 function AutoBG_SavePosition(frame, name)
@@ -85,6 +103,8 @@ local defaultSettings = {
     LastPlayedBG = nil,
     Positions = {}, SkipIfAFK = true,
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
+    -- Arena queued with them: ArenaType 0 Skirmish, 1-3 Rated 2v2/3v3/5v5.
+    AutoQueue_Arena = false, ArenaType = 0,
     StartTimer = true,
     -- Countdown look
     ObjectiveWidth = 225, ObjectiveHeight = 25, ObjectiveScale = 1, ObjectiveOpacity = 0.9,
@@ -97,7 +117,11 @@ local BATTLEGROUNDS = {
     ["Arathi Basin"]   = { icon = "Interface\\Icons\\INV_Jewelry_Amulet_07", queue = "Arathi" },
     ["Alterac Valley"] = { icon = "Interface\\Icons\\INV_Jewelry_Necklace_21", queue = "Alterac" },
     ["Thorn Gorge"]    = { icon = "Interface\\Icons\\INV_Jewelry_Talisman_04", queue = "ThornGorge" },
+    -- Arenas queue through JoinArenaQueue (Turtle_ArenaUI.lua); the icon is
+    -- OctoWoW's own battleground finder button.
+    [ARENA]            = { icon = "Interface\\Icons\\Ability_DualWield", arena = true },
 }
+local ARENA_TYPES = { [0] = "Skirmish", [1] = "Rated 2v2", [2] = "Rated 3v3", [3] = "Rated 5v5" }
 
 function AutoBG_GetBGIcon(name)
     local bg = name and BATTLEGROUNDS[name]
@@ -118,10 +142,11 @@ function AutoBG_CancelAllQueues()
         inviteGeneration[i] = (inviteGeneration[i] or 0) + 1
         notifiedQueues[i] = false
         invitedMaps[i] = nil
-        local status = GetBattlefieldStatus(i)
+        local status, map = GetBattlefieldStatus(i)
         if status and status ~= "none" and status ~= "active" then
-            -- Blizzard's Leave Queue passes nil; 0 is true in Lua.
-            AcceptBattlefieldPort(i)
+            -- The client's Leave Queue: LeaveArenaQueue for the arena queue, else
+            -- AcceptBattlefieldPort with a nil flag (0 is true in Lua).
+            if map == ARENA then LeaveArenaQueue() else AcceptBattlefieldPort(i) end
             cancelled = cancelled + 1
         end
     end
@@ -282,7 +307,8 @@ local function FullBattlegroundName(text)
     if not text then return "Warsong Gulch" end
     if BATTLEGROUNDS[text] then return text end
     local lower = string.lower(text)
-    if string.find(lower, "arathi") or lower == "ab" then return "Arathi Basin"
+    if lower == "arena" then return ARENA
+    elseif string.find(lower, "arathi") or lower == "ab" then return "Arathi Basin"
     elseif string.find(lower, "alterac") or lower == "av" then return "Alterac Valley"
     elseif string.find(lower, "thorn") or string.find(lower, "gorge") or lower == "tg" then return "Thorn Gorge"
     elseif string.find(lower, "warsong") or lower == "wsg" then return "Warsong Gulch" end
@@ -324,6 +350,13 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
         end)
         finderTimer = timer
     end
+    if bg.arena then
+        -- Skirmish asks the server like a battleground does; a rated queue starts at once.
+        -- UNVERIFIED: test in game that Skirmish answers with BATTLEFIELDS_SHOW for "Arena".
+        AutoBG_Print("Queueing |cFFFFFF00" .. ARENA_TYPES[AutoBG_Settings.ArenaType] .. "|r arena...")
+        JoinArenaQueue(AutoBG_Settings.ArenaType)
+        return
+    end
     -- The server answers with the battlemaster list (BATTLEFIELDS_SHOW), where
     -- the request is joined.
     JoinBattlegroundQueue(bg.queue)
@@ -340,6 +373,7 @@ function AutoBG_GetSelectedBGs()
         if AutoBG_Settings.AutoQueue_WSG ~= false then table.insert(list, "Warsong Gulch") end
         if AutoBG_Settings.AutoQueue_AB ~= false then table.insert(list, "Arathi Basin") end
         if AutoBG_Settings.AutoQueue_AV ~= false then table.insert(list, "Alterac Valley") end
+        if AutoBG_Settings.AutoQueue_Arena then table.insert(list, ARENA) end
     end
     return list
 end
@@ -419,6 +453,16 @@ function AutoBG_QueueAllBGs()
             isAutoQueueing = false; AutoBG_Print("Queue requests finished. Check the battleground queue status.")
             return
         end
+        -- The client holds three queues; the server refuses a fourth.
+        local used = 0
+        for q = 1, MAX_BATTLEFIELD_QUEUES do
+            if GetBattlefieldStatus(q) ~= "none" then used = used + 1 end
+        end
+        if used >= MAX_BATTLEFIELD_QUEUES then
+            isAutoQueueing = false
+            AutoBG_Print("All " .. MAX_BATTLEFIELD_QUEUES .. " queues are in use: |cFFFFFF00" .. queueQueueBuffer[idx] .. "|r and later choices were not queued.", true)
+            return
+        end
         local currentBG = queueQueueBuffer[idx]
         idx = idx + 1
         AutoBG_Print("Auto-queuing for |cFFFFFF00" .. currentBG .. "|r (" .. (idx - 1) .. "/" .. total .. ")...")
@@ -492,9 +536,10 @@ local function HandleMatchEnd()
     if not currentZonePVP then return end
     hasHandledEnd = true
     rejoinWorldReady = false
-    if currentZoneText ~= "" then
-        lastPlayedBG = currentZoneText
-        if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = currentZoneText end
+    local match = MatchName()
+    if match ~= "" then
+        lastPlayedBG = match
+        if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = match end
     end
     BeginRejoin(lastPlayedBG)
 
@@ -575,9 +620,9 @@ end
 -- Ensure Auto-Rejoin target is captured regardless of how the player leaves the battleground
 hooksecurefunc("LeaveBattlefield", function()
     if currentZonePVP then
-        local departedBG = currentZoneText
+        local departedBG = MatchName()
         UpdateZoneCache()
-        if currentZonePVP then departedBG = currentZoneText end
+        if currentZonePVP then departedBG = MatchName() end
         if departedBG ~= "" then
             lastPlayedBG = departedBG
             if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = departedBG end
@@ -711,6 +756,16 @@ local function ProcessBattlefieldQueue(id)
     end
 end
 
+-- OctoWoW lists Cross-Faction and Factioned as reserved instance numbers after
+-- First Available (BattlefieldFrame.lua, OCTO_BG_ROW_XF_ID). The player's
+-- choice, 2026-11-03: always Cross-Faction where a battleground offers it.
+local function CrossFactionRow()
+    for k = 1, GetNumBattlefields() do
+        if GetBattlefieldInstanceInfo(k) == OCTO_BG_ROW_XF_ID then return k end
+    end
+    return 0
+end
+
 frame:SetScript("OnEvent", function()
     local ev, a1, a2 = event, arg1, arg2
 
@@ -730,6 +785,7 @@ frame:SetScript("OnEvent", function()
         -- Dynamic invite window clobbered by early leaves is retired.
         AutoBG_Settings.InviteWindow = nil
         -- Older/manual SavedVariables must not break queue comparisons or sliders.
+        if not ARENA_TYPES[AutoBG_Settings.ArenaType] then AutoBG_Settings.ArenaType = 0 end
         local delay = tonumber(AutoBG_Settings.AutoAcceptDelay) or 0
         if delay ~= delay then delay = 0 end
         AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(AutoBG_MAX_ENTER_DELAY, math.floor(delay)))
@@ -763,9 +819,10 @@ frame:SetScript("OnEvent", function()
         SyncMatchChat()
 
         if currentZonePVP then
-            if currentZoneText ~= "" then
-                lastPlayedBG = currentZoneText
-                if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = currentZoneText end
+            local match = MatchName()
+            if match ~= "" then
+                lastPlayedBG = match
+                if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = match end
             end
             if not wasInBattleground then
                 FinishRejoin()
@@ -843,8 +900,9 @@ frame:SetScript("OnEvent", function()
                 request.phase = "queue"
                 request.deadline = GetTime() + 1.5
             end
-            SetSelectedBattlefield(0)
-            JoinBattlefield(0)
+            local row = CrossFactionRow()
+            SetSelectedBattlefield(row)
+            JoinBattlefield(row)
 
             suppressBattlefieldFrameUntil = GetTime() + 4.0
             suppressedBattlefieldBG = bgTitle
@@ -862,7 +920,7 @@ frame:SetScript("OnEvent", function()
             C_Timer.After(0.35, HideRequestedWindow)
             C_Timer.After(0.8, HideRequestedWindow)
 
-            AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (First Available).")
+            AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (" .. (row > 0 and "Cross-Faction" or "First Available") .. ").")
             pendingAutoRejoin = nil
             if not rejoinRequest then hasHandledEnd = false end
         elseif GetTime() < suppressBattlefieldFrameUntil and GetBattlefieldInfo() == suppressedBattlefieldBG then
@@ -878,7 +936,8 @@ frame:SetScript("OnEvent", function()
         TryAutoRejoin()
 
     elseif ev == "PLAYER_DEAD" then
-        if AutoBG_Settings and AutoBG_Settings.AutoRelease and currentZonePVP then
+        -- Never in an arena: the dead stay until it ends.
+        if AutoBG_Settings and AutoBG_Settings.AutoRelease and currentZonePVP and not currentArena then
             if not HasSoulstone() then
                 RepopMe()
                 StaticPopup_Hide("DEATH")
@@ -1051,7 +1110,7 @@ SlashCmdList["AUTOBG"] = function(msg)
         end
         if arg == "all" or arg == "3" or arg == "bg" or arg == "bgs" or arg == "" then AutoBG_QueueAllBGs(); return end
         if arg == "cancel" or arg == "drop" then AutoBG_CancelAllQueues(); return end
-        local target = (string.find(arg, "wsg") and "Warsong Gulch") or (string.find(arg, "ab") and "Arathi Basin") or (string.find(arg, "av") and "Alterac Valley") or (string.find(arg, "tg") and "Thorn Gorge") or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
+        local target = (arg == "arena" and ARENA) or (string.find(arg, "wsg") and "Warsong Gulch") or (string.find(arg, "ab") and "Arathi Basin") or (string.find(arg, "av") and "Alterac Valley") or (string.find(arg, "tg") and "Thorn Gorge") or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
         if target then
             if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = target end
             AutoBG_Print("Quick-queue triggered for |cFFFFFF00" .. target .. "|r...", true)
@@ -1078,7 +1137,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "reset" then
         AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|all], /abg cancel, /abg targets, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|arena|all], /abg cancel, /abg targets, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
     else
         AutoBG_OpenOptions("general")
     end

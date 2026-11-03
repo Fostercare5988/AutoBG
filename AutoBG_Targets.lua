@@ -1390,6 +1390,8 @@ end
 
 local function GetBracketSize(bgName)
 	if not bgName then return currentSize end
+	-- Arenas (2v2 to 5v5) use the smallest frames.
+	if bgName == ARENA then return 10 end
 	if string.find(bgName, "Warsong") then
 		return 10
 	elseif string.find(bgName, "Arathi") or string.find(bgName, "Thorn") then

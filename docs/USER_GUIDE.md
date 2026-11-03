@@ -21,7 +21,12 @@ without resetting other choices.
 
 Choose battlegrounds under General, then press **Queue now**.
 **Leave queues** cancels outstanding queue work and existing queues.
-The available battleground list comes from the server.
+The available battleground list comes from the server. AutoBG joins a
+battleground's **Cross-Faction** row when the server offers it, else First
+Available. **Queue an arena** adds the arena picked under it (Skirmish, or a
+rated 2v2, 3v3 or 5v5, which needs an arena team); `/abg q arena` queues it
+alone. You can hold three queues at once and one of them an arena; choices
+beyond that are reported and skipped. Release spirit never acts in an arena.
 
 - **Accept queue pops:** enter when an invitation arrives. **Enter delay** waits
   0 to 78 seconds first; an invite runs out after about 80 seconds. If an

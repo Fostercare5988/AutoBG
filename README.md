@@ -5,7 +5,8 @@ enemy alerts for World of Warcraft 1.12.1, build 5875.
 
 ## Features
 
-- Queue selected battlegrounds, accept invitations with an optional delay, leave
+- Queue selected battlegrounds (Cross-Faction where offered) and an arena
+  (Skirmish or rated), accept invitations with an optional delay, leave
   completed matches and request the same queue again.
 - Show objective, gate, flag-respawn, queue and spirit-healer countdowns.
 - Track Warsong flag carriers with health, distance, target and focus controls.
@@ -44,6 +45,7 @@ Enable AutoBG in the character-selection addon list.
 | `/abg targets` or `/bgt` | Open enemy-frame settings |
 | `/abg spy` | Open Spy settings |
 | `/abg q wsg`, `/abg q ab`, `/abg q av` | Request a battleground queue |
+| `/abg q arena` | Queue the arena chosen under General |
 | Left-click an enemy or carrier | Target that player |
 | Right-click an enemy or carrier | Focus the verified loaded player |
 | Ctrl + left-click a timer | Announce its countdown in battleground chat |

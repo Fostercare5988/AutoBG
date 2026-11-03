@@ -69,7 +69,7 @@ local function Seconds(value) return value .. "s" end
 local panel = UI.Window("AutoBG_OptionsPanel", "AutoBG", WIDTH, 446, GetAddOnMetadata("AutoBG", "Version"))
 
 local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", {
-	{ label = "General", height = 446 },
+	{ label = "General", height = 486 },
 	{ label = "Timers", height = 436 },
 	{ label = "Enemy frames", height = 542 },
 	{ label = "Spy", height = 390 },
@@ -99,6 +99,16 @@ local cbAutoRejoin = Setting("AutoBG_Opt_AutoRejoin", panelGeneral, "Queue again
 	"Request the same battleground queue after leaving a completed match.", 28, -274, "AutoRejoin")
 local cbAutoRelease = Setting("AutoBG_Opt_AutoRelease", panelGeneral, "Release spirit",
 	"Automatically release your spirit when you die in a battleground (skipped while a Soulstone or Ankh is ready).", 28, -300, "AutoRelease")
+
+UI.Heading(panelGeneral, "Arena", 28, -340)
+local cbQueueArena = Setting("AutoBG_Opt_QueueArena", panelGeneral, "Queue an arena",
+	"Queue the arena picked below together with the checked battlegrounds. Rated arenas need an arena team.", 28, -360, "AutoQueue_Arena")
+local ShowArenaType
+_, ShowArenaType = UI.Segmented("AutoBG_Opt_ArenaType", panelGeneral, { "Skirmish", "2v2", "3v3", "5v5" }, 24, -390, 212,
+	function(index)
+		if AutoBG_Settings then AutoBG_Settings.ArenaType = index - 1 end
+		ShowArenaType(index)
+	end, { height = 26 })
 
 UI.Heading(panelGeneral, "Auto queue", 264, -98)
 local cbQueueWSG = Setting("AutoBG_Opt_QueueWSG", panelGeneral, "Warsong Gulch",
@@ -147,6 +157,8 @@ Refresh[1] = function()
 	UI.Sync(cbQueueAB, s.AutoQueue_AB ~= false)
 	UI.Sync(cbQueueAV, s.AutoQueue_AV ~= false)
 	UI.Sync(cbAutoQueue, s.AutoQueueLogin)
+	UI.Sync(cbQueueArena, s.AutoQueue_Arena)
+	ShowArenaType((s.ArenaType or 0) + 1)
 	UI.Sync(cbSound, s.NotifySound)
 	UI.Sync(cbFlash, s.FlashTaskbar)
 	UI.Sync(cbChatMsg, s.ChatMessages)
