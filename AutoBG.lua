@@ -32,26 +32,15 @@ local rejoinRequest = nil
 local TryAutoRejoin
 local FinishRejoin
 
--- Deferred work uses the required ClassicAPI timers.
-function AutoBG_TimerAfter(delay, func)
-    if not func then return end
-    if not delay or delay <= 0 then func() else C_Timer.After(delay, func) end
-end
-
--- Pre-allocated static Unit ID arrays
-
--- Cached Zone State
 local currentZoneText = ""
 local currentZonePVP = false
 
 local function UpdateZoneCache()
-    currentZoneText = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+    currentZoneText = GetRealZoneText() or ""
     local inInstance, instanceType = IsInInstance()
     currentZonePVP = (inInstance and instanceType == "pvp")
 end
 
--- Frame Position Helpers
--- Frame Position Helpers & Migration (Finding 8)
 function AutoBG_SavePosition(frame, name)
     if not frame or not name or not AutoBG_Settings then return end
     AutoBG_Settings.Positions = AutoBG_Settings.Positions or {}
@@ -81,84 +70,6 @@ function AutoBG_LoadPosition(frame, name, defaultPoint, defaultX, defaultY, defa
     end
 end
 
-function AutoBG_MigratePositions()
-    if not AutoBG_Settings then return end
-    AutoBG_Settings.Positions = AutoBG_Settings.Positions or {}
-    local positions = AutoBG_Settings.Positions
-
-    -- 1. Migrate Targets positions from AutoBG_Settings.Targets.pos
-    local tPos = AutoBG_Settings.Targets and AutoBG_Settings.Targets.pos
-    if tPos and type(tPos) == "table" then
-        local targetKeys = {
-            "AutoBG_TargetsMainFrame",
-            "AutoBG_TargetsMainFrame10",
-            "AutoBG_TargetsMainFrame15",
-            "AutoBG_TargetsMainFrame40",
-        }
-        for _, key in ipairs(targetKeys) do
-            local px = tPos[key .. "_posX"]
-            local py = tPos[key .. "_posY"]
-            if px and py then
-                if not positions[key] then
-                    positions[key] = { point = "TOPLEFT", relPoint = "BOTTOMLEFT", x = px, y = py }
-                end
-                tPos[key .. "_posX"] = nil
-                tPos[key .. "_posY"] = nil
-            end
-        end
-
-        -- Clean up cross-polluted Spy keys inside Targets.pos
-        if tPos["AutoBG_SpyFrame_posX"] and tPos["AutoBG_SpyFrame_posY"] then
-            if not positions["AutoBG_SpyFrame"] then
-                positions["AutoBG_SpyFrame"] = {
-                    point = "TOPLEFT",
-                    relPoint = "BOTTOMLEFT",
-                    x = tPos["AutoBG_SpyFrame_posX"],
-                    y = tPos["AutoBG_SpyFrame_posY"],
-                }
-            end
-            tPos["AutoBG_SpyFrame_posX"] = nil
-            tPos["AutoBG_SpyFrame_posY"] = nil
-        end
-    end
-
-    -- 2. Migrate Spy positions from AutoBG_Settings.Spy
-    local spyOpt = AutoBG_Settings.Spy
-    if spyOpt and type(spyOpt) == "table" then
-        if spyOpt.posX and spyOpt.posY then
-            if not positions["AutoBG_SpyFrame"] then
-                positions["AutoBG_SpyFrame"] = {
-                    point = "TOPLEFT",
-                    relPoint = "BOTTOMLEFT",
-                    x = spyOpt.posX,
-                    y = spyOpt.posY,
-                }
-            end
-            spyOpt.posX = nil
-            spyOpt.posY = nil
-        end
-
-        if spyOpt.alertPosX and spyOpt.alertPosY then
-            if not positions["AutoBG_SpyAlertWindow"] then
-                positions["AutoBG_SpyAlertWindow"] = {
-                    point = "TOPLEFT",
-                    relPoint = "BOTTOMLEFT",
-                    x = spyOpt.alertPosX,
-                    y = spyOpt.alertPosY,
-                }
-            end
-            spyOpt.alertPosX = nil
-            spyOpt.alertPosY = nil
-        end
-    end
-
-    -- 3. Standardize existing Spy alert entries lacking point/relPoint
-    if positions["AutoBG_SpyAlertWindow"] and (not positions["AutoBG_SpyAlertWindow"].point or not positions["AutoBG_SpyAlertWindow"].relPoint) then
-        positions["AutoBG_SpyAlertWindow"].point = positions["AutoBG_SpyAlertWindow"].point or "TOPLEFT"
-        positions["AutoBG_SpyAlertWindow"].relPoint = positions["AutoBG_SpyAlertWindow"].relPoint or "BOTTOMLEFT"
-    end
-end
-
 -- Ctrl+click announcements go to the battleground, else the raid or party,
 -- else say.
 function AutoBG_SendAnnouncement(text)
@@ -183,28 +94,18 @@ local defaultSettings = {
     ObjectiveWidth = 225, ObjectiveHeight = 25, ObjectiveScale = 1, ObjectiveOpacity = 0.9,
 }
 
--- Battleground Icons
-local BG_ICONS = {
-    ["Warsong Gulch"]  = "Interface\\Icons\\INV_Misc_Rune_07",
-    ["Arathi Basin"]   = "Interface\\Icons\\INV_Jewelry_Amulet_07",
-    ["Alterac Valley"] = "Interface\\Icons\\INV_Jewelry_Necklace_21",
-    ["Thorn Gorge"]    = "Interface\\Icons\\INV_Jewelry_Talisman_04",
-    ["wsg"]            = "Interface\\Icons\\INV_Misc_Rune_07",
-    ["ab"]             = "Interface\\Icons\\INV_Jewelry_Amulet_07",
-    ["av"]             = "Interface\\Icons\\INV_Jewelry_Necklace_21",
-    ["tg"]             = "Interface\\Icons\\INV_Jewelry_Talisman_04",
+-- Each battleground: its icon on the queue bar and the type OctoWoW's queue
+-- request takes (JoinBattlegroundQueue, the client's own minimap menu).
+local BATTLEGROUNDS = {
+    ["Warsong Gulch"]  = { icon = "Interface\\Icons\\INV_Misc_Rune_07", queue = "Warsong" },
+    ["Arathi Basin"]   = { icon = "Interface\\Icons\\INV_Jewelry_Amulet_07", queue = "Arathi" },
+    ["Alterac Valley"] = { icon = "Interface\\Icons\\INV_Jewelry_Necklace_21", queue = "Alterac" },
+    ["Thorn Gorge"]    = { icon = "Interface\\Icons\\INV_Jewelry_Talisman_04", queue = "ThornGorge" },
 }
 
-function AutoBG_GetBGIcon(keyOrName)
-    if not keyOrName then return nil end
-    if BG_ICONS[keyOrName] then return BG_ICONS[keyOrName] end
-    local lower = string.lower(keyOrName)
-    if string.find(lower, "warsong") or lower == "wsg" then return BG_ICONS["wsg"]
-    elseif string.find(lower, "arathi") or lower == "ab" then return BG_ICONS["ab"]
-    elseif string.find(lower, "alterac") or lower == "av" then return BG_ICONS["av"]
-    elseif string.find(lower, "thorn") or string.find(lower, "gorge") or lower == "tg" then return BG_ICONS["tg"]
-    end
-    return nil
+function AutoBG_GetBGIcon(name)
+    local bg = name and BATTLEGROUNDS[name]
+    return bg and bg.icon
 end
 
 function AutoBG_CancelAllQueues()
@@ -216,9 +117,8 @@ function AutoBG_CancelAllQueues()
     hasHandledEnd = false
     AutoBG_StopNotificationSound()
     FinishRejoin()
-    local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
     local cancelled = 0
-    for i = 1, maxQueues do
+    for i = 1, MAX_BATTLEFIELD_QUEUES do
         inviteGeneration[i] = (inviteGeneration[i] or 0) + 1
         notifiedQueues[i] = false
         invitedMaps[i] = nil
@@ -252,7 +152,7 @@ local function FlashTaskbar()
     if AutoBG_Settings and AutoBG_Settings.FlashTaskbar then FlashClientIcon() end
 end
 
--- Canonical Class Colors (Rule B7: Shaman Blue 0x00, 0x70, 0xDE)
+-- Class colors, Shaman in blue (the 1.12 table has it pink).
 AutoBG_CLASS_COLORS = {
     HUNTER  = { r = 0.67, g = 0.83, b = 0.45, hex = "|cffabd473" },
     WARLOCK = { r = 0.58, g = 0.51, b = 0.79, hex = "|cff9482c9" },
@@ -264,16 +164,6 @@ AutoBG_CLASS_COLORS = {
     SHAMAN  = { r = 0.00, g = 0.44, b = 0.87, hex = "|cff0070de" },
     WARRIOR = { r = 0.78, g = 0.61, b = 0.43, hex = "|cffc79c6e" },
 }
-if RAID_CLASS_COLORS then
-    for class, color in pairs(RAID_CLASS_COLORS) do
-        if class ~= "SHAMAN" and not AutoBG_CLASS_COLORS[class] then
-            AutoBG_CLASS_COLORS[class] = {
-                r = color.r, g = color.g, b = color.b,
-                hex = string.format("|cff%02x%02x%02x", color.r * 255, color.g * 255, color.b * 255)
-            }
-        end
-    end
-end
 
 function AutoBG_GetClassColor(classOrToken)
     if not classOrToken then return nil end
@@ -302,8 +192,7 @@ function AutoBG_FindPlayerClass(playerName)
     local _, token = C_PlayerCache.GetPlayerInfoByName(clean)
     if token then return token end
 
-    local numScores = (GetNumBattlefieldScores and GetNumBattlefieldScores()) or 0
-    for i = 1, numScores do
+    for i = 1, GetNumBattlefieldScores() do
         local name, _, _, _, _, _, _, _, locClass, classToken = GetBattlefieldScore(i)
         if name and string.gsub(name, "-.*$", "") == clean then
             return classToken or locClass
@@ -313,11 +202,11 @@ function AutoBG_FindPlayerClass(playerName)
 end
 
 local function IsPlayerDeadOrGhost()
-    return (UnitIsDeadOrGhost and UnitIsDeadOrGhost("player")) or (UnitIsDead and UnitIsDead("player")) or (UnitIsGhost and UnitIsGhost("player"))
+    return UnitIsDeadOrGhost("player")
 end
 
 local function DismissBattlefieldPopups()
-    if StaticPopup_Hide then StaticPopup_Hide("CONFIRM_BATTLEFIELD_ENTRY") end
+    StaticPopup_Hide("CONFIRM_BATTLEFIELD_ENTRY")
     for s = 1, 4 do
         local dlg = _G["StaticPopup" .. s]
         if dlg and dlg:IsShown() and dlg.which == "CONFIRM_BATTLEFIELD_ENTRY" then
@@ -363,15 +252,11 @@ local function AutoBG_HideBattlefieldWindow()
     CloseDropDownMenus()
 end
 
-if BattlefieldFrame then
-    local orig_BattlefieldFrame_OnShow = BattlefieldFrame:GetScript("OnShow")
-    BattlefieldFrame:SetScript("OnShow", function()
-        if orig_BattlefieldFrame_OnShow then orig_BattlefieldFrame_OnShow() end
-        if GetTime() < suppressBattlefieldFrameUntil and GetBattlefieldInfo() == suppressedBattlefieldBG then
-            AutoBG_HideBattlefieldWindow()
-        end
-    end)
-end
+BattlefieldFrame:HookScript("OnShow", function()
+    if GetTime() < suppressBattlefieldFrameUntil and GetBattlefieldInfo() == suppressedBattlefieldBG then
+        AutoBG_HideBattlefieldWindow()
+    end
+end)
 
 function AutoBG_StopNotificationSound()
     notificationGeneration = notificationGeneration + 1
@@ -402,24 +287,16 @@ function AutoBG_PlayNotificationSound(isAutomatic)
     end
 end
 
-local function GetBGButtonIndex(bgName)
-    if not bgName then return 4, "Warsong Gulch", "Warsong" end
-    local lower = string.lower(bgName)
-    if string.find(lower, "arathi") or string.find(lower, "ab") then return 5, "Arathi Basin", "Arathi"
-    elseif string.find(lower, "alterac") or string.find(lower, "av") then return 7, "Alterac Valley", "Alterac"
-    elseif string.find(lower, "thorn") or string.find(lower, "gorge") or string.find(lower, "tg") then return 6, "Thorn Gorge", "ThornGorge"
-    elseif string.find(lower, "warsong") or lower == "wsg" then return 4, "Warsong Gulch", "Warsong"
-    else return 0, bgName end
-end
-
-local function ClickFrame(f)
-    if not f then return false end
-    if f.Click then f:Click(); return true end
-    if f.IsObjectType and (f:IsObjectType("Button") or f:IsObjectType("CheckButton")) then
-        local onClick = f.GetScript and f:GetScript("OnClick")
-        if onClick then onClick(); return true end
-    end
-    return false
+-- The full name of a battleground from its name, an abbreviation or a word of it.
+local function FullBattlegroundName(text)
+    if not text then return "Warsong Gulch" end
+    if BATTLEGROUNDS[text] then return text end
+    local lower = string.lower(text)
+    if string.find(lower, "arathi") or lower == "ab" then return "Arathi Basin"
+    elseif string.find(lower, "alterac") or lower == "av" then return "Alterac Valley"
+    elseif string.find(lower, "thorn") or string.find(lower, "gorge") or lower == "tg" then return "Thorn Gorge"
+    elseif string.find(lower, "warsong") or lower == "wsg" then return "Warsong Gulch" end
+    return text
 end
 
 function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
@@ -437,7 +314,13 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
         return
     end
 
-    local btnIdx, cleanName, queueName = GetBGButtonIndex(bgName)
+    local cleanName = FullBattlegroundName(bgName)
+    local bg = BATTLEGROUNDS[cleanName]
+    if not bg then
+        pendingAutoRejoin = nil
+        AutoBG_Print("No queue for |cFFFFFF00" .. cleanName .. "|r.", true)
+        return
+    end
     if finderTimer then finderTimer:Cancel(); finderTimer = nil end
     pendingAutoRejoin = cleanName
     suppressBattlefieldFrameUntil = 0
@@ -451,49 +334,9 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
         end)
         finderTimer = timer
     end
-    CloseDropDownMenus()
-
-    -- UNVERIFIED: test in game. JoinBattlegroundQueue is not in the references;
-    -- without it the minimap dropdown path below is used.
-    if queueName and JoinBattlegroundQueue then
-        local ok, err = pcall(JoinBattlegroundQueue, queueName)
-        if not ok then
-            pendingAutoRejoin = nil
-            AutoBG_Print("Could not open queue for |cFFFFFF00" .. cleanName .. "|r: " .. tostring(err), true)
-        end
-        return
-    end
-
-    local mmBtn = _G["TWMiniMapBattlefieldFrame"] or _G["MiniMapBattlefieldFrame"]
-    if mmBtn then ClickFrame(mmBtn) end
-
-    local requestGeneration = queueGeneration
-    local function TryClickDropdown(attempt)
-        if requestGeneration ~= queueGeneration then return end
-        if isRejoin and not (AutoBG_Settings and AutoBG_Settings.AutoRejoin) then return end
-        local targetFound = false
-        local lowerTarget = string.lower(cleanName)
-        for i = 1, 12 do
-            local dropBtn = _G["DropDownList1Button" .. i]
-            if dropBtn and dropBtn:IsShown() then
-                local text = dropBtn:GetText() or (_G["DropDownList1Button" .. i .. "NormalText"] and _G["DropDownList1Button" .. i .. "NormalText"]:GetText())
-                if text and string.find(string.lower(text), lowerTarget) then
-                    ClickFrame(dropBtn)
-                    targetFound = true
-                    break
-                end
-            end
-        end
-        if not targetFound and attempt < 4 then
-            AutoBG_TimerAfter(0.12, function()
-                TryClickDropdown(attempt + 1)
-            end)
-        end
-    end
-
-    AutoBG_TimerAfter(0.08, function()
-        TryClickDropdown(1)
-    end)
+    -- The server answers with the battlemaster list (BATTLEFIELDS_SHOW), where
+    -- the request is joined.
+    JoinBattlegroundQueue(bg.queue)
 end
 
 
@@ -529,7 +372,6 @@ function AutoBG_QueueAllBGs()
     end
 
     table.wipe(queueQueueBuffer)
-    local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
     local total = 0
     local bgsToQueue = AutoBG_GetSelectedBGs()
     if #bgsToQueue == 0 then
@@ -540,7 +382,7 @@ function AutoBG_QueueAllBGs()
     for i = 1, #bgsToQueue do
         local bg = bgsToQueue[i]
         local alreadyQueued = false
-        for q = 1, maxQueues do
+        for q = 1, MAX_BATTLEFIELD_QUEUES do
             local status, mapName = GetBattlefieldStatus(q)
             if status and status ~= "none" and mapName and string.find(string.lower(mapName), string.lower(bg)) then
                 alreadyQueued = true; break
@@ -591,7 +433,7 @@ function AutoBG_QueueAllBGs()
         idx = idx + 1
         AutoBG_Print("Auto-queuing for |cFFFFFF00" .. currentBG .. "|r (" .. (idx - 1) .. "/" .. total .. ")...")
         AutoBG_TriggerBattlegroundFinder(currentBG, false, true)
-        AutoBG_TimerAfter(2.2, StepQueue)
+        C_Timer.After(2.2, StepQueue)
     end
     StepQueue()
 end
@@ -620,7 +462,7 @@ local function BeginRejoin(bg)
     rejoinRequest = nil
     pendingAutoRejoin = nil
     if AutoBG_Settings and AutoBG_Settings.AutoRejoin and bg then
-        local _, cleanName = GetBGButtonIndex(bg)
+        local cleanName = FullBattlegroundName(bg)
         rejoinRequest = { bg = cleanName, generation = queueGeneration, attempts = 0, phase = "world" }
         pendingAutoRejoin = cleanName
     end
@@ -672,7 +514,7 @@ local function HandleMatchEnd()
         if UnitExists("player") then PrepareBattlefieldExit() end
         local finishedBG = currentZoneText
         local generation = queueGeneration
-        AutoBG_TimerAfter(0.3, function()
+        C_Timer.After(0.3, function()
             UpdateZoneCache()
             if generation ~= queueGeneration or not hasHandledEnd or not currentZonePVP or
                currentZoneText ~= finishedBG or not UnitExists("player") or
@@ -686,7 +528,7 @@ local function HandleMatchEnd()
 end
 
 local function IsQueuedFor(bg)
-    for i = 1, MAX_BATTLEFIELD_QUEUES or 3 do
+    for i = 1, MAX_BATTLEFIELD_QUEUES do
         local status, map = GetBattlefieldStatus(i)
         if (status == "queued" or status == "confirm") and map == bg then return true end
     end
@@ -717,8 +559,7 @@ TryAutoRejoin = function()
         AutoBG_Print("Auto-Rejoin could not confirm the queue after three attempts. Use /abg q to retry.", true)
         return
     end
-    local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
-    for i = 1, maxQueues do
+    for i = 1, MAX_BATTLEFIELD_QUEUES do
         if GetBattlefieldStatus(i) == "active" then WaitForRejoinReady(request); return end
     end
     if IsPlayerDeadOrGhost() then WaitForRejoinReady(request); return end
@@ -778,10 +619,16 @@ frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("PLAYER_LEAVING_WORLD")
 frame:RegisterEvent("ZONE_CHANGED")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
-frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_ALLIANCE")
-frame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
-frame:RegisterEvent("CHAT_MSG_SYSTEM")
+-- The match-end lines matter only inside a battleground.
+local MATCH_CHAT = { "CHAT_MSG_BG_SYSTEM_NEUTRAL", "CHAT_MSG_BG_SYSTEM_ALLIANCE", "CHAT_MSG_BG_SYSTEM_HORDE", "CHAT_MSG_SYSTEM" }
+local matchChatOn = false
+local function SyncMatchChat()
+    if matchChatOn == currentZonePVP then return end
+    matchChatOn = currentZonePVP
+    for i = 1, #MATCH_CHAT do
+        if matchChatOn then frame:RegisterEvent(MATCH_CHAT[i]) else frame:UnregisterEvent(MATCH_CHAT[i]) end
+    end
+end
 -- Only your own auras matter (the Deserter debuff); other units never reach Lua.
 -- ClassicAPI 1.17.10 UNIT_AURA_DELTA says what changed, so refreshes cost nothing.
 frame:RegisterUnitEvent("UNIT_AURA_DELTA", "player")
@@ -838,7 +685,7 @@ local function ProcessBattlefieldQueue(id)
                     AutoBG_Print("Instant Auto-Accepted |cFFFFFF00" .. bg .. "|r!")
                 else
                     AutoBG_Print("Queue popped for |cFFFFFF00" .. bg .. "|r! Entering in |cFFFFFF00" .. delay .. "s|r...")
-                    AutoBG_TimerAfter(delay, function()
+                    C_Timer.After(delay, function()
                         if inviteGeneration[qId] ~= generation or notifiedQueues[qId] ~= true or not AutoBG_Settings.AutoAccept then return end
                         local currentStatus, currentMap = GetBattlefieldStatus(qId)
                         if currentStatus ~= "confirm" or currentMap ~= mapName then return end
@@ -903,22 +750,12 @@ frame:SetScript("OnEvent", function()
         AutoBG_Settings.NodeColors = nil
         AutoBG_Settings.ABProjection = nil
 
-        -- Initialize Targets & Spy settings natively under AutoBG_Settings
-        if not AutoBG_Settings.Targets then
-            AutoBG_Settings.Targets = {}
-        end
-        if AutoBG_Targets and AutoBG_Targets.EnsureOptions then
-            AutoBG_Targets:EnsureOptions()
-        end
-
-        if AutoBG_Spy and AutoBG_Spy.EnsureOptions then
-            -- A finished list-order migration left its marker behind.
-            AutoBG_Spy:EnsureOptions().StableRowsMigration = nil
-        end
-
-        AutoBG_MigratePositions()
+        AutoBG_Targets:EnsureOptions()
+        -- A finished list-order migration left its marker behind.
+        AutoBG_Spy:EnsureOptions().StableRowsMigration = nil
 
         UpdateZoneCache()
+        SyncMatchChat()
         AutoBG_Print("v1.0.0 loaded. Type |cFFFFFF00/abg|r or |cFFFFFF00/bgt|r for options.", true)
 
     elseif ev == "PLAYER_LEAVING_WORLD" then
@@ -933,6 +770,7 @@ frame:SetScript("OnEvent", function()
     elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
         local wasInBattleground = currentZonePVP
         UpdateZoneCache()
+        SyncMatchChat()
 
         if currentZonePVP then
             if currentZoneText ~= "" then
@@ -966,7 +804,7 @@ frame:SetScript("OnEvent", function()
                     else
                         hasQueuedOnLogin = true
                         local generation = queueGeneration
-                        AutoBG_TimerAfter(3.0, function()
+                        C_Timer.After(3.0, function()
                             if generation ~= queueGeneration or not (AutoBG_Settings and AutoBG_Settings.AutoQueueLogin) then return end
                             local currDes, currRem = AutoBG_HasDeserter()
                             if currDes then
@@ -1009,7 +847,7 @@ frame:SetScript("OnEvent", function()
                 isAutoQueueing = false
                 return
             end
-            local bgTitle = pendingAutoRejoin or (GetBattlefieldInfo and GetBattlefieldInfo()) or "Battleground"
+            local bgTitle = pendingAutoRejoin or GetBattlefieldInfo() or "Battleground"
             if request then
                 -- A list reply is not confirmation; submit once and await status.
                 request.phase = "queue"
@@ -1029,10 +867,10 @@ frame:SetScript("OnEvent", function()
                     AutoBG_HideBattlefieldWindow()
                 end
             end
-            AutoBG_TimerAfter(0.04, HideRequestedWindow)
-            AutoBG_TimerAfter(0.15, HideRequestedWindow)
-            AutoBG_TimerAfter(0.35, HideRequestedWindow)
-            AutoBG_TimerAfter(0.8, HideRequestedWindow)
+            C_Timer.After(0.04, HideRequestedWindow)
+            C_Timer.After(0.15, HideRequestedWindow)
+            C_Timer.After(0.35, HideRequestedWindow)
+            C_Timer.After(0.8, HideRequestedWindow)
 
             AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (First Available).")
             pendingAutoRejoin = nil
@@ -1046,15 +884,14 @@ frame:SetScript("OnEvent", function()
 
     elseif ev == "UPDATE_BATTLEFIELD_STATUS" then
         if not AutoBG_Settings then return end
-        local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
-        for i = 1, maxQueues do ProcessBattlefieldQueue(i) end
+        for i = 1, MAX_BATTLEFIELD_QUEUES do ProcessBattlefieldQueue(i) end
         TryAutoRejoin()
 
     elseif ev == "PLAYER_DEAD" then
         if AutoBG_Settings and AutoBG_Settings.AutoRelease and currentZonePVP then
             if not HasSoulstone() then
                 RepopMe()
-                if StaticPopup_Hide then StaticPopup_Hide("DEATH") end
+                StaticPopup_Hide("DEATH")
             else
                 AutoBG_Print("Self-resurrection available. Preserving spirit.")
             end
@@ -1064,7 +901,7 @@ frame:SetScript("OnEvent", function()
         if needsQueueAfterResurrect and not IsPlayerDeadOrGhost() then
             needsQueueAfterResurrect = false; hasQueuedOnLogin = true
             local generation = queueGeneration
-            AutoBG_TimerAfter(2.0, function()
+            C_Timer.After(2.0, function()
                 if generation ~= queueGeneration then return end
                 if not IsPlayerDeadOrGhost() then
                     AutoBG_Print("Resurrection detected! Initiating Battleground Auto-Queue...")
@@ -1230,9 +1067,8 @@ SlashCmdList["AUTOBG"] = function(msg)
             AutoBG_Print("Quick-queue triggered for |cFFFFFF00" .. target .. "|r...", true)
             AutoBG_TriggerBattlegroundFinder(target)
         else
-            AutoBG_Print("No previous BG recorded. Opening Battleground Finder...", true)
-            local mmBtn = _G["TWMiniMapBattlefieldFrame"] or _G["MiniMapBattlefieldFrame"]
-            if mmBtn then ClickFrame(mmBtn) end
+            AutoBG_Print("No previous BG recorded. Opening the battleground menu...", true)
+            TWMiniMapBattlefieldFrame:Click()
         end
     elseif cmd == "delay" or cmd == "acceptdelay" then
         local val = tonumber(arg)
