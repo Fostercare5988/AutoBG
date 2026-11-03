@@ -42,10 +42,10 @@ local function ActiveBattlefieldMap()
 end
 
 -- The arena zones (2v2, 3v3, 5v5). The one place that names them; Timers,
--- Targets and Spy ask AutoBG_IsArenaZone. UNVERIFIED: the third zone name
--- ("Circle of Blood") and the instance type an arena reports; test in the
--- arena with /run print(GetRealZoneText(), IsInInstance()).
-local ARENA_ZONES = { ["lordaeron arena"] = true, ["sunstrider court"] = true, ["circle of blood"] = true }
+-- Targets and Spy ask AutoBG_IsArenaZone. The zone names are confirmed by the
+-- player (2026-11-03). UNVERIFIED: the instance type an arena reports; test
+-- in the arena with /run print(GetRealZoneText(), IsInInstance()).
+local ARENA_ZONES = { ["lordaeron arena"] = true, ["sunstrider court"] = true, ["blood ring"] = true }
 function AutoBG_IsArenaZone()
     local inInstance, instanceType = IsInInstance()
     return (inInstance and instanceType == "arena") or ARENA_ZONES[string.lower(GetRealZoneText() or "")] == true

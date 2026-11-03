@@ -83,7 +83,7 @@ end
 -- In a battleground the enemy frames own the enemies. The queue status leaves
 -- "active" before the loading screen, so the instance type counts too.
 local function InBattleground()
-	return inBattleground or Targets.activeBG
+	return inBattleground or (Targets.activeBG and not Targets.activeArena)
 end
 
 function Spy:IsRaidDisabled()

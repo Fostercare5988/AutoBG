@@ -13,7 +13,8 @@ local UI = ns.UI
 local Targets = AutoBG_Targets
 local Spy = AutoBG_Spy
 local FlagAlert = AutoBG_FlagAlert
-local BRACKETS = { 10, 15, 40 }
+-- 5 is the arena bracket (2v2 to 5v5), as in AutoBG_Targets.lua.
+local BRACKETS = { 10, 15, 40, 5 }
 local WIDTH = 500
 local selectedTab = 1
 local selectedBracket = 10
@@ -264,8 +265,8 @@ local function SelectBracket(size, start)
 	UpdateTargetsWidgets(size)
 end
 
-UI.Heading(panelTargets, "Battleground size", 28, -98)
-local _, ShowBracket = UI.Segmented("AutoBG_Targets_BracketBtn", panelTargets, { "10v10", "15v15", "40v40" }, 24, -114, 208,
+UI.Heading(panelTargets, "Battleground size or arena", 28, -98)
+local _, ShowBracket = UI.Segmented("AutoBG_Targets_BracketBtn", panelTargets, { "10v10", "15v15", "40v40", "Arena" }, 24, -114, 208,
 	function(index) SelectBracket(BRACKETS[index]) end, { height = 26 })
 
 local cbTgtEnable = BracketSetting("AutoBG_Tgt_Enable", "Show frames in 10v10",
@@ -296,6 +297,7 @@ local SIZE_PRESETS = {
 	[10] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
 	[15] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
 	[40] = { { 160, 16, 10 }, { 210, 20, 11 }, { 240, 24, 12 } },
+	[5] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
 }
 UI.Heading(panelTargets, "Frame size", 264, -98)
 local _, ShowPreset = UI.Segmented("AutoBG_Tgt_Preset", panelTargets, { "Compact", "Standard", "Large" }, 260, -114, 212,
@@ -385,10 +387,10 @@ UpdateTargetsWidgets = function(sz)
 	if Targets and Targets.EnsureOptions then Targets:EnsureOptions() end
 	local o = TargetOptions()
 	if not o then return end
-	for i = 1, 3 do
+	for i = 1, #BRACKETS do
 		if BRACKETS[i] == sz then ShowBracket(i) end
 	end
-	local label = sz .. "v" .. sz
+	local label = sz == 5 and "arenas" or (sz .. "v" .. sz)
 	cbTgtEnable.label:SetText("Show frames in " .. label)
 	sizeHint:SetText("The switches above and the frame size apply to " .. label .. " only.")
 	UI.Sync(cbTgtEnable, o.EnableBracket and o.EnableBracket[sz])
