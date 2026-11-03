@@ -72,18 +72,7 @@ local activeBG = false
 Targets.activeBG = false
 local currentSize = 10
 
-local CLASS_COLORS = AutoBG_CLASS_COLORS or {
-	HUNTER  = { r = 0.67, g = 0.83, b = 0.45 },
-	WARLOCK = { r = 0.58, g = 0.51, b = 0.79 },
-	PRIEST  = { r = 1.00, g = 1.00, b = 1.00 },
-	PALADIN = { r = 0.96, g = 0.55, b = 0.73 },
-	MAGE    = { r = 0.41, g = 0.80, b = 0.94 },
-	ROGUE   = { r = 1.00, g = 0.96, b = 0.41 },
-	DRUID   = { r = 1.00, g = 0.49, b = 0.04 },
-	SHAMAN  = { r = 0.00, g = 0.44, b = 0.87 },
-	WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
-}
-
+local CLASS_COLORS = AutoBG_CLASS_COLORS
 local FALLBACK_COLOR = { r = 0.60, g = 0.60, b = 0.60 }
 local CLASS_ORDER = {
 	DRUID = 1,
@@ -100,14 +89,13 @@ local CLASS_ORDER = {
 local function ResolveClassToken(rawClass)
 	if not rawClass or type(rawClass) ~= "string" then return "WARRIOR" end
 	local upper = string.upper(rawClass)
-	local tbl = AutoBG_CLASS_COLORS or CLASS_COLORS
-	return (tbl[upper] and upper) or "WARRIOR"
+	return (CLASS_COLORS[upper] and upper) or "WARRIOR"
 end
 
 local function GetClassColor(classToken)
 	if not classToken then return FALLBACK_COLOR end
 	local upper = string.upper(classToken)
-	return (AutoBG_CLASS_COLORS and AutoBG_CLASS_COLORS[upper]) or CLASS_COLORS[upper] or FALLBACK_COLOR
+	return CLASS_COLORS[upper] or FALLBACK_COLOR
 end
 Targets.ResolveClassToken = ResolveClassToken
 Targets.GetClassColor = GetClassColor
@@ -257,6 +245,7 @@ function Targets.CheckUnitStealth(unit)
 	return false
 end
 
+-- Cross-realm battlegrounds name players "Name-Realm" (seen: "Mayve-NZ").
 local function StripRealm(name)
 	if not name then return "" end
 	local p = string.find(name, "-", 1, true)
@@ -265,6 +254,7 @@ local function StripRealm(name)
 	end
 	return name
 end
+Targets.StripRealm = StripRealm
 
 -- Full names are authoritative. Only an unqualified name may use the unique
 -- short-name index; a different explicit realm must never resolve to this row.
@@ -286,15 +276,11 @@ local function ClassThenNameSort(a, b)
 	return a.name < b.name
 end
 
-local function NameSort(a, b)
-	return a.name < b.name
-end
-
 -- Allocation-free insertion sort strictly over active segment (1..enemyCount)
-local function SortActiveRoster(comparator)
+local function SortActiveRoster()
 	for i = 2, enemyCount do
 		local j = i
-		while j > 1 and comparator(roster[j], roster[j - 1]) do
+		while j > 1 and ClassThenNameSort(roster[j], roster[j - 1]) do
 			roster[j], roster[j - 1] = roster[j - 1], roster[j]
 			j = j - 1
 		end
@@ -303,7 +289,6 @@ end
 
 -- Roster delta-detection buffers (fixed 1..MAX_ENEMIES, zero GC allocation)
 local prevEnemyCount = -1
-local prevSortBy = -1
 local prevEnemyNames = {}
 local prevEnemyClasses = {}
 for i = 1, MAX_ENEMIES do
@@ -312,9 +297,6 @@ for i = 1, MAX_ENEMIES do
 end
 
 local function HasRosterChanged()
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	local sortBy = (o and o.ButtonSortBy and o.ButtonSortBy[currentSize]) or 1
-	if sortBy ~= prevSortBy then return true end
 	if enemyCount ~= prevEnemyCount then return true end
 	for i = 1, enemyCount do
 		if roster[i].name ~= prevEnemyNames[i] or roster[i].classToken ~= prevEnemyClasses[i] then
@@ -325,8 +307,6 @@ local function HasRosterChanged()
 end
 
 local function SaveRosterSnapshot()
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	prevSortBy = (o and o.ButtonSortBy and o.ButtonSortBy[currentSize]) or 1
 	prevEnemyCount = enemyCount
 	for i = 1, enemyCount do
 		prevEnemyNames[i] = roster[i].name or ""
@@ -340,7 +320,6 @@ end
 
 function Targets:InvalidateRosterCache()
 	prevEnemyCount = -1
-	prevSortBy = -1
 end
 
 function Targets:EnsureOptions()
@@ -355,6 +334,7 @@ function Targets:EnsureOptions()
 	-- Leftovers of finished position migrations and of an older Spy table
 	-- that lived here; no code reads them.
 	o.pos, o.IndependentPositionsVersion, o.IndependentPositioning, o.Spy = nil, nil, nil, nil
+	o.ButtonSortBy = nil -- Always class, then name; the setting had no control.
 	if AutoBG_Settings.Positions then AutoBG_Settings.Positions.AutoBG_TargetsMainFrame = nil end
 	o.EnableBracket = o.EnableBracket or {}
 	o.ButtonFontSize = o.ButtonFontSize or {}
@@ -365,7 +345,6 @@ function Targets:EnsureOptions()
 	o.ButtonShowHealthBar = nil -- Permanent behavior; retire the saved toggle.
 	o.ButtonShowHealthText = o.ButtonShowHealthText or {}
 	o.ButtonHideRealm = o.ButtonHideRealm or {}
-	o.ButtonSortBy = o.ButtonSortBy or {}
 	o.ShowStealthIcon = nil -- Permanent behavior; retire the saved toggle.
 	o.DimStealthed = o.DimStealthed or {}
 	o.ShowStealthText = nil -- Permanent behavior; retire the saved toggle.
@@ -405,7 +384,6 @@ function Targets:EnsureOptions()
 		if o.ButtonHeight[size] == nil then o.ButtonHeight[size] = (size == 40 and 20) or 25 end
 		if o.ButtonShowHealthText[size] == nil then o.ButtonShowHealthText[size] = true end
 		if o.ButtonHideRealm[size] == nil then o.ButtonHideRealm[size] = true end
-		if o.ButtonSortBy[size] == nil then o.ButtonSortBy[size] = 1 end
 		if o.DimStealthed[size] == nil then o.DimStealthed[size] = true end
 		if o.ShowTrinket[size] == nil then o.ShowTrinket[size] = true end
 	end
@@ -419,10 +397,7 @@ local function GetEnemyFlagCarrier()
 	if Targets.isConfig then
 		return "Target1"
 	end
-	if AutoBG_GetEnemyCarrier then
-		return AutoBG_GetEnemyCarrier()
-	end
-	return nil
+	return AutoBG_GetEnemyCarrier()
 end
 
 local function GetEnemyFlagTexture()
@@ -574,32 +549,6 @@ end
 
 local SetUnitStealth -- forward declaration
 
-local stealthWatcher = CreateFrame("Frame", "AutoBG_TargetsStealthWatcher", UIParent)
-stealthWatcher:Hide()
-local stealthWatcherElapsed = 0
-
-local function StealthWatcher_OnUpdate()
-	stealthWatcherElapsed = stealthWatcherElapsed + arg1
-	if stealthWatcherElapsed < 0.25 then return end
-	stealthWatcherElapsed = 0
-
-	local now = GetTime()
-	local hasExpiring = false
-	for name, entry in pairs(stealthedState) do
-		if entry and entry.expireTime then
-			if now >= entry.expireTime then
-				SetUnitStealth(name, false)
-			else
-				hasExpiring = true
-			end
-		end
-	end
-	if not hasExpiring then
-		stealthWatcher:Hide()
-	end
-end
-stealthWatcher:SetScript("OnUpdate", StealthWatcher_OnUpdate)
-
 SetUnitStealth = function(name, isStealthed, spellName, texture, duration, observedUnit, fromRecheck)
 	if not name then return end
 	local visualChanged = false
@@ -633,14 +582,10 @@ SetUnitStealth = function(name, isStealthed, spellName, texture, duration, obser
 			entry.expireTime = exp
 		end
 
-		if observedUnit and UnitGUID then entry.observedGUID = UnitGUID(observedUnit) end
+		if observedUnit then entry.observedGUID = UnitGUID(observedUnit) end
 		if not entry.alerted and not Targets.isConfig and AutoBG_Spy then
 			local guid = nameToGUID[name] or entry.observedGUID
 			entry.alerted = AutoBG_Spy:NotifyStealth(name, entry.spellName, nil, guid, true, entry.observedGUID) and true or false
-		end
-
-		if exp and stealthWatcher and not stealthWatcher:IsShown() then
-			stealthWatcher:Show()
 		end
 	else
 		local entry = stealthedState[name]
@@ -662,9 +607,6 @@ local function ClearAllStealth()
 	for name, entry in pairs(stealthedState) do
 		ReleaseStealthEntry(entry)
 		stealthedState[name] = nil
-	end
-	if stealthWatcher then
-		stealthWatcher:Hide()
 	end
 end
 
@@ -726,8 +668,8 @@ local CHANNEL_COLOR = { 0.40, 0.75, 1.0 }
 local LOCKED_COLOR = { 0.60, 0.60, 0.60 }
 
 local function StopCast(btn)
-	local cast = btn and btn.Cast
-	if not cast or not cast.active then return end
+	local cast = btn.Cast
+	if not cast.active then return end
 	cast.active, cast.guid, cast.spell, cast.preview, cast.fromEvent = nil, nil, nil, nil, nil
 	cast:Hide()
 end
@@ -747,14 +689,17 @@ local function ShowCast(btn, guid, spell, texture, startMs, endMs, channel, lock
 	local cast = btn.Cast
 	cast.active, cast.guid = true, guid
 	cast.startMs, cast.endMs, cast.channel = startMs, endMs, channel
-	cast.nextCheck = GetTime() + 0.2
 	if cast.spell ~= spell then
 		cast.spell = spell
 		cast.Text:SetText(spell)
 	end
 	cast.Icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
 	local c = locked and LOCKED_COLOR or (channel and CHANNEL_COLOR) or CAST_COLOR
-	cast.Bar:SetVertexColor(c[1], c[2], c[3], 1)
+	cast.Bar:SetStatusBarColor(c[1], c[2], c[3])
+	-- A cast fills, a channel drains.
+	cast.timer:SetTimeSpan(startMs / 1000, endMs / 1000)
+	cast.Bar:SetTimerDuration(cast.timer, Enum.StatusBarInterpolation.Immediate,
+		channel and Enum.StatusBarTimerDirection.RemainingTime or Enum.StatusBarTimerDirection.ElapsedTime)
 	cast:Show()
 end
 
@@ -784,47 +729,33 @@ local function RefreshCast(row, fallbackSpell, fallbackMs, fallbackChannel)
 	end
 end
 
--- Animation only: the bar moves every frame while a cast is showing.
-local function Cast_OnUpdate(self)
-	local cast = self or this
-	local btn = cast.owner
-	local now = GetTime()
-	local nowMs = now * 1000
+-- Half-second check of a shown cast: the samples loop, an ended cast or one
+-- the engine cleared without an event goes.
+local function CheckCast(btn, nowMs)
+	local cast = btn.Cast
 	if cast.preview then
 		if nowMs >= cast.endMs then
 			local span = cast.endMs - cast.startMs
-			cast.startMs, cast.endMs = nowMs, nowMs + span
+			ShowCast(btn, nil, cast.spell, nil, nowMs, nowMs + span, cast.channel, false)
+			cast.preview = true
 		end
-	elseif now >= cast.nextCheck then
-		cast.nextCheck = now + 0.2
-		local guid = btn.targetName and nameToGUID[btn.targetName]
-		if guid ~= cast.guid then StopCast(btn); return end
-		local spell, texture, startMs, endMs, channel, locked = ReadCast(guid)
-		if spell then
-			if spell ~= cast.spell or startMs ~= cast.startMs then
-				ShowCast(btn, guid, spell, texture, startMs, endMs, channel, locked)
-			end
-			cast.endMs, cast.fromEvent = endMs, nil -- pushback moves the end
-		elseif not cast.fromEvent then
-			StopCast(btn)
-			return
-		end
+		return
 	end
-	if not cast.endMs or not cast.startMs or nowMs >= cast.endMs then StopCast(btn); return end
-	local span = cast.endMs - cast.startMs
-	local pct = span > 0 and (nowMs - cast.startMs) / span or 1
-	if cast.channel then pct = 1 - pct end
-	if pct < 0 then pct = 0 elseif pct > 1 then pct = 1 end
-	local width = math.max(1, math.floor((cast.barMax or 1) * pct + 0.5))
-	if cast.barWidth ~= width then
-		cast.barWidth = width
-		cast.Bar:SetWidth(width)
-	end
+	if nowMs >= cast.endMs or cast.guid ~= nameToGUID[btn.targetName or ""] then StopCast(btn); return end
+	if not cast.fromEvent and not ReadCast(cast.guid) then StopCast(btn) end
 end
 
 local function ClearAllCasts()
 	if not Targets.TargetButton then return end
 	for i = 1, MAX_ENEMIES do StopCast(Targets.TargetButton[i]) end
+end
+
+local function CheckCasts()
+	local nowMs = GetTime() * 1000
+	for i = 1, math.min(enemyCount, currentSize) do
+		local btn = Targets.TargetButton[i]
+		if btn.Cast.active then CheckCast(btn, nowMs) end
+	end
 end
 
 -- -------------------------------------------------------------------------- --
@@ -919,8 +850,12 @@ local function UpdateObservedTimers()
 	if not (activeBG or Targets.isConfig) then return end
 	if not Targets.TargetButton then return end
 	UpdateRowStatus()
+	CheckCasts()
 	if not next(stealthedState) and not next(trinketCooldown) then return end
 	local now = GetTime()
+	for name, entry in pairs(stealthedState) do
+		if entry.expireTime and now >= entry.expireTime then SetUnitStealth(name, false) end
+	end
 	for i = 1, math.min(enemyCount, currentSize) do
 		local btn = Targets.TargetButton[i]
 		if btn and btn:IsShown() and btn.targetName then
@@ -966,7 +901,7 @@ local MATCH_EVENTS = {
 }
 -- An enemy is only ever on these tokens; the raid's own health, auras and casts
 -- are dropped by the engine before Lua runs (ClassicAPI RegisterUnitEvent).
-local ENEMY_UNIT_EVENTS = { "UNIT_AURA_DELTA", "UNIT_HEALTH", "UNIT_NAME_UPDATE", "UNIT_SPELLCAST_SUCCEEDED" }
+local ENEMY_UNIT_EVENTS = { "UNIT_AURA_DELTA", "UNIT_HEALTH", "UNIT_NAME_UPDATE" }
 local ENEMY_UNITS = { "target", "focus", "mouseover" }
 for i = 1, 40 do ENEMY_UNITS[3 + i] = "nameplate" .. i end
 local matchEventsOn = false
@@ -1090,19 +1025,13 @@ local function UpdateAllSelectionVisuals()
 	end
 end
 
-local function MainFrame_OnMouseDown(self)
-	local f = Targets.MainFrame
-	if f and f.StartMoving then
-		f:StartMoving()
-	end
+local function MainFrame_OnMouseDown()
+	Targets.MainFrame:StartMoving()
 end
 
-local function MainFrame_OnMouseUp(self)
-	local f = Targets.MainFrame
-	if f and f.StopMovingOrSizing then
-		f:StopMovingOrSizing()
-	end
-	Targets:Frame_SavePosition("AutoBG_TargetsMainFrame")
+local function MainFrame_OnMouseUp()
+	Targets.MainFrame:StopMovingOrSizing()
+	Targets:Frame_SavePosition()
 end
 
 -- The loaded unit is the named enemy: same name, and the same realm when both
@@ -1291,15 +1220,16 @@ function Targets:CreateFrames()
 		cast.Icon = cast:CreateTexture(nil, "ARTWORK")
 		cast.Icon:SetPoint("TOPLEFT", cast, "TOPLEFT", 1, -1)
 		cast.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-		cast.Bar = cast:CreateTexture(nil, "ARTWORK")
+		cast.Bar = CreateFrame("StatusBar", nil, cast)
 		cast.Bar:SetPoint("TOPLEFT", cast.Icon, "TOPRIGHT", 1, 0)
-		cast.Bar:SetPoint("BOTTOMLEFT", cast.Icon, "BOTTOMRIGHT", 1, 0)
-		cast.Bar:SetTexture(BAR_TEXTURE)
-		cast.Text = cast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		cast.Text:SetPoint("LEFT", cast.Icon, "RIGHT", 3, 0)
-		cast.Text:SetPoint("RIGHT", cast, "RIGHT", -2, 0)
+		cast.Bar:SetPoint("BOTTOMRIGHT", cast, "BOTTOMRIGHT", -1, 1)
+		cast.Bar:SetStatusBarTexture(BAR_TEXTURE)
+		cast.Bar:EnableMouse(false)
+		cast.timer = C_DurationUtil.CreateDuration()
+		cast.Text = cast.Bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		cast.Text:SetPoint("LEFT", cast.Bar, "LEFT", 2, 0)
+		cast.Text:SetPoint("RIGHT", cast.Bar, "RIGHT", -2, 0)
 		cast.Text:SetJustifyH("LEFT")
-		cast:SetScript("OnUpdate", Cast_OnUpdate)
 		cast:EnableMouse(true)
 		cast:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 		cast:SetScript("OnClick", TargetButton_OnClick)
@@ -1374,41 +1304,16 @@ function Targets:CreateFrames()
 		btn:SetScript("OnLeave", TargetButton_OnLeave)
 	end
 
-	Targets:Frame_SetupPosition("AutoBG_TargetsMainFrame")
+	Targets:Frame_SetupPosition()
 end
 
-function Targets:Frame_SetupPosition(frameName)
-	local frame = _G[frameName] or (Targets and Targets.MainFrame)
-	if not frame then return end
-
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	local size = currentSize
-	local keyPrefix = frameName
-	if frameName == "AutoBG_TargetsMainFrame" then
-		keyPrefix = frameName .. size
-	end
-
-	if AutoBG_LoadPosition then
-		AutoBG_LoadPosition(frame, keyPrefix, "CENTER", 300, 50, "CENTER")
-	else
-		frame:ClearAllPoints()
-		frame:SetPoint("CENTER", UIParent, "CENTER", 300, 50)
-	end
+-- Each battleground size keeps its own position.
+function Targets:Frame_SetupPosition()
+	AutoBG_LoadPosition(Targets.MainFrame, "AutoBG_TargetsMainFrame" .. currentSize, "CENTER", 300, 50, "CENTER")
 end
 
-function Targets:Frame_SavePosition(frameName)
-	local frame = _G[frameName] or (Targets and Targets.MainFrame)
-	if not frame then return end
-
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	local keyPrefix = frameName
-	if frameName == "AutoBG_TargetsMainFrame" then
-		keyPrefix = frameName .. currentSize
-	end
-
-	if AutoBG_SavePosition then
-		AutoBG_SavePosition(frame, keyPrefix)
-	end
+function Targets:Frame_SavePosition()
+	AutoBG_SavePosition(Targets.MainFrame, "AutoBG_TargetsMainFrame" .. currentSize)
 end
 
 function Targets:SetupButtonLayout(size)
@@ -1438,32 +1343,24 @@ function Targets:SetupButtonLayout(size)
 		btn:SetHeight(height)
 		btn.Name:SetFont(FONT, fontSize, "OUTLINE")
 		btn.HealthText:SetFont(FONT, fontSize, "OUTLINE")
-		if btn.StealthIconBg then
-			btn.StealthIconBg:SetWidth(height - 2)
-			btn.StealthIconBg:SetHeight(height - 2)
+		btn.StealthIconBg:SetWidth(height - 2)
+		btn.StealthIconBg:SetHeight(height - 2)
+		btn.StealthIcon:SetWidth(height - 4)
+		btn.StealthIcon:SetHeight(height - 4)
+		btn.FlagIcon:SetWidth(height - 2)
+		btn.FlagIcon:SetHeight(height - 2)
+		local tPos = (o and o.TrinketPos) or "RIGHT"
+		btn.Trinket:ClearAllPoints()
+		if tPos == "LEFT" then
+			btn.Trinket:SetPoint("RIGHT", btn, "LEFT", -3, 0)
+		else
+			btn.Trinket:SetPoint("LEFT", btn, "RIGHT", 3, 0)
 		end
-		if btn.StealthIcon then
-			btn.StealthIcon:SetWidth(height - 4)
-			btn.StealthIcon:SetHeight(height - 4)
-		end
-		if btn.FlagIcon then
-			btn.FlagIcon:SetWidth(height - 2)
-			btn.FlagIcon:SetHeight(height - 2)
-		end
-		if btn.Trinket then
-			local tPos = (o and o.TrinketPos) or "RIGHT"
-			btn.Trinket:ClearAllPoints()
-			if tPos == "LEFT" then
-				btn.Trinket:SetPoint("RIGHT", btn, "LEFT", -3, 0)
-			else
-				btn.Trinket:SetPoint("LEFT", btn, "RIGHT", 3, 0)
-			end
-			btn.Trinket:SetWidth(height)
-			btn.Trinket:SetHeight(height)
-			local tFontSize = math.max(9, math.floor(height * 0.6))
-			btn.Trinket.Text:SetFont(FONT, tFontSize, "THICKOUTLINE")
-			btn.Trinket.Icon:SetTexture(GetEnemyTrinketTexture())
-		end
+		btn.Trinket:SetWidth(height)
+		btn.Trinket:SetHeight(height)
+		local tFontSize = math.max(9, math.floor(height * 0.6))
+		btn.Trinket.Text:SetFont(FONT, tFontSize, "THICKOUTLINE")
+		btn.Trinket.Icon:SetTexture(GetEnemyTrinketTexture())
 		btn.RaidIcon:SetWidth(height - 6)
 		btn.RaidIcon:SetHeight(height - 6)
 		btn.nameInset, btn.raidInset = nil, nil
@@ -1485,13 +1382,11 @@ function Targets:SetupButtonLayout(size)
 		cast:SetHeight(height)
 		cast.Icon:SetWidth(height - 2)
 		cast.Icon:SetHeight(height - 2)
-		cast.barMax = CAST_WIDTH - (height - 2) - 3
-		cast.barWidth = nil
 		cast.Text:SetFont(CAST_FONT, math.max(8, fontSize - 2), "OUTLINE")
 		btn.HealthBar:SetTexture(BAR_TEXTURE)
 	end
 
-	Targets:Frame_SetupPosition("AutoBG_TargetsMainFrame")
+	Targets:Frame_SetupPosition()
 end
 
 local function GetBracketSize(bgName)
@@ -1507,8 +1402,7 @@ local function GetBracketSize(bgName)
 end
 
 local function DetectBattleground()
-	local maxQueues = MAX_BATTLEFIELD_QUEUES or 3
-	for i = 1, maxQueues do
+	for i = 1, MAX_BATTLEFIELD_QUEUES do
 		local status, mapName = GetBattlefieldStatus(i)
 		if status == "active" then
 			return true, mapName
@@ -1643,10 +1537,10 @@ local function RenderRoster()
 			btn.targetGUID = nil
 			btn.stealthTexture = nil
 			btn.flagCarrier = nil
-			if btn.StealthIcon then btn.StealthIcon:Hide() end
-			if btn.StealthIconBg then btn.StealthIconBg:Hide() end
-			if btn.FlagIcon then btn.FlagIcon:Hide() end
-			if btn.Trinket then btn.Trinket:Hide() end
+			btn.StealthIcon:Hide()
+			btn.StealthIconBg:Hide()
+			btn.FlagIcon:Hide()
+			btn.Trinket:Hide()
 			btn.trinketShown = false
 			btn.castOwner = nil
 			StopCast(btn)
@@ -1732,12 +1626,7 @@ function Targets:BattlefieldScoreUpdate(force)
 		e.guid = nil
 	end
 
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	if o and o.ButtonSortBy and o.ButtonSortBy[currentSize] == 2 then
-		SortActiveRoster(NameSort)
-	else
-		SortActiveRoster(ClassThenNameSort)
-	end
+	SortActiveRoster()
 
 	if not force and not HasRosterChanged() then return end
 	SaveRosterSnapshot()
@@ -1747,10 +1636,8 @@ end
 
 -- NamPower GetUnitField reads the health fields directly; UnitHealth covers the rest.
 local function ReadHealth(unit)
-	if GetUnitField then
-		local hp, maxHp = GetUnitField(unit, "health"), GetUnitField(unit, "maxHealth")
-		if hp and maxHp and maxHp > 0 then return hp, maxHp end
-	end
+	local hp, maxHp = GetUnitField(unit, "health"), GetUnitField(unit, "maxHealth")
+	if hp and maxHp and maxHp > 0 then return hp, maxHp end
 	return UnitHealth(unit), UnitHealthMax(unit)
 end
 
@@ -1816,7 +1703,7 @@ local function ObserveUnit(unit, scanAuras)
 	-- Keep last observed health/death when the object is no longer visible.
 	-- Cached/empty descriptors must not erase a newer stealth cast.
 	if not UnitIsVisible(unit) then return end
-	local dead = (UnitIsDeadOrGhost and UnitIsDeadOrGhost(unit)) or (UnitIsDead(unit) or UnitIsGhost(unit)) and true or false
+	local dead = UnitIsDeadOrGhost(unit) and true or false
 	local curHp, maxHp = ReadHealth(unit)
 	SetObservedHealth(name, curHp, maxHp, dead)
 end
@@ -1905,16 +1792,14 @@ function Targets:DisableConfigMode()
 	wipe(previewStatus)
 	for i = 1, MAX_ENEMIES do
 		local btn = Targets.TargetButton[i]
-		if btn then
-			btn.targetName = nil
-			btn.targetGUID = nil
-			btn.stealthTexture = nil
-			btn.flagCarrier = nil
-			if btn.StealthIcon then btn.StealthIcon:Hide() end
-			if btn.StealthIconBg then btn.StealthIconBg:Hide() end
-			if btn.FlagIcon then btn.FlagIcon:Hide() end
-			btn:Hide()
-		end
+		btn.targetName = nil
+		btn.targetGUID = nil
+		btn.stealthTexture = nil
+		btn.flagCarrier = nil
+		btn.StealthIcon:Hide()
+		btn.StealthIconBg:Hide()
+		btn.FlagIcon:Hide()
+		btn:Hide()
 	end
 	-- The instance can change while preview events are suppressed.
 	Targets:BattlefieldScoreUpdate(true)
@@ -1939,7 +1824,7 @@ function Targets:ResetPosition(bracket)
 			positions[frameName .. sz] = nil
 		end
 	end
-	Targets:Frame_SetupPosition("AutoBG_TargetsMainFrame")
+	Targets:Frame_SetupPosition()
 end
 
 function Targets:CopySettings(sourceSize, destinationSize)
@@ -1952,7 +1837,6 @@ function Targets:CopySettings(sourceSize, destinationSize)
 	o.ButtonHeight[destinationSize] = o.ButtonHeight[sourceSize]
 	o.ButtonShowHealthText[destinationSize] = o.ButtonShowHealthText[sourceSize]
 	o.ButtonHideRealm[destinationSize] = o.ButtonHideRealm[sourceSize]
-	o.ButtonSortBy[destinationSize] = o.ButtonSortBy[sourceSize]
 	o.DimStealthed[destinationSize] = o.DimStealthed[sourceSize]
 	o.ShowTrinket[destinationSize] = o.ShowTrinket[sourceSize]
 end
@@ -1984,20 +1868,8 @@ Targets:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 Targets:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 -- The match events follow activeBG (SyncMatchEvents).
 
-local TARGETS_LIFECYCLE_EVENTS = {
-	PLAYER_LOGIN = true,
-	PLAYER_ENTERING_WORLD = true,
-	ZONE_CHANGED_NEW_AREA = true,
-	UPDATE_BATTLEFIELD_STATUS = true,
-	UPDATE_BATTLEFIELD_SCORE = true,
-}
-
 local function Targets_OnEvent()
 	local ev, a1, a2, a3, a4, a5 = event, arg1, arg2, arg3, arg4, arg5
-	if not (activeBG or Targets.isConfig) and not TARGETS_LIFECYCLE_EVENTS[ev] then
-		return
-	end
-
 	if ev == "PLAYER_LOGIN" then
 		playerName = StripRealm(UnitName("player"))
 		playerFaction = UnitFactionGroup("player") == "Horde" and 0 or 1
@@ -2076,25 +1948,14 @@ local function Targets_OnEvent()
 			end
 		end
 
-	elseif ev == "UNIT_CASTEVENT" or ev == "UNIT_SPELLCAST_SUCCEEDED" then
-		local modern = ev == "UNIT_SPELLCAST_SUCCEEDED"
-		local casterGUID = a1
-		if modern then casterGUID = UnitGUID(a1) end
-		local eventType = modern and "CAST" or a3
-		local spellId = modern and a3 or a4
-		if not casterGUID then return end
-
-		local rawName = UnitName(casterGUID) or guidToName[casterGUID]
-		if not rawName then return end
-		local name = ResolveRosterName(rawName, casterGUID)
+	elseif ev == "UNIT_CASTEVENT" then
+		-- a1 caster GUID, a3 START/CAST/FAIL/CHANNEL/MAINHAND/OFFHAND, a4 spell
+		-- ID, a5 cast time in ms. Every swing and cast nearby: a GUID that is
+		-- not an enemy on the roster is asked about once.
+		local eventType, spellId = a3, a4
+		local name = RosterNameForGUID(a1)
 		if not name then return end
-
-		guidToName[casterGUID] = name
-		nameToGUID[name] = casterGUID
 		local row = nameToRow[name]
-		if row and Targets.TargetButton[row] then
-			Targets.TargetButton[row].targetGUID = casterGUID
-		end
 
 		if eventType == "CAST" then
 			if IsTrinketSpell(spellId) then
@@ -2113,7 +1974,7 @@ local function Targets_OnEvent()
 
 		-- Cast bars: START/CHANNEL begin a cast, CAST ends it, FAIL means it was
 		-- interrupted or cancelled. a5 is the cast duration in milliseconds.
-		if row and not modern then
+		if row then
 			if eventType == "FAIL" then
 				StopCast(Targets.TargetButton[row])
 			elseif eventType == "START" or eventType == "CHANNEL" then
