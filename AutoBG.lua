@@ -1,13 +1,9 @@
--- AutoBG for World of Warcraft 1.12.1 (Vanilla Enhanced)
--- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI, SuperWoW 2.2+, NamPower
+-- AutoBG for World of Warcraft 1.12.1: queues, timers, flag carriers, enemy
+-- frames and Spy. Author & Maintainer: Fostercare5988.
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI & SuperWoW v2.2+)
-
-if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION then
-    if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff2020[AutoBG Fatal Error]|r AutoBG requires ClassicAPI & SuperWoW (v2.2+)! Please ensure both DLLs are loaded.", 1, 0.2, 0.2)
-    end
+-- Needs ClassicAPI, SuperWoW and NamPower loaded.
+if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION or not GetNampowerVersion then
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff2020AutoBG is off:|r it needs the ClassicAPI, SuperWoW and NamPower DLLs loaded. Start the game through a launcher that loads them.", 1, 0.2, 0.2)
     return
 end
 
@@ -484,7 +480,7 @@ local function WaitForRejoinReady(request)
 end
 
 local function PrepareBattlefieldExit()
-    -- NamPower 4.6.2 also clears its queued casts through this native API.
+    -- NamPower also clears its queued casts through this native API.
     SpellStopCasting()
     SpellStopTargeting()
     ClearTarget()

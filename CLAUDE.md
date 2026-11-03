@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (203 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (223 tests).
 
 | File | Job |
 | --- | --- |
@@ -22,10 +22,21 @@ Things to know:
 - Enemy frames have separate sizes and positions per battleground size
   (10, 15, 40). In a match the settings page edits the size being played.
 - Invites run out after about 80 seconds. The enter delay tops out at 78; an
-  invite that ends before the scheduled enter is reported in chat.
-- Requires ClassicAPI (guards check that it is loaded), SuperWoW and
-  NamPower. UnitXP is no longer used.
-- `AutoBG_SetPreview(on)` in Options is the one switch for every preview.
+  invite that ends before the scheduled enter is reported in chat. Leaving
+  the queue (AcceptBattlefieldPort without accept, hooked) is not.
+- Queues go through `JoinBattlegroundQueue(type)`, defined by OctoWoW's own
+  FrameXML (Minimap.lua); `BATTLEGROUNDS` in AutoBG.lua holds each type and
+  queue-bar icon. The server answers with BATTLEFIELDS_SHOW, where AutoBG joins.
+- Requires ClassicAPI, SuperWoW and NamPower: AutoBG.lua's guard checks all
+  three and says what is missing; the other files check ClassicAPI and
+  SuperWoW. UnitXP is not used.
+- `AutoBG_SetPreview(on)` in Options is the one switch for every preview
+  (`/abg test`, `/abg t`, the button, closing the window). Options owns the
+  timer and carrier preview flag and passes it on (`AutoBG_Timers_SetPreview`,
+  `AutoBG_FC_SetPreview`); it is never saved.
+- OctoWoW battlegrounds are cross-realm: players can be named "Name-Realm"
+  (Spy stats hold "Mayve-NZ" from Alterac Valley). The realm handling and
+  "Hide realm names" are live; one helper, `Targets.StripRealm`.
 - Faction colors on timers and the Arathi Basin projection are always on; their
   old settings are cleared on load.
 - Every timer (objectives, game start, respawn, queues) is a row from one
@@ -49,8 +60,19 @@ Things to know:
   until the battle for Alterac Valley begins."). "This game will close in 30
   seconds" (too few players) once started it by mistake.
 - Events are registered only where they are used. Enemy frames: match events
-  only in a battleground or the preview (`SyncMatchEvents`). Spy: sightings
-  only while its list works (`SyncTelemetry` in `MaintainTicker`). Unit events
+  only in a battleground or the preview (`SyncMatchEvents`). Match-end chat
+  (AutoBG.lua) and objective lines (Timers) only inside a battleground. Spy:
+  sightings only while its list works (`SyncTelemetry` in `MaintainTicker`);
+  it rests in any battleground instance, whatever the queue status says.
+  Carrier health: NamPower UNIT_HEALTH_GUID while a carrier is tracked; a
+  0.5 s ticker finds the unit and reads the distance.
+- Casts come from SuperWoW UNIT_CASTEVENT alone (enemy frames and Spy). It
+  reports every unit's casts, instants included, and the swings that end
+  stealth; ClassicAPI UNIT_SPELLCAST_SUCCEEDED gave the same casts for fewer
+  units. Enemy cast bars are status bars on a reused duration
+  (`SetTimerDuration`): no OnUpdate. Another unit's pushback is never sent to
+  the client (ClassicAPI docs), so nothing re-reads a running cast; the 0.5 s
+  ticker ends casts the engine cleared without an event and loops the samples. Unit events
   use `RegisterUnitEvent` for the tokens that matter (target, focus,
   mouseover, nameplates; `player` for Deserter; raid tokens for revivals, in
   battlegrounds only). In a battleground the stealth alert comes from the

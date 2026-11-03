@@ -1,9 +1,8 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Options window (VanillaForge ForgeUI layout, Ember palette)         --
--- World of Warcraft 1.12.1, ClassicAPI, SuperWoW v2.2+                --
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI & SuperWoW v2.2+)
+-- Needs ClassicAPI and SuperWoW loaded; AutoBG.lua says what is missing.
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION then
 	return
@@ -52,9 +51,7 @@ local function Setting(name, parent, text, tip, x, y, key, after, hitWidth)
 end
 
 local function SpySettings()
-	if not AutoBG_Settings then AutoBG_Settings = {} end
-	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
-	return AutoBG_Settings.Spy
+	return Spy:EnsureOptions()
 end
 
 local function Hint(parent, text, x, y, width)
@@ -127,11 +124,7 @@ local cbSound = Setting("AutoBG_Opt_Sound", panelGeneral, "Queue sound",
 		if not value and AutoBG_StopNotificationSound then AutoBG_StopNotificationSound() end
 	end, 110)
 local btnTestSound = UI.Button("AutoBG_BtnTestSound", panelGeneral, "Play", 420, -284, 52, function()
-	if AutoBG_PlayNotificationSound then
-		AutoBG_PlayNotificationSound()
-	else
-		PlaySound("ReadyCheck")
-	end
+	AutoBG_PlayNotificationSound()
 end, { height = 20 })
 UI.Tooltip(btnTestSound, "Play the queue sound once.")
 local cbFlash = Setting("AutoBG_Opt_Flash", panelGeneral, "Flash the taskbar",
@@ -532,9 +525,7 @@ local btnResetAll = UI.Button("AutoBG_BtnResetAll", panel, "Reset positions", 0,
 	if Targets and Targets.ResetPosition then Targets:ResetPosition() end
 	if Spy and Spy.ResetPosition then Spy:ResetPosition() end
 	if FlagAlert then FlagAlert:ResetPosition() end
-	if DEFAULT_CHAT_FRAME then
-		DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00AutoBG:|r All frame positions reset to defaults.")
-	end
+	AutoBG_Print("All frame positions reset to defaults.", true)
 end)
 btnResetAll:ClearAllPoints()
 btnResetAll:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 186, 18)

@@ -20,9 +20,10 @@ enemy alerts for World of Warcraft 1.12.1, build 5875.
 These three DLLs are required:
 
 - [ClassicAPI](https://github.com/brues-code/ClassicAPI)
-- [SuperWoW v2.2+](https://github.com/balakethelock/SuperWoW)
-- [NamPower v4.6.2+](https://github.com/Emyrk/nampower): deaths, stealth buffs
-  and health by GUID
+- [SuperWoW](https://github.com/balakethelock/SuperWoW): casts and swings of
+  every unit, GUID units
+- [NamPower](https://github.com/Emyrk/nampower): deaths, stealth buffs, health
+  and spell casts by GUID
 
 Start through a launcher that loads the required DLLs. Installing or updating
 a DLL requires a full game restart.
@@ -66,6 +67,9 @@ confirmed stealth aura, at any distance your detection reaches. Turning it off
 allows open-world warnings from received stealth events. Battleground warnings
 always need you to see the enemy. Spy is off inside raids unless you turn
 **Disable in raids** off.
+
+Spy rests inside battlegrounds, where the enemy frames list every enemy and
+give the stealth warning.
 
 Enemy trinket cooldowns, resurrection estimates and victory projections depend
 on observed events. Missing server telemetry can make them incomplete.

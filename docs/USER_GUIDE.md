@@ -25,7 +25,8 @@ The available battleground list comes from the server.
 
 - **Accept queue pops:** enter when an invitation arrives. **Enter delay** waits
   0 to 78 seconds first; an invite runs out after about 80 seconds. If an
-  invite ends before AutoBG enters, chat says so; lower the delay then. **Pause while AFK** stops accepting, queueing and
+  invite ends before AutoBG enters, chat says so; lower the delay then.
+  Leaving the queue yourself is not reported. **Pause while AFK** stops accepting, queueing and
   rejoining while you are AFK.
 - **Leave when it ends:** leave a completed match. Current or queued casts and
   terrain targeting are stopped before departure. Turning it off cancels a
@@ -78,7 +79,8 @@ list out of combat; in combat it stays locked, so a stray click cannot move it.
 - **Cast bars:** each enemy's cast or channel appears beside its row with the spell
   icon and name. Orange is a cast, blue a channel, grey cannot be interrupted.
   Interrupts clear the bar at once. Only casts that start while the enemy is
-  loaded near you can be seen. Left-click a cast bar to target the caster,
+  loaded near you can be seen, and the game does not tell you when another
+  player's cast is pushed back, so the bar keeps its first length. Left-click a cast bar to target the caster,
   right-click to focus them. **Cast bars on the left** picks the side; on the
   trinket's side the bar sits outside the trinket.
 - **Mark enemies in range:** a thin green stripe on the left of each enemy
@@ -111,7 +113,8 @@ are suppressed.
 
 ## Open-world Spy
 
-Open `/abg spy`. The list shows recent enemy names, levels and classes.
+Open `/abg spy`. The list shows recent enemy names, levels and classes. It
+rests inside battlegrounds, where the enemy frames take over.
 Hover for race, health, stealth state and observation age. New enemies enter at
 the top; further activity updates their existing row. Up to 20 enemies are
 tracked; when the list is full, a newcomer takes the place of an enemy you
