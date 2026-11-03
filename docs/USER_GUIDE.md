@@ -119,7 +119,8 @@ are suppressed.
 ## Open-world Spy
 
 Open `/abg spy`. The list shows recent enemy names, levels and classes. It
-rests inside battlegrounds, where the enemy frames take over.
+rests inside battlegrounds, where the enemy frames take over. It works in the
+arenas (Lordaeron Arena, Sunstrider Court and the 5v5 arena).
 Hover for race, health, stealth state and observation age. New enemies enter at
 the top; further activity updates their existing row. Up to 20 enemies are
 tracked; when the list is full, a newcomer takes the place of an enemy you
