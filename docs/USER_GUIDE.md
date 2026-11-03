@@ -70,7 +70,7 @@ does not provide enough information.
 
 ## Enemy frames
 
-Open `/abg targets` or `/bgt`. Pick 10v10, 15v15 or 40v40, then choose that size's
+Open `/abg targets` or `/bgt`. Pick 10v10, 15v15, 40v40 or Arena, then choose that size's
 health text, realm suffix, stealth dimming and trinket. **Frame size** offers
 Compact, Standard and Large; the **Custom size** sliders below set text size,
 scale, width, height and opacity for anything in between. Text size runs 0 to 20,
