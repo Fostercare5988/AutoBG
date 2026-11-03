@@ -5,7 +5,7 @@
 -- color. Each card has its own saved position and hides itself after a while.--
 -- -------------------------------------------------------------------------- --
 
--- Strict Engine Dependency Guard (Mandatory ClassicAPI & SuperWoW v2.2+)
+-- Needs ClassicAPI and SuperWoW loaded; AutoBG.lua says what is missing.
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION then
 	return

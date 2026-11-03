@@ -1,8 +1,6 @@
 -- AutoBG objective countdowns, resurrection waves and score projection.
 -- Author & Maintainer: Fostercare5988
--- Built natively for ClassicAPI, SuperWoW 2.2+, NamPower
-
--- Strict Engine Dependency Guard (Mandatory ClassicAPI & SuperWoW v2.2+)
+-- Needs ClassicAPI and SuperWoW loaded; AutoBG.lua says what is missing.
 
 if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION then
     return
