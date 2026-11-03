@@ -29,17 +29,20 @@ local queuedBattlegrounds = {}
 local queuedCount = 0
 local lastQueueSecond, lastQueuePreview, lastQueueEnabled = nil, nil, nil
 local worldStateDirty = true
+-- The frame preview (the settings window's Preview button); never saved.
+local preview = false
 
 -- Queue membership changes on this event; waited/estimated times remain live reads.
 local function RefreshQueuedBattlegrounds()
     lastQueueSecond = nil
-    table.wipe(queuedBattlegrounds)
     queuedCount = 0
-    for i = 1, MAX_BATTLEFIELD_QUEUES or 3 do
+    for i = 1, MAX_BATTLEFIELD_QUEUES do
         local status, mapName = GetBattlefieldStatus(i)
         if status == "queued" then
             queuedCount = queuedCount + 1
-            queuedBattlegrounds[queuedCount] = { id = i, map = mapName }
+            local queue = queuedBattlegrounds[queuedCount]
+            if not queue then queue = {}; queuedBattlegrounds[queuedCount] = queue end
+            queue.id, queue.map = i, mapName
         end
     end
 end
@@ -49,7 +52,7 @@ local cachedZone = ""
 local isAB, isAV, isWSG, inPVP = false, false, false, false
 
 local function UpdateZoneCache()
-    cachedZone = string.lower((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
+    cachedZone = string.lower(GetRealZoneText() or "")
     local inInstance, instanceType = IsInInstance()
     inPVP = (inInstance and instanceType == "pvp") and true or false
     -- Only battleground instances count; Arathi Highlands and Alterac Mountains do not.
@@ -268,7 +271,7 @@ local function CreateTimerRow(frame, name)
     end)
     row:SetScript("OnDragStop", function()
         frame:StopMovingOrSizing()
-        if AutoBG_SavePosition then AutoBG_SavePosition(frame, frame:GetName()) end
+        AutoBG_SavePosition(frame, frame:GetName())
     end)
     row:SetScript("OnClick", OnRowClick)
     row:SetScript("OnEnter", OnRowEnter)
@@ -348,7 +351,7 @@ local function CreateBarTimerFrame(name, titleText, xOffset, yOffset, maxRows, d
     frame:SetScript("OnDragStart", function() this:StartMoving() end)
     frame:SetScript("OnDragStop", function()
         this:StopMovingOrSizing()
-        if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
+        AutoBG_SavePosition(this, name)
     end)
     frame:Hide()
 
@@ -482,7 +485,7 @@ local function CreateABProjectionFrame(name)
     end)
     frame:SetScript("OnDragStop", function()
         this:StopMovingOrSizing()
-        if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
+        AutoBG_SavePosition(this, name)
     end)
     frame:SetScript("OnClick", function()
         local self = this or frame
@@ -547,29 +550,28 @@ end
 local ABProjectionFrame = CreateABProjectionFrame("AutoBG_ABProjectionFrame")
 
 function AutoBG_LoadTimerPositions()
-    if AutoBG_LoadPosition then
-        AutoBG_LoadPosition(QueueFrame,   "AutoBG_QueueFrame",   "TOP", -220, -100)
-        AutoBG_LoadPosition(RespawnFrame, "AutoBG_RespawnFrame", "TOP",    0, -100)
-        AutoBG_LoadPosition(NodeBarFrame, "AutoBG_NodeFrame",    "TOP",  220, -100)
-        AutoBG_LoadPosition(AVNodeFrame,  "AutoBG_AVNodeFrame",  "TOP",  220, -150)
-        AutoBG_LoadPosition(WSGFlagFrame, "AutoBG_WSGFlagFrame", "TOP", -110, -150)
-        AutoBG_LoadPosition(StartTimerFrame, "AutoBG_StartTimerFrame", "TOP", 0, -60)
+    AutoBG_LoadPosition(QueueFrame,   "AutoBG_QueueFrame",   "TOP", -220, -100)
+    AutoBG_LoadPosition(RespawnFrame, "AutoBG_RespawnFrame", "TOP",    0, -100)
+    AutoBG_LoadPosition(NodeBarFrame, "AutoBG_NodeFrame",    "TOP",  220, -100)
+    AutoBG_LoadPosition(AVNodeFrame,  "AutoBG_AVNodeFrame",  "TOP",  220, -150)
+    AutoBG_LoadPosition(WSGFlagFrame, "AutoBG_WSGFlagFrame", "TOP", -110, -150)
+    AutoBG_LoadPosition(StartTimerFrame, "AutoBG_StartTimerFrame", "TOP", 0, -60)
 
-        if AutoBG_Settings and AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] then
-            AutoBG_LoadPosition(ABProjectionFrame, "AutoBG_ABProjectionFrame", "TOP", -160, -25)
-            ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
-            ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
-        elseif AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
-            ABProjectionFrame:ClearAllPoints()
-            ABProjectionFrame:SetPoint("TOPRIGHT", AlwaysUpFrame1, "TOPLEFT", -6, 2)
-            ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.35)
-            ABProjectionFrame:SetBackdropBorderColor(0, 0, 0, 0)
-        else
-            ABProjectionFrame:ClearAllPoints()
-            ABProjectionFrame:SetPoint("TOP", UIParent, "TOP", -160, -25)
-            ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
-            ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
-        end
+    -- The projection sits beside the score display unless it was moved.
+    if AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] then
+        AutoBG_LoadPosition(ABProjectionFrame, "AutoBG_ABProjectionFrame", "TOP", -160, -25)
+        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
+        ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
+    elseif AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
+        ABProjectionFrame:ClearAllPoints()
+        ABProjectionFrame:SetPoint("TOPRIGHT", AlwaysUpFrame1, "TOPLEFT", -6, 2)
+        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.35)
+        ABProjectionFrame:SetBackdropBorderColor(0, 0, 0, 0)
+    else
+        ABProjectionFrame:ClearAllPoints()
+        ABProjectionFrame:SetPoint("TOP", UIParent, "TOP", -160, -25)
+        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
+        ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
     end
 end
 
@@ -658,7 +660,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
     if not frame or not frame.rows then return end
     ApplyObjectiveAppearance(frame)
     local now       = GetTime()
-    local isTestAll = AutoBG_Settings and AutoBG_Settings.TestAllTimers
+    local isTestAll = preview
     local maxRows   = #frame.rows
     local activeCount = 0
 
@@ -672,9 +674,7 @@ local function RenderCountdownBars(frame, timerTable, isEnabled, isZone, maxTime
         else
             local sortCount = 0
             for nodeName, data in pairs(timerTable) do
-                local expireTime = (type(data) == "table" and data.expire) or data
-                local faction    = (type(data) == "table" and data.faction) or nil
-                local rowMax     = (type(data) == "table" and data.max) or maxTime
+                local expireTime, faction, rowMax = data.expire, data.faction, data.max or maxTime
                 if expireTime - now > 0 then
                     sortCount = sortCount + 1
                     local item = activeSortBuffer[sortCount]
@@ -718,7 +718,7 @@ local QUEUE_ABBREV = { ["Warsong Gulch"] = "WSG", ["Arathi Basin"] = "AB", ["Alt
 
 local function ApplyQueueRow(row, mapName, waited, estimate)
     mapName = mapName or "Battleground"
-    SetRowIcon(row, (AutoBG_GetBGIcon and AutoBG_GetBGIcon(mapName)) or NEUTRAL_ICON)
+    SetRowIcon(row, AutoBG_GetBGIcon(mapName) or NEUTRAL_ICON)
     SetRowName(row, mapName, "In " .. (QUEUE_ABBREV[mapName] or mapName) .. " queue for", " ")
     PaintRow(row, "neutral")
     local full = estimate > 0 and estimate or 1
@@ -747,8 +747,7 @@ local AB_TICK_INTERVAL = { [0] = 0, [1] = 12, [2] = 9, [3] = 6, [4] = 3, [5] = 1
 
 local function ReadABWorldStateInfo()
     local aRes, hRes, aBases, hBases
-    local n = (GetNumWorldStateUI and GetNumWorldStateUI()) or 0
-    for i = 1, n do
+    for i = 1, GetNumWorldStateUI() do
         local uiType, state, text = GetWorldStateUIInfo(i)
         local str1 = (state and tostring(state)) or ""
         local str2 = (text and tostring(text)) or ""
@@ -794,9 +793,8 @@ local function GetABPendingCaps()
     table.wipe(pendingCapsBuffer)
     local now = GetTime()
     for node, data in pairs(timers.AB) do
-        local expire = (type(data) == "table" and data.expire) or data
-        local faction = (type(data) == "table" and data.faction) or nil
-        if expire and expire > now and faction then
+        local expire, faction = data.expire, data.faction
+        if expire > now and faction then
             local rem = expire - now
             local index = #pendingCapsBuffer + 1
             local cap = pendingCapsPool[index]
@@ -1051,7 +1049,7 @@ local function UpdateAllTimers()
     if not AutoBG_Settings then return end
 
     local now         = GetTime()
-    local isTestAll   = AutoBG_Settings.TestAllTimers
+    local isTestAll   = preview
 
     -- 0. Game start (pre-game gate countdown)
     RenderCountdownBars(StartTimerFrame, timers.Global, AutoBG_Settings.StartTimer ~= false, inPVP, 120, START_TEST_DATA, "time")
@@ -1074,7 +1072,7 @@ local function UpdateAllTimers()
         ApplyObjectiveAppearance(RespawnFrame)
         local remaining, prefix, expiry = 24, "", nil
         if inPVP then
-            local healerTime = (GetAreaSpiritHealerTime and GetAreaSpiritHealerTime()) or 0
+            local healerTime = GetAreaSpiritHealerTime()
             if healerTime > 0 then SyncSpiritWave(now - (30 - healerTime)) end
             if spiritHealerSyncTime == 0 then spiritHealerSyncTime = now end
             -- Learn who is a ghost once a second; UNIT_HEALTH times their revival.
@@ -1117,8 +1115,8 @@ local function UpdateAllTimers()
             else
                 for queueIndex = 1, math.min(queuedCount, #QueueFrame.rows) do
                     local queue = queuedBattlegrounds[queueIndex]
-                    local waited = (GetBattlefieldTimeWaited and GetBattlefieldTimeWaited(queue.id)) or 0
-                    local estimate = (GetBattlefieldEstimatedWaitTime and GetBattlefieldEstimatedWaitTime(queue.id)) or 0
+                    local waited = GetBattlefieldTimeWaited(queue.id)
+                    local estimate = GetBattlefieldEstimatedWaitTime(queue.id)
                     shown = shown + 1
                     ApplyQueueRow(QueueFrame.rows[shown], queue.map, math.floor(waited / 1000), math.floor(estimate / 1000))
                 end
@@ -1134,7 +1132,7 @@ RenderTimers = UpdateAllTimers
 SyncUpdateTicker = function()
     local s = AutoBG_Settings
     -- Test mode always shows the AB projection, so it always needs the ticker.
-    local needed = s and (s.TestAllTimers or
+    local needed = s and (preview or
         (s.QueueTimers and queuedCount > 0) or
         (inPVP and (s.RessTimer or
          (s.StartTimer ~= false and next(timers.Global)) or
@@ -1153,6 +1151,11 @@ SyncUpdateTicker = function()
         updateTicker:Cancel()
         updateTicker = nil
     end
+end
+
+-- The settings window's frame preview shows sample rows in every group.
+function AutoBG_Timers_SetPreview(on)
+    preview = on and true or false
 end
 
 function AutoBG_Timers_UpdateVisibility()
@@ -1281,8 +1284,8 @@ local function ParseCombatMessage(msg, ev)
 
     -- 4. WSG Flag Respawns: 23s on OctoWoW (confirmed in play, 2026-10-21)
     if AutoBG_Settings.WSGTimers and isWSG then
-        if     string.find(lower, "captured the alliance flag") then timers.WSG["Alliance Flag"] = GetTime() + 23
-        elseif string.find(lower, "captured the horde flag")    then timers.WSG["Horde Flag"]    = GetTime() + 23
+        if     string.find(lower, "captured the alliance flag") then timers.WSG["Alliance Flag"] = { expire = GetTime() + 23 }
+        elseif string.find(lower, "captured the horde flag")    then timers.WSG["Horde Flag"]    = { expire = GetTime() + 23 }
         end
     end
 end
@@ -1291,13 +1294,19 @@ end
 -- Event Frame
 -- =========================================================
 local EventFrame = CreateFrame("Frame", "AutoBG_TimersEventFrame")
-EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
-EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_ALLIANCE")
-EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
-EventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
-EventFrame:RegisterEvent("CHAT_MSG_MONSTER_YELL")
-EventFrame:RegisterEvent("CHAT_MSG_RAID_BOSS_EMOTE")
-EventFrame:RegisterEvent("CHAT_MSG_MONSTER_EMOTE")
+-- Objective, flag and start lines; registered only inside a battleground.
+local MATCH_CHAT = {
+    "CHAT_MSG_BG_SYSTEM_NEUTRAL", "CHAT_MSG_BG_SYSTEM_ALLIANCE", "CHAT_MSG_BG_SYSTEM_HORDE",
+    "CHAT_MSG_SYSTEM", "CHAT_MSG_MONSTER_YELL", "CHAT_MSG_RAID_BOSS_EMOTE", "CHAT_MSG_MONSTER_EMOTE",
+}
+local matchChatOn = false
+local function SyncMatchChat()
+    if matchChatOn == inPVP then return end
+    matchChatOn = inPVP
+    for i = 1, #MATCH_CHAT do
+        if inPVP then EventFrame:RegisterEvent(MATCH_CHAT[i]) else EventFrame:UnregisterEvent(MATCH_CHAT[i]) end
+    end
+end
 EventFrame:RegisterEvent("ADDON_LOADED")
 EventFrame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 EventFrame:RegisterEvent("UPDATE_WORLD_STATES")
@@ -1325,6 +1334,7 @@ EventFrame:SetScript("OnEvent", function()
     end
     if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
         UpdateZoneCache()
+        SyncMatchChat()
         -- Revivals are timed only in a battleground, and only raid members count.
         if inPVP then EventFrame:RegisterUnitEvent("UNIT_HEALTH", unpack(RAID_UNITS))
         else EventFrame:UnregisterEvent("UNIT_HEALTH") end
@@ -1371,8 +1381,7 @@ EventFrame:SetScript("OnEvent", function()
         -- (PLAYER_ALIVE also fires on release, so it cannot time a wave.)
         if inPVP then SyncSpiritWave(GetTime()) end
     elseif ev ~= "ADDON_LOADED" and ev ~= "UPDATE_BATTLEFIELD_STATUS" and ev ~= "UPDATE_WORLD_STATES" then
-        if not inPVP then return end
-        ParseCombatMessage(msg or arg1, ev)
+        ParseCombatMessage(msg, ev)
     end
     AutoBG_Timers_UpdateVisibility()
 end)

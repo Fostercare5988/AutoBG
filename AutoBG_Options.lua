@@ -18,6 +18,7 @@ local BRACKETS = { 10, 15, 40 }
 local WIDTH = 500
 local selectedTab = 1
 local selectedBracket = 10
+local timersPreview = false
 local startPreview
 local previewButton
 local Refresh = {}
@@ -30,7 +31,7 @@ end
 local function PreviewActive()
 	return (Targets and Targets.isConfig) or (Spy and Spy.isTestMode)
 		or (FlagAlert and FlagAlert.isPreview)
-		or (AutoBG_Settings and AutoBG_Settings.TestAllTimers)
+		or timersPreview
 end
 AutoBG_IsPreviewActive = PreviewActive
 
@@ -502,13 +503,14 @@ function AutoBG_SetPreview(on)
 		if Targets and Targets.EnableConfigMode then Targets:EnableConfigMode(selectedBracket) end
 		if Spy and Spy.EnableTestMode then Spy:EnableTestMode() end
 		if FlagAlert then FlagAlert:SetPreview(true) end
-		if AutoBG_Settings then AutoBG_Settings.TestAllTimers = true end
 	else
 		if Targets and Targets.isConfig then Targets:DisableConfigMode() end
 		if Spy and Spy.isTestMode then Spy:DisableTestMode() end
 		if FlagAlert then FlagAlert:SetPreview(false) end
-		if AutoBG_Settings then AutoBG_Settings.TestAllTimers = false end
 	end
+	timersPreview = on and true or false
+	AutoBG_Timers_SetPreview(timersPreview)
+	AutoBG_FC_SetPreview(timersPreview)
 	if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
 	RefreshTimers(true)
 	AutoBG_Options_Refresh()
