@@ -35,19 +35,20 @@ local function RefreshQueuedBattlegrounds()
     lastQueueSecond = nil
     queuedCount = 0
     for i = 1, MAX_BATTLEFIELD_QUEUES do
-        local status, mapName = GetBattlefieldStatus(i)
+        local status, mapName, instanceID = GetBattlefieldStatus(i)
         if status == "queued" then
             queuedCount = queuedCount + 1
             local queue = queuedBattlegrounds[queuedCount]
             if not queue then queue = {}; queuedBattlegrounds[queuedCount] = queue end
-            queue.id, queue.map = i, mapName
+            -- OctoWoW's name for the row: "Warsong Gulch (Cross-Faction)".
+            queue.id, queue.map, queue.title = i, mapName, OctoBGQueueName(mapName, instanceID)
         end
     end
 end
 
 -- Cached Zone & Instance State
 local cachedZone = ""
-local isAB, isAV, isWSG, inPVP = false, false, false, false
+local isAB, isAV, isWSG, inPVP, isArena = false, false, false, false, false
 
 local function UpdateZoneCache()
     cachedZone = string.lower(GetRealZoneText() or "")
@@ -57,6 +58,12 @@ local function UpdateZoneCache()
     isAB  = inPVP and string.find(cachedZone, "arathi")  ~= nil
     isAV  = inPVP and string.find(cachedZone, "alterac") ~= nil
     isWSG = inPVP and string.find(cachedZone, "warsong") ~= nil
+    -- An arena has no spirit healer. UNVERIFIED: its instance type on OctoWoW.
+    isArena = inInstance and instanceType == "arena" or false
+    for i = 1, MAX_BATTLEFIELD_QUEUES do
+        local status, map = GetBattlefieldStatus(i)
+        if status == "active" and map == ARENA then isArena = true end
+    end
 end
 UpdateZoneCache()
 
@@ -714,10 +721,10 @@ end
 -- estimated wait (full and still without an estimate).
 local QUEUE_ABBREV = { ["Warsong Gulch"] = "WSG", ["Arathi Basin"] = "AB", ["Alterac Valley"] = "AV", ["Thorn Gorge"] = "TG" }
 
-local function ApplyQueueRow(row, mapName, waited, estimate)
+local function ApplyQueueRow(row, mapName, title, waited, estimate)
     mapName = mapName or "Battleground"
     SetRowIcon(row, AutoBG_GetBGIcon(mapName) or NEUTRAL_ICON)
-    SetRowName(row, mapName, "In " .. (QUEUE_ABBREV[mapName] or mapName) .. " queue for", " ")
+    SetRowName(row, title or mapName, "In " .. (QUEUE_ABBREV[mapName] or mapName) .. " queue for", " ")
     PaintRow(row, "neutral")
     local full = estimate > 0 and estimate or 1
     SetRowDuration(row, full)
@@ -1066,10 +1073,11 @@ local function UpdateAllTimers()
 
     -- 4. Respawn: the spirit healer's 30-second wave
     local respawnRow = RespawnFrame.rows[1]
-    if (inPVP or isTestAll) and AutoBG_Settings.RessTimer then
+    local battleground = inPVP and not isArena
+    if (battleground or isTestAll) and AutoBG_Settings.RessTimer then
         ApplyObjectiveAppearance(RespawnFrame)
         local remaining, prefix, expiry = 24, "", nil
-        if inPVP then
+        if battleground then
             local healerTime = GetAreaSpiritHealerTime()
             if healerTime > 0 then SyncSpiritWave(now - (30 - healerTime)) end
             if spiritHealerSyncTime == 0 then spiritHealerSyncTime = now end
@@ -1107,8 +1115,8 @@ local function UpdateAllTimers()
         if AutoBG_Settings.QueueTimers then
             ApplyObjectiveAppearance(QueueFrame)
             if isTestAll then
-                ApplyQueueRow(QueueFrame.rows[1], "Warsong Gulch", 75, 0)
-                ApplyQueueRow(QueueFrame.rows[2], "Arathi Basin", 272, 360)
+                ApplyQueueRow(QueueFrame.rows[1], "Warsong Gulch", "Warsong Gulch (Cross-Faction)", 75, 0)
+                ApplyQueueRow(QueueFrame.rows[2], "Arathi Basin", "Arathi Basin", 272, 360)
                 shown = 2
             else
                 for queueIndex = 1, math.min(queuedCount, #QueueFrame.rows) do
@@ -1116,7 +1124,7 @@ local function UpdateAllTimers()
                     local waited = GetBattlefieldTimeWaited(queue.id)
                     local estimate = GetBattlefieldEstimatedWaitTime(queue.id)
                     shown = shown + 1
-                    ApplyQueueRow(QueueFrame.rows[shown], queue.map, math.floor(waited / 1000), math.floor(estimate / 1000))
+                    ApplyQueueRow(QueueFrame.rows[shown], queue.map, queue.title, math.floor(waited / 1000), math.floor(estimate / 1000))
                 end
             end
         end

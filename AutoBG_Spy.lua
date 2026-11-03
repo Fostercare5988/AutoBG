@@ -75,7 +75,7 @@ local inRaid, inBattleground = false, false
 local function UpdateInstanceState()
 	local inInstance, instanceType = IsInInstance()
 	inRaid = (inInstance and instanceType == "raid") and true or false
-	inBattleground = (inInstance and instanceType == "pvp") and true or false
+	inBattleground = (inInstance and (instanceType == "pvp" or instanceType == "arena")) and true or false
 end
 
 -- In a battleground the enemy frames own the enemies. The queue status leaves

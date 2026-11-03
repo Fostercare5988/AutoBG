@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (223 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (232 tests).
 
 | File | Job |
 | --- | --- |
@@ -26,7 +26,17 @@ Things to know:
   the queue (AcceptBattlefieldPort without accept, hooked) is not.
 - Queues go through `JoinBattlegroundQueue(type)`, defined by OctoWoW's own
   FrameXML (Minimap.lua); `BATTLEGROUNDS` in AutoBG.lua holds each type and
-  queue-bar icon. The server answers with BATTLEFIELDS_SHOW, where AutoBG joins.
+  queue-bar icon. The server answers with BATTLEFIELDS_SHOW, where AutoBG joins
+  the Cross-Faction row when listed (client 2026.10.31: reserved instance
+  OCTO_BG_ROW_XF_ID 9001 after First Available; the player's choice, always
+  Cross-Faction), else First Available. Queue bars use OctoBGQueueName.
+- Arenas (client FrameXML Turtle_ArenaUI.lua): `JoinArenaQueue(0)` Skirmish,
+  1-3 Rated 2v2/3v3/5v5; `LeaveArenaQueue()`; the queue status map is ARENA.
+  One arena queue at a time, three queues in all. `AutoQueue_Arena` and
+  `ArenaType` queue one with the battlegrounds. In an arena: no auto-release,
+  no spirit-healer bar, 10-size enemy frames, rejoin queues the arena again.
+  UNVERIFIED: the arena's instance type and whether Skirmish answers with
+  BATTLEFIELDS_SHOW.
 - Requires ClassicAPI, SuperWoW and NamPower: AutoBG.lua's guard checks all
   three and says what is missing; the other files check ClassicAPI and
   SuperWoW. UnitXP is not used.
