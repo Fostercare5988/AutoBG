@@ -352,23 +352,11 @@ function Targets:EnsureOptions()
 	end
 
 	local o = AutoBG_Settings.Targets
-	-- Seed independent positions once, preserving the placement used by each bracket.
-	if not o.IndependentPositionsVersion then
-		if AutoBG_MigratePositions then AutoBG_MigratePositions() end
-		AutoBG_Settings.Positions = AutoBG_Settings.Positions or {}
-		local positions = AutoBG_Settings.Positions
-		local shared = positions.AutoBG_TargetsMainFrame
-		for _, size in ipairs(BRACKETS) do
-			local key = "AutoBG_TargetsMainFrame" .. size
-			if shared and (not positions[key] or not (o.IndependentPositioning and o.IndependentPositioning[size])) then
-				positions[key] = {point=shared.point, relPoint=shared.relPoint, x=shared.x, y=shared.y}
-			end
-		end
-		o.IndependentPositionsVersion = 1
-	end
-	o.pos = o.pos or {}
+	-- Leftovers of finished position migrations and of an older Spy table
+	-- that lived here; no code reads them.
+	o.pos, o.IndependentPositionsVersion, o.IndependentPositioning, o.Spy = nil, nil, nil, nil
+	if AutoBG_Settings.Positions then AutoBG_Settings.Positions.AutoBG_TargetsMainFrame = nil end
 	o.EnableBracket = o.EnableBracket or {}
-	o.IndependentPositioning = nil -- Permanent behavior; retire the saved toggle.
 	o.ButtonFontSize = o.ButtonFontSize or {}
 	o.ButtonScale = o.ButtonScale or {}
 	o.ButtonOpacity = o.ButtonOpacity or {}
@@ -1941,32 +1929,14 @@ function Targets:ToggleTestMode(size)
 end
 
 function Targets:ResetPosition(bracket)
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	local frameName = "AutoBG_TargetsMainFrame"
 	local positions = AutoBG_Settings and AutoBG_Settings.Positions
 
 	if bracket then
-		local key = frameName .. bracket
-		if positions then positions[key] = nil end
-		if o and o.pos then
-			o.pos[key .. "_posX"] = nil
-			o.pos[key .. "_posY"] = nil
-		end
-
-	else
-		if positions then
-			positions[frameName] = nil
-			for _, sz in ipairs(BRACKETS) do
-				positions[frameName .. sz] = nil
-			end
-		end
-		if o and o.pos then
-			o.pos[frameName .. "_posX"] = nil
-			o.pos[frameName .. "_posY"] = nil
-			for _, sz in ipairs(BRACKETS) do
-				o.pos[frameName .. sz .. "_posX"] = nil
-				o.pos[frameName .. sz .. "_posY"] = nil
-			end
+		if positions then positions[frameName .. bracket] = nil end
+	elseif positions then
+		for _, sz in ipairs(BRACKETS) do
+			positions[frameName .. sz] = nil
 		end
 	end
 	Targets:Frame_SetupPosition("AutoBG_TargetsMainFrame")
