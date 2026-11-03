@@ -269,7 +269,7 @@ local TELEMETRY_EVENTS = {
 	-- NamPower: exact stealth gain/loss and deaths by GUID (Emyrk/nampower EVENTS.md).
 	"BUFF_ADDED_OTHER", "BUFF_REMOVED_OTHER", "UNIT_DIED",
 }
-local ENEMY_UNIT_EVENTS = { "UNIT_AURA_DELTA", "UNIT_SPELLCAST_SUCCEEDED" }
+local ENEMY_UNIT_EVENTS = { "UNIT_AURA_DELTA" }
 local ENEMY_UNITS = { "target", "focus", "mouseover" }
 for i = 1, 40 do ENEMY_UNITS[3 + i] = "nameplate" .. i end
 local telemetryFrame, telemetryOn
@@ -318,18 +318,7 @@ local function IsPlaceholderName(name)
 	return name == UNKNOWNOBJECT or name == UKNOWNBEING
 end
 
-local function StripRealm(name)
-	if not name then return "" end
-	local p = string.find(name, "-", 1, true)
-	if p then
-		return string.sub(name, 1, p - 1)
-	end
-	return name
-end
-
-local function GetPlayerFaction()
-	return UnitFactionGroup("player")
-end
+local StripRealm = Targets.StripRealm
 
 local function SetHostility(name, guid, hostile)
 	if not name or IsPlaceholderName(name) then return end
@@ -416,12 +405,8 @@ end
 
 local function FormatClass(rawClass)
 	if not rawClass or rawClass == "" then return nil end
-	local token = (Targets and Targets.ResolveClassToken and Targets.ResolveClassToken(rawClass)) or string.upper(rawClass)
+	local token = Targets.ResolveClassToken(rawClass)
 	return CLASS_DISPLAY[token] or token
-end
-
-function Spy:CheckUnitStealth(unit)
-	return Targets.CheckUnitStealth(unit)
 end
 
 local function IsGroupMember(name, guid, unit)
@@ -432,81 +417,27 @@ local function IsGroupMember(name, guid, unit)
 		if realmAt and groupNames[string.sub(name, 1, realmAt - 1)] then return true end
 	end
 	if guid then
-		local pGUID = UnitGUID("player")
-		if pGUID and guid == pGUID then return true end
-		if groupGUIDs[guid] then return true end
-		if UnitInParty and UnitInParty(guid) then return true end
-		if UnitInRaid and UnitInRaid(guid) then return true end
+		if groupGUIDs[guid] or guid == UnitGUID("player") then return true end
+		if UnitInParty(guid) or UnitInRaid(guid) then return true end
 	end
 	if unit then
-		if UnitIsUnit and UnitIsUnit(unit, "player") then return true end
-		if UnitInParty and UnitInParty(unit) then return true end
-		if UnitInRaid and UnitInRaid(unit) then return true end
+		if UnitIsUnit(unit, "player") or UnitInParty(unit) or UnitInRaid(unit) then return true end
 	end
 	return false
 end
 Spy.IsGroupMember = IsGroupMember
 
-local function IsHostilePlayer(guid, name, unit)
-	if not guid and not name and not unit then return false end
-
-	-- 1. Never hostile to player or any group member (party/raid)
-	if IsGroupMember(name, guid, unit) then
+local function IsHostilePlayer(guid, name)
+	-- Never you or anyone in your group.
+	if IsGroupMember(name, guid) then
 		SetHostility(name, guid, false)
 		return false
 	end
-
-	-- 2. In SuperWoW / 1.12.1, player GUIDs start with 0x0000
-	if guid and type(guid) == "string" and string.sub(guid, 1, 6) ~= "0x0000" then
-		return false
-	end
-
-	local checkTarget = unit or guid
-	if checkTarget and UnitIsPlayer and not UnitIsPlayer(checkTarget) then
-		return false
-	end
-
-	-- 3. Friendly check: if UnitIsFriend returns truthy and cannot attack, definitely not hostile
-	if checkTarget and UnitIsFriend and UnitIsFriend("player", checkTarget) then
-		local canAtk = UnitCanAttack and UnitCanAttack("player", checkTarget)
-		if not canAtk then
-			SetHostility(name, guid, false)
-			return false
-		end
-	end
-
-	-- 4. Authoritative attackability: if player can attack them, they are hostile
-	if checkTarget and UnitCanAttack and UnitCanAttack("player", checkTarget) then
-		SetHostility(name, guid, true)
-		return true
-	end
-
-	-- 5. If we can verify they CANNOT be attacked:
-	if checkTarget and UnitCanAttack and not UnitCanAttack("player", checkTarget) then
-		SetHostility(name, guid, false)
-		return false
-	end
-
-	-- 6. Different faction fallback (only when not verified unattackable above)
-	local f = checkTarget and UnitFactionGroup and UnitFactionGroup(checkTarget)
-	local pf = GetPlayerFaction()
-	if f and pf then
-		if f ~= pf then
-			SetHostility(name, guid, true)
-			return true
-		else
-			SetHostility(name, guid, false)
-			return false
-		end
-	end
-
-	-- 7. Hostility cache fallback (only if not a group member)
-	local contact = name and contactByName[name]
-	if contact and contact.hostile and (not guid or not contact.guid or contact.guid == guid) then
-		return true
-	end
-
-	return false
+	-- Player GUIDs start with 0x0000; creatures and pets are never listed.
+	if string.sub(guid, 1, 6) ~= "0x0000" or not UnitIsPlayer(guid) then return false end
+	local hostile = UnitCanAttack("player", guid) and true or false
+	SetHostility(name, guid, hostile)
+	return hostile
 end
 
 -- -------------------------------------------------------------------------- --
@@ -536,7 +467,7 @@ function Spy:PruneGroupMembers()
 	local i = 1
 	while i <= activeEnemyCount do
 		local e = trackedEnemies[i]
-		if e and (IsGroupMember(e.name, e.guid) or (e.guid and UnitIsFriend and UnitIsFriend("player", e.guid) and not (UnitCanAttack and UnitCanAttack("player", e.guid)))) then
+		if e and (IsGroupMember(e.name, e.guid) or (e.guid and UnitIsFriend("player", e.guid) and not UnitCanAttack("player", e.guid))) then
 			if e.name then
 				SetHostility(e.name, e.guid, false)
 				nameToTrackIndex[e.name] = nil
@@ -572,7 +503,7 @@ local function UpdateGroupRoster()
 	local pGUID = UnitGUID("player")
 	if pGUID then groupGUIDs[pGUID] = true end
 
-	local numRaid = GetNumRaidMembers and GetNumRaidMembers() or 0
+	local numRaid = GetNumRaidMembers()
 	if numRaid > 0 then
 		for i = 1, numRaid do
 			local name = GetRaidRosterInfo(i)
@@ -586,19 +517,16 @@ local function UpdateGroupRoster()
 			if guid then groupGUIDs[guid] = true end
 		end
 	else
-		local numParty = GetNumPartyMembers and GetNumPartyMembers() or 0
-		if numParty > 0 then
-			for i = 1, numParty do
-				local u = "party" .. i
-				local name = UnitName(u)
-				if name then
-					groupNames[name] = true
-					local realmAt = string.find(name, "-", 1, true)
-					if realmAt then groupNames[string.sub(name, 1, realmAt - 1)] = true end
-				end
-				local guid = UnitGUID(u)
-				if guid then groupGUIDs[guid] = true end
+		for i = 1, GetNumPartyMembers() do
+			local u = "party" .. i
+			local name = UnitName(u)
+			if name then
+				groupNames[name] = true
+				local realmAt = string.find(name, "-", 1, true)
+				if realmAt then groupNames[string.sub(name, 1, realmAt - 1)] = true end
 			end
+			local guid = UnitGUID(u)
+			if guid then groupGUIDs[guid] = true end
 		end
 	end
 
@@ -614,7 +542,7 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	if not name or name == "" or IsPlaceholderName(name) then return end
 	if Spy:IsIgnored(name) then return end
 	if IsGroupMember(name, guid, observedUnit) then return end
-	if observedUnit and UnitIsFriend and UnitIsFriend("player", observedUnit) and not (UnitCanAttack and UnitCanAttack("player", observedUnit)) then
+	if observedUnit and UnitIsFriend("player", observedUnit) and not UnitCanAttack("player", observedUnit) then
 		return
 	end
 
@@ -671,14 +599,14 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 	e.name = name
 	e.shortName = StripRealm(name)
 	if classToken then
-		e.classToken = (Targets and Targets.ResolveClassToken and Targets.ResolveClassToken(classToken)) or classToken
+		e.classToken = Targets.ResolveClassToken(classToken)
 	end
 
 	-- Race Resolution Pipeline
 	if race then
 		race = FormatRace(race)
 	end
-	if not race and guid and UnitRace then
+	if not race and guid then
 		local r = UnitRace(guid)
 		if r and r ~= "" then
 			race = FormatRace(r)
@@ -842,7 +770,6 @@ function Spy:ClearHistory()
 	ClearObservations()
 	for _, contact in ipairs(contactHistory) do
 		contact.hostile, contact.race = nil, nil
-		contact.castSpell, contact.castAt, contact.castProvider = nil, nil, nil
 	end
 	table.wipe(nameToTrackIndex)
 	table.wipe(guidToName)
@@ -867,15 +794,13 @@ local function AnchorSpyTopLeft(frame)
 	AutoBG_Settings.Positions["AutoBG_SpyFrame"] = { point = "TOPLEFT", relPoint = "BOTTOMLEFT", x = left, y = top }
 end
 
-local function SpyFrame_OnDragStart(self)
-	local f = self or this or (Spy and Spy.Frame)
-	if f and f.StartMoving then f:StartMoving() end
+local function SpyFrame_OnDragStart()
+	Spy.Frame:StartMoving()
 end
 
-local function SpyFrame_OnDragStop(self)
-	local f = self or this or (Spy and Spy.Frame)
-	if f and f.StopMovingOrSizing then f:StopMovingOrSizing() end
-	if f then AnchorSpyTopLeft(f) end
+local function SpyFrame_OnDragStop()
+	Spy.Frame:StopMovingOrSizing()
+	AnchorSpyTopLeft(Spy.Frame)
 end
 
 local function SpyClearBtn_OnClick(self)
@@ -920,7 +845,7 @@ local function SpyRow_OnEnter(self)
 	end
 
 	if raceClassText then
-		local color = (Targets and Targets.GetClassColor and Targets.GetClassColor(b.targetClass)) or (AutoBG_GetClassColorRGB and AutoBG_GetClassColorRGB(b.targetClass)) or { r = 0.8, g = 0.8, b = 0.8 }
+		local color = Targets.GetClassColor(b.targetClass)
 		GameTooltip:AddLine(raceClassText, color.r, color.g, color.b)
 	end
 
@@ -1132,22 +1057,13 @@ end
 function Spy:ApplyPosition()
 	if Spy.AlertWindow then Spy.AlertWindow:ApplyPosition() end
 	if not Spy.Frame then return end
-	if AutoBG_LoadPosition then
-		AutoBG_LoadPosition(Spy.Frame, "AutoBG_SpyFrame", "TOPLEFT", 100, -200, "TOPLEFT")
-		-- Older saves may use a center or bottom anchor; convert them once.
-		local pos = AutoBG_Settings and AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_SpyFrame"]
-		if pos and pos.point ~= "TOPLEFT" then AnchorSpyTopLeft(Spy.Frame) end
-	else
-		Spy.Frame:ClearAllPoints()
-		Spy.Frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 100, -200)
-	end
+	AutoBG_LoadPosition(Spy.Frame, "AutoBG_SpyFrame", "TOPLEFT", 100, -200, "TOPLEFT")
 end
 
 function Spy:SavePosition()
 	if Spy.Frame then AnchorSpyTopLeft(Spy.Frame) end
 end
 
--- Older position keys are moved into Positions on load (AutoBG_MigratePositions).
 function Spy:ResetPosition()
 	if AutoBG_Settings and AutoBG_Settings.Positions then
 		AutoBG_Settings.Positions["AutoBG_SpyFrame"] = nil
@@ -1304,7 +1220,7 @@ OnSpyTick = function()
 		end
 		-- ClassicAPI distance; an enemy out of sight has no distance.
 		local yards
-		if visible and UnitDistanceSquared then
+		if visible then
 			local d2, checked = UnitDistanceSquared(e.guid)
 			if checked and d2 then yards = math.floor(math.sqrt(d2) + 0.5) end
 		end
@@ -1317,7 +1233,7 @@ OnSpyTick = function()
 			if e.inactive ~= inactive then e.inactive = inactive; changed = true end
 			if e.pendingUntil and now >= e.pendingUntil then
 				e.pendingUntil = nil
-				local found, spell = Spy:CheckUnitStealth(e.guid)
+				local found, spell = Targets.CheckUnitStealth(e.guid)
 				if found ~= nil then
 					e.isStealthed, e.stealthSpell = found, spell
 					if not found then e.wasStealthedAlerted = false end
@@ -1428,7 +1344,7 @@ local function ObserveUnit(unit, expectedGUID)
 	local hp, maxHp = UnitHealth(unit), UnitHealthMax(unit)
 	local pct = 100
 	if maxHp and maxHp > 0 then pct = math.floor((hp / maxHp) * 100 + 0.5) end
-	local isStealth, spell = Spy:CheckUnitStealth(unit)
+	local isStealth, spell = Targets.CheckUnitStealth(unit)
 	Spy:RecordEnemy(name, classToken, UnitLevel(unit), expectedGUID, pct,
 		isStealth, spell, UnitRace(unit), unit)
 end
@@ -1492,16 +1408,7 @@ eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 telemetryFrame = eventFrame
 SyncTelemetry(true)
 
-local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
-	-- Accept frame/event arguments, event-first arguments and native 1.12 globals.
-	local event, arg1, arg2, arg3, arg4, arg5
-	if type(p1) == "table" or type(p1) == "userdata" then
-		event, arg1, arg2, arg3, arg4, arg5 = p2, p3, p4, p5, p6, p7
-	elseif type(p1) == "string" then
-		event, arg1, arg2, arg3, arg4, arg5 = p1, p2, p3, p4, p5, p6
-	else
-		event, arg1, arg2, arg3, arg4, arg5 = _G.event, _G.arg1, _G.arg2, _G.arg3, _G.arg4, _G.arg5
-	end
+local function Spy_OnEvent()
 	if event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
 		-- A loading screen starts a fresh list; a new area keeps it unless it is a
 		-- raid where Spy is off. Subzone changes never touch the list.
@@ -1540,25 +1447,14 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 	local opt = GetSpySettings()
 	if not opt or not opt.Enabled or Spy.isTestMode or Spy:IsRaidDisabled() then return end
 
-	if event == "UNIT_CASTEVENT" or event == "UNIT_SPELLCAST_SUCCEEDED" then
-		local modern = event == "UNIT_SPELLCAST_SUCCEEDED"
-		local casterGUID = arg1
-		if modern then casterGUID = UnitGUID(arg1) end
-		local eventType = modern and "CAST" or arg3
-		local spellId = modern and arg3 or arg4
-		if not casterGUID then return end
-		if type(casterGUID) == "string" and string.sub(casterGUID, 1, 6) ~= "0x0000" then return end
+	if event == "UNIT_CASTEVENT" then
+		-- arg1 caster GUID, arg3 START/CAST/FAIL/CHANNEL/MAINHAND/OFFHAND, arg4 spell ID.
+		local casterGUID, eventType, spellId = arg1, arg3, arg4
+		if not casterGUID or string.sub(casterGUID, 1, 6) ~= "0x0000" then return end
 
 		local rawName = guidToName[casterGUID] or UnitName(casterGUID)
-		if IsPlaceholderName(rawName) then return end
+		if not rawName or IsPlaceholderName(rawName) then return end
 		if not IsHostilePlayer(casterGUID, rawName) then return end
-		-- Both installed providers report successful casts. Preserve their coverage,
-		-- but do not reprocess the same GUID/spell through both in one frame.
-		if rawName and eventType == "CAST" then
-			local contact, now = GetContact(rawName, casterGUID), GetTime()
-			if contact.castAt == now and contact.castSpell == spellId and contact.castProvider ~= event then return end
-			contact.castAt, contact.castSpell, contact.castProvider = now, spellId, event
-		end
 
 		local _, classToken = UnitClass(casterGUID)
 		local level = UnitLevel(casterGUID)
@@ -1566,30 +1462,26 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 		local sName = nil
 		local detectedRace = nil
 
-		if UnitRace then
-			local r = UnitRace(casterGUID)
-			if r and r ~= "" then
-				detectedRace = FormatRace(r)
-			end
+		local r = UnitRace(casterGUID)
+		if r and r ~= "" then
+			detectedRace = FormatRace(r)
 		end
 
 		if not detectedRace and spellId and eventType == "CAST" then
 			detectedRace = RaceForSpell(spellId)
 		end
 
-		if eventType == "CAST" and Targets and Targets.CheckIsStealthSpell then
-			local isS, spell, tex = Targets.CheckIsStealthSpell(spellId)
+		if eventType == "CAST" then
+			local isS, spell = Targets.CheckIsStealthSpell(spellId)
 			if isS then
 				isStealth = true
 				sName = spell
 			end
 		end
 
-		if rawName then
-			Spy:RecordEnemy(rawName, classToken, level, casterGUID, nil, isStealth, sName, detectedRace)
-			if eventType == "MAINHAND" or eventType == "OFFHAND" then
-				Spy:SetUnitStealthState(rawName, false)
-			end
+		Spy:RecordEnemy(rawName, classToken, level, casterGUID, nil, isStealth, sName, detectedRace)
+		if eventType == "MAINHAND" or eventType == "OFFHAND" then
+			Spy:SetUnitStealthState(rawName, false)
 		end
 
 	elseif event == "BUFF_ADDED_OTHER" or event == "BUFF_REMOVED_OTHER" then

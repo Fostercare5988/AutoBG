@@ -172,12 +172,6 @@ function AutoBG_GetClassColor(classOrToken)
     return entry and entry.hex, token
 end
 
-local FALLBACK_CLASS_COLOR = { r = 0.60, g = 0.60, b = 0.60, hex = "|cff999999" }
-function AutoBG_GetClassColorRGB(classOrToken)
-    if not classOrToken then return FALLBACK_CLASS_COLOR end
-    local token = string.upper(classOrToken)
-    return AutoBG_CLASS_COLORS[token] or FALLBACK_CLASS_COLOR
-end
 
 -- ClassicAPI's player cache knows you, your group (in range or not), players
 -- near you and everyone met this session; an enemy never seen near you is
