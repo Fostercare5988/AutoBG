@@ -120,7 +120,7 @@ are suppressed.
 
 Open `/abg spy`. The list shows recent enemy names, levels and classes. It
 rests inside battlegrounds, where the enemy frames take over. It works in the
-arenas (Lordaeron Arena, Sunstrider Court and the 5v5 arena).
+arenas (Lordaeron Arena, Sunstrider Court and Blood Ring), next to the arena enemy frames.
 Hover for race, health, stealth state and observation age. New enemies enter at
 the top; further activity updates their existing row. Up to 20 enemies are
 tracked; when the list is full, a newcomer takes the place of an enemy you

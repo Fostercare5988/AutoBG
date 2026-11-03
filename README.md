@@ -71,7 +71,8 @@ always need you to see the enemy. Spy is off inside raids unless you turn
 **Disable in raids** off.
 
 Spy rests inside battlegrounds, where the enemy frames list every enemy and
-give the stealth warning. It works in the arenas (2v2, 3v3, 5v5).
+give the stealth warning. It works in the arenas (2v2, 3v3, 5v5), where the enemy frames also have
+their own "Arena" size, position and options on the Enemy frames tab.
 
 Enemy trinket cooldowns, resurrection estimates and victory projections depend
 on observed events. Missing server telemetry can make them incomplete.

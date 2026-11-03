@@ -10,7 +10,10 @@ if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION then
 end
 
 local MAX_ENEMIES = 40
-local BRACKETS = { 10, 15, 40 }
+-- Bracket keys: the battleground size, or 5 for the arenas (2v2 to 5v5), which
+-- keep their own size, position and options like a battleground size does.
+local ARENA_BRACKET = 5
+local BRACKETS = { 10, 15, 40, ARENA_BRACKET }
 local DRAG_HEADER_HEIGHT = 18
 -- Arial Narrow: the client's calm, plain sans; cast bars keep Friz Quadrata.
 local FONT = "Fonts\\ARIALN.TTF"
@@ -69,6 +72,10 @@ local playerFaction = UnitFactionGroup("player") == "Horde" and 0 or 1
 local enemyFaction = playerFaction == 0 and 1 or 0
 local activeBG = false
 Targets.activeBG = false
+-- In an arena the scoreboard may not list the other team (UNVERIFIED: test in
+-- an arena), so enemies seen are kept here and join the roster.
+local arenaSeen, arenaSeenCount = {}, 0
+Targets.activeArena = false
 local currentSize = 10
 
 local CLASS_COLORS = AutoBG_CLASS_COLORS
@@ -1396,6 +1403,8 @@ local function GetBracketSize(bgName)
 		return 15
 	elseif string.find(bgName, "Alterac") then
 		return 40
+	elseif bgName == ARENA then
+		return ARENA_BRACKET
 	end
 	return currentSize
 end
@@ -1403,8 +1412,7 @@ end
 local function DetectBattleground()
 	for i = 1, MAX_BATTLEFIELD_QUEUES do
 		local status, mapName = GetBattlefieldStatus(i)
-		-- An arena belongs to Spy: its enemy list works there, so no frames.
-		if status == "active" and mapName ~= ARENA then
+		if status == "active" then
 			return true, mapName
 		end
 	end
@@ -1564,6 +1572,8 @@ function Targets:BattlefieldScoreUpdate(force)
 		local wasActive = activeBG
 		activeBG = false
 		Targets.activeBG = false
+		Targets.activeArena = false
+		wipe(arenaSeen); arenaSeenCount = 0
 		SyncTargetTimers()
 		if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
 			AutoBG_Spy:OnBattlegroundChanged(false)
@@ -1586,9 +1596,12 @@ function Targets:BattlefieldScoreUpdate(force)
 	end
 	activeBG = true
 	Targets.activeBG = true
+	Targets.activeArena = bgName == ARENA
+	if not Targets.activeArena and arenaSeenCount > 0 then wipe(arenaSeen); arenaSeenCount = 0 end
 	SyncTargetTimers()
+	-- Spy rests in battlegrounds, not in arenas.
 	if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
-		AutoBG_Spy:OnBattlegroundChanged(true)
+		AutoBG_Spy:OnBattlegroundChanged(not Targets.activeArena)
 	end
 
 	local size = GetBracketSize(bgName)
@@ -1616,6 +1629,20 @@ function Targets:BattlefieldScoreUpdate(force)
 			local rawClass = (type(classToken) == "string" and classToken) or (type(class) == "string" and class)
 			e.classToken = ResolveClassToken(rawClass)
 			e.guid = nameToGUID[name]
+		end
+	end
+
+	if Targets.activeArena then
+		for name, seen in pairs(arenaSeen) do
+			local listed = false
+			for i = 1, enemyCount do
+				if roster[i].name == name then listed = true; break end
+			end
+			if not listed and enemyCount < ARENA_BRACKET then
+				enemyCount = enemyCount + 1
+				local e = roster[enemyCount]
+				e.name, e.classToken, e.guid = name, seen.classToken, seen.guid
+			end
 		end
 	end
 
@@ -1684,6 +1711,15 @@ local function ObserveUnit(unit, scanAuras)
 
 	local guid = UnitGUID(unit)
 	local name = ResolveRosterName(rawName, guid)
+	if not name and Targets.activeArena and not arenaSeen[rawName] and arenaSeenCount < ARENA_BRACKET
+		and UnitCanAttack("player", unit) then
+		-- A new opponent: it joins the list now and every refresh after.
+		local _, classToken = UnitClass(unit)
+		arenaSeen[rawName] = { classToken = ResolveClassToken(classToken), guid = guid }
+		arenaSeenCount = arenaSeenCount + 1
+		Targets:BattlefieldScoreUpdate(true)
+		name = ResolveRosterName(rawName, guid)
+	end
 	if not name then return end
 
 	if guid then

@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (234 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (235 tests).
 
 | File | Job |
 | --- | --- |
@@ -34,10 +34,11 @@ Things to know:
   1-3 Rated 2v2/3v3/5v5; `LeaveArenaQueue()`; the queue status map is ARENA.
   One arena queue at a time, three queues in all. `AutoQueue_Arena` and
   `ArenaType` queue one with the battlegrounds. In an arena: no auto-release,
-  no spirit-healer bar, no enemy frames (Spy owns arenas and lists the enemies
-  there), rejoin queues the arena again. `AutoBG_IsArenaZone` (AutoBG.lua) is
+  no spirit-healer bar, their own enemy frames (bracket key 5, own size, position and options;
+  the roster is the scoreboard plus enemies seen) next to Spy, which also works
+  there; rejoin queues the arena again. `AutoBG_IsArenaZone` (AutoBG.lua) is
   the one place that names the arena zones: Lordaeron Arena, Sunstrider Court,
-  Circle of Blood. UNVERIFIED: the third zone name, the arena's instance type
+  Blood Ring (confirmed by the player 2026-11-03). UNVERIFIED: the arena's instance type
   and whether Skirmish answers with BATTLEFIELDS_SHOW.
 - Requires ClassicAPI, SuperWoW and NamPower: AutoBG.lua's guard checks all
   three and says what is missing; the other files check ClassicAPI and
