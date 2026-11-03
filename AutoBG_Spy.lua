@@ -72,10 +72,17 @@ end
 
 -- The instance type changes only behind a loading screen; it is read on world
 -- and zone events, so the event path checks a cached flag.
-local inRaid = false
+local inRaid, inBattleground = false, false
 local function UpdateInstanceState()
 	local inInstance, instanceType = IsInInstance()
 	inRaid = (inInstance and instanceType == "raid") and true or false
+	inBattleground = (inInstance and instanceType == "pvp") and true or false
+end
+
+-- In a battleground the enemy frames own the enemies. The queue status leaves
+-- "active" before the loading screen, so the instance type counts too.
+local function InBattleground()
+	return inBattleground or Targets.activeBG
 end
 
 function Spy:IsRaidDisabled()
@@ -280,7 +287,7 @@ end
 
 local function MaintainTicker()
 	local opt = GetSpySettings()
-	if opt.Enabled and not Spy.isTestMode and not (Targets and Targets.activeBG) and not Spy:IsRaidDisabled() then
+	if opt.Enabled and not Spy.isTestMode and not InBattleground() and not Spy:IsRaidDisabled() then
 		if not purgeTicker then purgeTicker = C_Timer.NewTicker(1, OnSpyTick) end
 		SyncTelemetry(true)
 	else
@@ -613,7 +620,7 @@ function Spy:RecordEnemy(name, classToken, level, guid, healthPct, isStealth, st
 
 	local opt = GetSpySettings()
 	if opt and not opt.Enabled then return end
-	if Targets and Targets.activeBG then return end
+	if InBattleground() then return end
 
 	local now = GetTime()
 	local idx = nameToTrackIndex[name]
@@ -1225,9 +1232,9 @@ function Spy:RenderRows()
 	MaintainTicker()
 	if not Spy.Frame then return end
 	local f, opt = Spy.Frame, GetSpySettings()
-	if not opt.Enabled or (Targets and Targets.activeBG) or Spy:IsRaidDisabled() then
+	if not opt.Enabled or InBattleground() or Spy:IsRaidDisabled() then
 		f:Hide()
-		if not (Targets and Targets.activeBG) then Spy:HideAlert() end
+		if not InBattleground() then Spy:HideAlert() end
 		return
 	end
 
@@ -1268,7 +1275,7 @@ end
 -- -------------------------------------------------------------------------- --
 OnSpyTick = function()
 	local opt = GetSpySettings()
-	if not opt.Enabled or (Targets and Targets.activeBG) or Spy:IsRaidDisabled() then
+	if not opt.Enabled or InBattleground() or Spy:IsRaidDisabled() then
 		StopTicker()
 		if Spy.Frame then Spy.Frame:Hide() end
 		return
@@ -1455,7 +1462,7 @@ end
 FlushObservations = function()
 	if flushingObservations or pendingCount == 0 then return end
 	local opt = GetSpySettings()
-	if not opt.Enabled or Spy.isTestMode or (Targets and Targets.activeBG) then
+	if not opt.Enabled or Spy.isTestMode or InBattleground() then
 		ClearObservations()
 		return
 	end
@@ -1529,7 +1536,7 @@ local function Spy_OnEvent(p1, p2, p3, p4, p5, p6, p7)
 		return
 	end
 
-	if Targets and Targets.activeBG then return end
+	if InBattleground() then return end
 	local opt = GetSpySettings()
 	if not opt or not opt.Enabled or Spy.isTestMode or Spy:IsRaidDisabled() then return end
 

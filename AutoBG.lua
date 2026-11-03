@@ -793,6 +793,12 @@ frame:RegisterUnitEvent("UNIT_AURA_DELTA", "player")
 AutoBG_MAX_ENTER_DELAY = 78
 local inviteStart = {}
 
+-- The minimap's Leave Queue calls AcceptBattlefieldPort(id) with no accept:
+-- the player left, so a scheduled enter is off and nothing ran out.
+hooksecurefunc("AcceptBattlefieldPort", function(id, accept)
+    if not accept and notifiedQueues[id] == true then notifiedQueues[id] = "left" end
+end)
+
 local function ReportMissedEnter(id)
     local started = inviteStart[id]
     local delay = AutoBG_Settings.AutoAcceptDelay or 0
@@ -1153,9 +1159,6 @@ local toggleCommands = {
     color = { key = "ScoreColor", label = "Scoreboard Class Colors" },
     r = { key = "AutoRelease", label = "Auto-Release Spirit" },
     release = { key = "AutoRelease", label = "Auto-Release Spirit" },
-    t = { key = "TestAllTimers", label = "Test Mode (All Timers)" },
-    test = { key = "TestAllTimers", label = "Test Mode (All Timers)" },
-    autoqueue = { key = "AutoQueueLogin", label = "Auto-Queue on Login" },
     start = { key = "StartTimer", label = "Game Start Timer" },
     starttimer = { key = "StartTimer", label = "Game Start Timer" },
 }
@@ -1192,7 +1195,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "cancel" or cmd == "drop" then
         AutoBG_CancelAllQueues()
         return
-    elseif cmd == "test" then
+    elseif cmd == "test" or cmd == "t" then
         if AutoBG_SetPreview then
             local on = not AutoBG_IsPreviewActive()
             AutoBG_SetPreview(on)
@@ -1205,7 +1208,7 @@ SlashCmdList["AUTOBG"] = function(msg)
         local entry = toggleCommands[cmd]
         AutoBG_Settings[entry.key] = not AutoBG_Settings[entry.key]
         if entry.key == "NotifySound" and not AutoBG_Settings.NotifySound then AutoBG_StopNotificationSound() end
-        if entry.key == "TestAllTimers" or entry.key == "StartTimer" then
+        if entry.key == "StartTimer" then
             RefreshBattlegroundDisplays()
         end
         AutoBG_Print(entry.label .. " is now " .. (AutoBG_Settings[entry.key] and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
