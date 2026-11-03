@@ -12,14 +12,13 @@ local carrierAlliance = nil
 local carrierHorde = nil
 local scanTicker = nil
 local SyncCarrierTicker
+-- The frame preview (the settings window's Preview button); never saved.
+local preview = false
 
--- Cached Zone State
-local cachedZone = ""
 local isWSG = false
 
 local function UpdateZoneCache()
-    cachedZone = string.lower((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
-    isWSG = (string.find(cachedZone, "warsong") ~= nil)
+    isWSG = string.find(string.lower(GetRealZoneText() or ""), "warsong") ~= nil
 end
 UpdateZoneCache()
 
@@ -65,7 +64,7 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     frame:SetScript("OnDragStart", function() this:StartMoving() end)
     frame:SetScript("OnDragStop", function()
         this:StopMovingOrSizing()
-        if AutoBG_SavePosition then AutoBG_SavePosition(this, name) end
+        AutoBG_SavePosition(this, name)
     end)
     frame:Hide()
 
@@ -140,10 +139,8 @@ local AllianceFC = CreateFCFrame("AutoBG_AllianceFC", "Alliance FC", -130, -150,
 local HordeFC = CreateFCFrame("AutoBG_HordeFC", "Horde FC", 130, -150, "Interface\\WorldStateFrame\\AllianceFlag")
 
 function AutoBG_LoadFCPositions()
-    if AutoBG_LoadPosition then
-        AutoBG_LoadPosition(AllianceFC, "AutoBG_AllianceFC", "TOP", -130, -150)
-        AutoBG_LoadPosition(HordeFC, "AutoBG_HordeFC", "TOP", 130, -150)
-    end
+    AutoBG_LoadPosition(AllianceFC, "AutoBG_AllianceFC", "TOP", -130, -150)
+    AutoBG_LoadPosition(HordeFC, "AutoBG_HordeFC", "TOP", 130, -150)
 end
 
 function AutoBG_ResetFCPositions()
@@ -168,7 +165,7 @@ local function UpdateFCButton(frame, carrierName)
     BindCarrier(frame, nil)
     frame.displayHealth, frame.displayHP, frame.displayDistance, frame.displayStacks = nil, nil, nil, nil
     if carrierName and carrierName ~= "" and (not AutoBG_Settings or AutoBG_Settings.FCFrame ~= false) then
-        local color = (AutoBG_FindPlayerClass and AutoBG_GetClassColor and AutoBG_GetClassColor(AutoBG_FindPlayerClass(carrierName)))
+        local color = AutoBG_GetClassColor(AutoBG_FindPlayerClass(carrierName))
         frame.nameText:SetText(color and (color .. carrierName .. "|r") or carrierName)
         frame.healthBar:SetValue(100)
         frame.healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
@@ -192,8 +189,17 @@ EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 EventFrame:RegisterEvent("DEBUFF_ADDED_OTHER")
 EventFrame:RegisterEvent("DEBUFF_REMOVED_OTHER")
 
+local ShowCarrierHealth
+
 EventFrame:SetScript("OnEvent", function()
     local ev, msg = event, arg1
+
+    if ev == "UNIT_HEALTH_GUID" then
+        -- NamPower: one event per health change of any loaded unit (arg1 GUID).
+        local frame = (msg == AllianceFC.carrierGuid and AllianceFC) or (msg == HordeFC.carrierGuid and HordeFC)
+        if frame then ShowCarrierHealth(frame, msg) end
+        return
+    end
 
     if ev == "DEBUFF_ADDED_OTHER" or ev == "DEBUFF_REMOVED_OTHER" then
         -- NamPower native globals: arg1 guid, arg3 spell ID, arg4 stacks, arg7 state (1 = removed).
@@ -306,11 +312,23 @@ end
 -- NamPower GetUnitField reads the unit's health fields directly and falls back to
 -- party/raid data for unloaded group members (Emyrk/nampower SCRIPTS.md).
 local function ReadCarrierHealth(unit)
-    if GetUnitField then
-        local hp, maxHp = GetUnitField(unit, "health"), GetUnitField(unit, "maxHealth")
-        if hp and maxHp and maxHp > 0 then return hp, maxHp end
-    end
+    local hp, maxHp = GetUnitField(unit, "health"), GetUnitField(unit, "maxHealth")
+    if hp and maxHp and maxHp > 0 then return hp, maxHp end
     return UnitHealth(unit) or 0, UnitHealthMax(unit) or 100
+end
+
+ShowCarrierHealth = function(frame, unit)
+    local hp, maxHp = ReadCarrierHealth(unit)
+    if maxHp <= 0 then return end
+    local pct = math.floor((hp / maxHp) * 100)
+    if frame.displayHealth ~= pct then
+        frame.healthBar:SetValue(pct)
+        frame.healthBar:SetStatusBarColor(pct < 60 and 0.95 or 0.1, pct < 30 and 0.15 or (pct < 60 and 0.8 or 0.85), 0.1)
+        frame.displayHealth = pct
+    end
+    -- Real values when the client holds them, otherwise 0-100.
+    -- UNVERIFIED: test in game which form OctoWoW sends for enemy players.
+    SetCarrierText(frame, "displayHP", frame.hpText, (maxHp > 100) and (hp .. " / " .. maxHp) or (pct .. "%"))
 end
 
 local ASSAULT_DEBUFFS = { ["Focused Assault"] = true, ["Brutal Assault"] = true }
@@ -328,26 +346,13 @@ OnCarrierDebuff = function(guid, spellId, stacks, state)
     SetCarrierStacks(frame, state == 1 and 0 or (stacks or 1))
 end
 
-local function ScanCarrier(carrierName, frame, flagType)
+local function ScanCarrier(carrierName, frame)
     if not carrierName or carrierName == "" then return end
     local u = ResolveCarrierUnit(carrierName, frame.carrierGuid)
     if u then
-            frame.carrierGuid = (UnitGUID and UnitGUID(u)) or nil
+            frame.carrierGuid = UnitGUID(u)
             BindCarrier(frame, frame.carrierGuid)
-            local hp, maxHp = ReadCarrierHealth(u)
-
-            if maxHp > 0 then
-                local pct = math.floor((hp / maxHp) * 100)
-                if frame.displayHealth ~= pct then
-                    frame.healthBar:SetValue(pct)
-                    frame.healthBar:SetStatusBarColor(pct < 30 and 0.95 or (pct < 60 and 0.95 or 0.1), pct < 30 and 0.15 or (pct < 60 and 0.8 or 0.85), 0.1)
-                    frame.displayHealth = pct
-                end
-                -- Real values when the client holds them, otherwise 0-100.
-                -- UNVERIFIED: test in game which form OctoWoW sends for enemy players.
-                local hpLabel = (maxHp > 100) and (hp .. " / " .. maxHp) or (pct .. "%")
-                SetCarrierText(frame, "displayHP", frame.hpText, hpLabel)
-            end
+            ShowCarrierHealth(frame, u)
 
             -- Read the stacks once per identified carrier; DEBUFF_*_OTHER events keep them current.
             if frame.stackGuid ~= frame.carrierGuid then
@@ -385,7 +390,9 @@ local function ScanCarrier(carrierName, frame, flagType)
     if frame.debuffText then SetCarrierText(frame, "displayStacks", frame.debuffText, "") end
 end
 
--- 6.6 Hz Native Hardware Ticker (ClassicAPI C_Timer)
+-- Health follows UNIT_HEALTH_GUID; twice a second finds the carrier's unit,
+-- reads the distance and keeps the health of a carrier without events right.
+local SCAN_SECONDS = 0.5
 local showingTest = false
 
 local function ScanFlagCarriers()
@@ -395,44 +402,50 @@ local function ScanFlagCarriers()
         return
     end
 
-    local isTestAll = AutoBG_Settings.TestAllTimers
-
-    if showingTest and not isTestAll then
+    if showingTest and not preview then
         -- The preview wrote over the live text; rebuild both frames from the tracked carriers.
         showingTest = false
         UpdateFCButton(AllianceFC, carrierAlliance)
         UpdateFCButton(HordeFC, carrierHorde)
     end
 
-    if not isTestAll and not isWSG then
+    if not preview and not isWSG then
         if AllianceFC:IsShown() then AllianceFC:Hide() end
         if HordeFC:IsShown() then HordeFC:Hide() end
         return
     end
 
-    if isTestAll then
-        AllianceFC:Show(); AllianceFC.nameText:SetText("|cFFFF7D0AAlliance Druid|r"); AllianceFC.healthBar:SetValue(82); AllianceFC.hpText:SetText("82%"); AllianceFC.distText:SetText("|cFF00FF0024 yd|r")
-        HordeFC:Show(); HordeFC.nameText:SetText("|cFFC79C6EHorde Warrior|r"); HordeFC.healthBar:SetValue(45); HordeFC.hpText:SetText("45%"); HordeFC.distText:SetText("|cFFFFFF0042 yd|r")
-        showingTest = true
+    if preview then
+        if not showingTest then
+            AllianceFC:Show(); AllianceFC.nameText:SetText("|cFFFF7D0AAlliance Druid|r"); AllianceFC.healthBar:SetValue(82); AllianceFC.hpText:SetText("82%"); AllianceFC.distText:SetText("|cFF00FF0024 yd|r")
+            HordeFC:Show(); HordeFC.nameText:SetText("|cFFC79C6EHorde Warrior|r"); HordeFC.healthBar:SetValue(45); HordeFC.hpText:SetText("45%"); HordeFC.distText:SetText("|cFFFFFF0042 yd|r")
+            showingTest = true
+        end
         return
     end
 
     if carrierAlliance then
         if not AllianceFC:IsShown() then AllianceFC:Show() end
-        ScanCarrier(carrierAlliance, AllianceFC, "Horde")
+        ScanCarrier(carrierAlliance, AllianceFC)
     elseif AllianceFC:IsShown() then AllianceFC:Hide() end
     if carrierHorde then
         if not HordeFC:IsShown() then HordeFC:Show() end
-        ScanCarrier(carrierHorde, HordeFC, "Alliance")
+        ScanCarrier(carrierHorde, HordeFC)
     elseif HordeFC:IsShown() then HordeFC:Hide() end
 end
 
+local healthEventsOn = false
 SyncCarrierTicker = function()
     local s = AutoBG_Settings
-    local needed = s and s.FCFrame and (s.TestAllTimers or (isWSG and (carrierAlliance or carrierHorde)))
+    local live = s and s.FCFrame and isWSG and (carrierAlliance or carrierHorde) and true or false
+    if healthEventsOn ~= live then
+        healthEventsOn = live
+        if live then EventFrame:RegisterEvent("UNIT_HEALTH_GUID") else EventFrame:UnregisterEvent("UNIT_HEALTH_GUID") end
+    end
+    local needed = live or (s and s.FCFrame and preview)
     if needed and not scanTicker then
         local ticker
-        ticker = C_Timer.NewTicker(0.15, function()
+        ticker = C_Timer.NewTicker(SCAN_SECONDS, function()
             if scanTicker ~= ticker then return end
             ScanFlagCarriers()
             SyncCarrierTicker()
@@ -442,6 +455,11 @@ SyncCarrierTicker = function()
         scanTicker:Cancel()
         scanTicker = nil
     end
+end
+
+-- The settings window's frame preview shows two sample carriers.
+function AutoBG_FC_SetPreview(on)
+    preview = on and true or false
 end
 
 function AutoBG_FC_UpdateVisibility()
