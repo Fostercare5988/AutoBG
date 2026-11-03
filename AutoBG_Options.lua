@@ -406,6 +406,8 @@ UpdateTargetsWidgets = function(sz)
 	UI.Sync(cbTgtRaidIcons, o.ShowRaidIcons ~= false)
 	UI.Sync(cbTgtTargetCount, o.ShowTargetCount ~= false)
 	UI.Sync(cbTgtFlagWatch, o.FlagWatch ~= false)
+	-- Flag warnings are an Arathi Basin feature: not offered for the arenas.
+	if sz == 5 then cbTgtFlagWatch:Hide() else cbTgtFlagWatch:Show() end
 	local width = (o.ButtonWidth and o.ButtonWidth[sz]) or 150
 	local height = (o.ButtonHeight and o.ButtonHeight[sz]) or 20
 	local fontSize = (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10
@@ -509,7 +511,7 @@ function AutoBG_SetPreview(on)
 	if on then
 		if Targets and Targets.EnableConfigMode then Targets:EnableConfigMode(selectedBracket) end
 		if Spy and Spy.EnableTestMode then Spy:EnableTestMode() end
-		if FlagAlert then FlagAlert:SetPreview(true) end
+		if FlagAlert and selectedBracket ~= 5 then FlagAlert:SetPreview(true) end
 	else
 		if Targets and Targets.isConfig then Targets:DisableConfigMode() end
 		if Spy and Spy.isTestMode then Spy:DisableTestMode() end
