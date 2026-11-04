@@ -72,9 +72,17 @@ local playerFaction = UnitFactionGroup("player") == "Horde" and 0 or 1
 local enemyFaction = playerFaction == 0 and 1 or 0
 local activeBG = false
 Targets.activeBG = false
--- In an arena the scoreboard may not list the other team (UNVERIFIED: test in
--- an arena), so enemies seen are kept here and join the roster.
-local arenaSeen, arenaSeenCount = {}, 0
+-- Cross-faction teams mix Alliance and Horde, so who is an enemy is decided by
+-- what you can attack, not by faction. Hostile players seen join the roster
+-- (seenEnemy; the only source in an arena, whose scoreboard may not list the
+-- other team: UNVERIFIED). A roster name that turns out not attackable is a
+-- teammate (notEnemy) and leaves it. checkedEnemy: names already tested.
+local seenEnemy, seenEnemyCount = {}, 0
+local notEnemy, checkedEnemy = {}, {}
+local function ForgetSightings()
+	table.wipe(seenEnemy); seenEnemyCount = 0
+	table.wipe(notEnemy); table.wipe(checkedEnemy)
+end
 Targets.activeArena = false
 local currentSize = 10
 
@@ -1584,7 +1592,7 @@ function Targets:BattlefieldScoreUpdate(force)
 		activeBG = false
 		Targets.activeBG = false
 		Targets.activeArena = false
-		wipe(arenaSeen); arenaSeenCount = 0
+		ForgetSightings()
 		SyncTargetTimers()
 		if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
 			AutoBG_Spy:OnBattlegroundChanged(false)
@@ -1608,7 +1616,6 @@ function Targets:BattlefieldScoreUpdate(force)
 	activeBG = true
 	Targets.activeBG = true
 	Targets.activeArena = bgName == ARENA
-	if not Targets.activeArena and arenaSeenCount > 0 then wipe(arenaSeen); arenaSeenCount = 0 end
 	SyncTargetTimers()
 	-- Spy rests in battlegrounds, not in arenas.
 	if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
@@ -1621,9 +1628,8 @@ function Targets:BattlefieldScoreUpdate(force)
 		Targets:SetupButtonLayout(size)
 	end
 
-	-- Cross-faction: a team mixes Alliance and Horde, so in an arena the
-	-- scoreboard's faction says nothing about who is an opponent. Only players
-	-- you can attack (LearnArenaOpponent) are listed there.
+	-- An arena lists only players you can attack (LearnOpponent); a
+	-- battleground starts from the scoreboard and corrects it the same way.
 	local numScores = Targets.activeArena and 0 or GetNumBattlefieldScores()
 	for i = 1, numScores do
 		local name, _, _, _, _, faction = GetBattlefieldScore(i)
@@ -1636,7 +1642,7 @@ function Targets:BattlefieldScoreUpdate(force)
 	enemyCount = 0
 	for i = 1, numScores do
 		local name, _, _, _, _, faction, _, _, class, classToken = GetBattlefieldScore(i)
-		if name and StripRealm(name) ~= playerName and faction == enemyFaction and enemyCount < MAX_ENEMIES then
+		if name and StripRealm(name) ~= playerName and faction == enemyFaction and not notEnemy[name] and enemyCount < MAX_ENEMIES then
 			enemyCount = enemyCount + 1
 			local e = roster[enemyCount]
 			e.name = name
@@ -1646,17 +1652,17 @@ function Targets:BattlefieldScoreUpdate(force)
 		end
 	end
 
-	if Targets.activeArena then
-		for name, seen in pairs(arenaSeen) do
-			local listed = false
-			for i = 1, enemyCount do
-				if roster[i].name == name then listed = true; break end
-			end
-			if not listed and enemyCount < ARENA_BRACKET then
-				enemyCount = enemyCount + 1
-				local e = roster[enemyCount]
-				e.name, e.classToken, e.guid = name, seen.classToken, seen.guid
-			end
+	local cap = Targets.activeArena and ARENA_BRACKET or MAX_ENEMIES
+	for name, seen in pairs(seenEnemy) do
+		local listed = false
+		local short = StripRealm(name)
+		for i = 1, enemyCount do
+			if StripRealm(roster[i].name) == short then listed = true; break end
+		end
+		if not listed and enemyCount < cap then
+			enemyCount = enemyCount + 1
+			local e = roster[enemyCount]
+			e.name, e.classToken, e.guid = name, seen.classToken, seen.guid
 		end
 	end
 
@@ -1701,17 +1707,36 @@ local function SetObservedHealth(name, curHp, maxHp, dead)
 	end
 end
 
--- In an arena a new opponent joins the list the moment it is first seen, by
+-- A hostile player the roster lacks joins it the moment it is first seen, by
 -- token (target, mouseover, nameplate) or by GUID (a cast or aura nearby).
--- Returns the roster name, or nil for anyone who is not an opponent.
-local function LearnArenaOpponent(rawName, unit, guid)
-	if not Targets.activeArena or arenaSeen[rawName] or arenaSeenCount >= ARENA_BRACKET
-		or not UnitCanAttack("player", unit) then return nil end
+local function LearnOpponent(rawName, unit, guid)
+	if not Targets.activeBG or seenEnemy[rawName] or notEnemy[rawName] then return nil end
+	if seenEnemyCount >= (Targets.activeArena and ARENA_BRACKET or MAX_ENEMIES)
+		or not UnitIsPlayer(unit) or not UnitCanAttack("player", unit) then return nil end
 	local _, classToken = UnitClass(unit)
-	arenaSeen[rawName] = { classToken = ResolveClassToken(classToken), guid = guid }
-	arenaSeenCount = arenaSeenCount + 1
+	seenEnemy[rawName] = { classToken = ResolveClassToken(classToken), guid = guid }
+	seenEnemyCount = seenEnemyCount + 1
 	Targets:BattlefieldScoreUpdate(true)
 	return ResolveRosterName(rawName, guid)
+end
+
+-- A roster name is an enemy only if you can attack it: a teammate of the other
+-- faction on the scoreboard's enemy side is dropped, once per name.
+local function VerifyEnemy(name, unit)
+	if checkedEnemy[name] or Targets.activeArena then return name end
+	checkedEnemy[name] = true
+	if UnitCanAttack("player", unit) then return name end
+	notEnemy[name] = true
+	Targets:BattlefieldScoreUpdate(true)
+	return nil
+end
+
+-- The roster name of a player seen on a unit or GUID; nil for anyone who is not
+-- an enemy.
+local function EnemyName(rawName, unit, guid)
+	local name = ResolveRosterName(rawName, guid)
+	if name then return VerifyEnemy(name, unit) end
+	return LearnOpponent(rawName, unit, guid)
 end
 
 -- Learn an enemy from its GUID alone (SuperWoW GUID units), once per roster.
@@ -1723,7 +1748,7 @@ local function RosterNameForGUID(guid)
 	local rawName = string.sub(guid, 1, 6) == "0x0000" and UnitName(guid)
 	-- An uncached name reads as UNKNOWNOBJECT; ask again on the next event instead of forgetting the GUID.
 	if rawName == UNKNOWNOBJECT or rawName == UKNOWNBEING then return nil end
-	name = rawName and (ResolveRosterName(rawName, guid) or LearnArenaOpponent(rawName, guid, guid))
+	name = rawName and EnemyName(rawName, guid, guid)
 	if not name then unknownGUIDs[guid] = true; return nil end
 	guidToName[guid], nameToGUID[name] = name, guid
 	local row = nameToRow[name]
@@ -1737,7 +1762,7 @@ local function ObserveUnit(unit, scanAuras)
 	if not rawName then return end
 
 	local guid = UnitGUID(unit)
-	local name = ResolveRosterName(rawName, guid) or LearnArenaOpponent(rawName, unit, guid)
+	local name = EnemyName(rawName, unit, guid)
 	if not name then return end
 
 	if guid then
@@ -1933,6 +1958,7 @@ local function Targets_OnEvent()
 		Targets:SetupButtonLayout(currentSize)
 
 	elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED_NEW_AREA" or ev == "UPDATE_BATTLEFIELD_STATUS" then
+		if ev == "PLAYER_ENTERING_WORLD" then ForgetSightings() end
 		prevEnemyCount = -1
 		Targets:OnCarrierChanged()
 		RequestBattlefieldScoreData()
