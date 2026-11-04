@@ -1,9 +1,10 @@
 -- -------------------------------------------------------------------------- --
 -- AutoBG: Arena extras                                                        --
 -- On each enemy row: a power bar (mana, rage or energy) and a strip of icons  --
--- (the key buffs it gained and the abilities it used). The drinking alert and --
--- the low-health and death callouts to your team. Arenas only; every part has --
--- a switch in the Arena tab. Shadow Sight lives with the timers.              --
+-- for a few key abilities (shield, protection, freedom, stun). The drinking   --
+-- alert and the low-health and death callouts to your team. Arenas only;      --
+-- every part has a switch in the Arena tab. Shadow Sight lives with the       --
+-- timers.                                                                     --
 -- -------------------------------------------------------------------------- --
 
 -- Needs ClassicAPI and SuperWoW loaded; AutoBG.lua says what is missing.
@@ -16,11 +17,14 @@ AutoBG_Arena = Arena
 
 local MAX_ROWS = 5            -- the arena bracket
 local SLOTS = 6               -- icons beside a row
-local MAX_BUFF_SLOTS = 3
-local BUFF_SHOW = 30          -- a buff gained in the match shows for 30 s at most: shields and immunities, not raid buffs
-local ABILITY_SHOW = 90       -- an ability stays 90 s after it was used
-local KEEP_ABILITIES = 8
-local SPAM_USES, SPAM_WINDOW = 3, 20 -- used 3 times within 20 s of each other: a filler, hidden
+-- The few abilities worth an icon, by name (the client names any spell ID; no IDs are
+-- taken from other servers). UNVERIFIED in game: that OctoWoW names them exactly so.
+local KEY_ORDER = { "Divine Shield", "Blessing of Protection", "Blessing of Freedom", "Hammer of Justice" }
+local KEY = {}
+for i = 1, #KEY_ORDER do KEY[KEY_ORDER[i]] = true end
+-- A use stays on the row this long (UNVERIFIED: the real cooldowns are not known yet, so
+-- the icon counts up from the use; it never claims "ready").
+local USED_SHOW = 300
 local SETTLE = 1.5            -- buffs announced this soon after first sight are the ones already on
 local DRINK_QUIET = 10
 local LOW_HEALTH, REARM_HEALTH = 25, 50
@@ -31,8 +35,7 @@ local BUFF_COLOR, ABILITY_COLOR = { 0.95, 0.78, 0.2 }, { 0.45, 0.45, 0.45 }
 local POWER_COLORS = { [0] = { 0.2, 0.45, 1 }, [1] = { 0.9, 0.2, 0.2 }, [2] = { 0.85, 0.5, 0.2 }, [3] = { 1, 0.9, 0.2 } }
 
 local active = false
-local units = {}              -- by GUID: { seen, spells = { {id, t, n} }, buffs = { [id] = t } }
-local startSpells = {}        -- spell IDs seen with a cast time: fillers, not worth an icon
+local units = {}              -- by GUID: { seen, used = { [name] = {id, t} }, active = { [name] = {id, t} } }
 local nameCache, iconCache = {}, {}
 local drinkAlerted, lowSent, deadSent = {}, {}, {}
 local decorated = false
@@ -44,7 +47,7 @@ local function Options() return AutoBG_ArenaOptions() or {} end
 local function Unit(guid)
 	local u = units[guid]
 	if not u then
-		u = { seen = GetTime(), spells = {}, buffs = {} }
+		u = { seen = GetTime(), used = {}, active = {} }
 		units[guid] = u
 	end
 	return u
@@ -163,36 +166,25 @@ local function ShowSlot(slot, id, age, color)
 	return true
 end
 
+-- Per key ability, gold while it is on the unit (the seconds left once that length has
+-- been measured in play, else the seconds since it began), grey after it was used (the
+-- seconds since).
 local function FillStrip(btn, u, o, now)
 	local strip = btn.Strip
 	local shown = 0
-	-- Key buffs first: the newest, up to MAX_BUFF_SLOTS.
-	if o.Buffs then
-		local taken = {}
-		for _ = 1, MAX_BUFF_SLOTS do
-			local bestId, bestT
-			for id, t in pairs(u.buffs) do
-				if now - t <= BUFF_SHOW and not taken[id] and (not bestT or t > bestT) then bestId, bestT = id, t end
-			end
-			if not bestId then break end
-			taken[bestId] = true
-			if shown < SLOTS and ShowSlot(strip.slots[shown + 1], bestId, now - bestT, BUFF_COLOR) then shown = shown + 1 end
+	local durations = o.Durations
+	for i = 1, #KEY_ORDER do
+		if shown >= SLOTS then break end
+		local name = KEY_ORDER[i]
+		local on, used = u.active[name], u.used[name]
+		local ok = false
+		if on then
+			local length = durations and durations[name]
+			ok = ShowSlot(strip.slots[shown + 1], on.id, length and math.max(0, length - (now - on.t)) or (now - on.t), BUFF_COLOR)
+		elseif used and now - used.t <= USED_SHOW then
+			ok = ShowSlot(strip.slots[shown + 1], used.id, now - used.t, ABILITY_COLOR)
 		end
-	end
-	if o.Abilities then
-		local spells = u.spells
-		local taken = {}
-		for _ = 1, KEEP_ABILITIES do
-			if shown >= SLOTS then break end
-			local best
-			for i = 1, #spells do
-				local e = spells[i]
-				if not taken[e] and not (e.n >= SPAM_USES) and now - e.t <= ABILITY_SHOW and (not best or e.t > best.t) then best = e end
-			end
-			if not best then break end
-			taken[best] = true
-			if ShowSlot(strip.slots[shown + 1], best.id, now - best.t, ABILITY_COLOR) then shown = shown + 1 end
-		end
+		if ok then shown = shown + 1 end
 	end
 	for s = shown + 1, SLOTS do strip.slots[s]:Hide() end
 	if shown > 0 then strip:Show() else strip:Hide() end
@@ -224,7 +216,7 @@ local function Tick()
 			if name and guid then
 				UpdatePower(btn, guid, o)
 				local u = units[guid]
-				if u and (o.Buffs or o.Abilities) then
+				if u and o.Abilities then
 					PlaceStrip(i, btn)
 					FillStrip(btn, u, o, now)
 				else
@@ -245,30 +237,10 @@ local function EnemyName(guid)
 end
 
 local function OnCast(guid, kind, spellId)
-	if not spellId then return end
-	if kind == "START" then startSpells[spellId] = true; return end
-	if kind ~= "CAST" or not Options().Abilities then return end
-	if startSpells[spellId] or AutoBG_Targets.IsTrinketSpell(spellId) then return end
-	if not EnemyName(guid) then return end
-	local u, now = Unit(guid), GetTime()
-	local spells = u.spells
-	for i = 1, #spells do
-		local e = spells[i]
-		if e.id == spellId then
-			e.n = (now - e.t > SPAM_WINDOW) and 1 or (e.n + 1)
-			e.t = now
-			return
-		end
-	end
-	-- Full: the oldest one makes room. Never table.remove: in this Lua it leaves a length
-	-- counter that later appends do not update.
-	if #spells >= KEEP_ABILITIES then
-		local oldest = 1
-		for i = 2, #spells do if spells[i].t < spells[oldest].t then oldest = i end end
-		spells[oldest] = { id = spellId, t = now, n = 1 }
-		return
-	end
-	spells[#spells + 1] = { id = spellId, t = now, n = 1 }
+	if kind ~= "CAST" or not spellId or not Options().Abilities then return end
+	local name = SpellName(spellId)
+	if not (name and KEY[name]) or not EnemyName(guid) then return end
+	Unit(guid).used[name] = { id = spellId, t = GetTime() }
 end
 
 local function Chat(text)
@@ -284,13 +256,25 @@ local function OnBuff(guid, spellId, state, added)
 		local mine = guid == UnitGUID("player")
 		AutoBG_Timers_ShadowSight(mine and "You" or (UnitName(guid) or "Someone"), not mine and UnitCanAttack("player", guid))
 	end
-	if not (o.Buffs or o.Drinking) then return end
+	local key = o.Abilities and SpellName(spellId)
+	if not (key and KEY[key]) then key = nil end
+	if not (key or o.Drinking) then return end
 	local name = EnemyName(guid)
 	if not name then return end
 	local u, now = Unit(guid), GetTime()
-	if not added then u.buffs[spellId] = nil; return end
+	if not added then
+		-- The longest a key buff was seen to last is its length (an early cancel is shorter).
+		local on = key and u.active[key]
+		if on then
+			local lengths = o.Durations
+			if not lengths then lengths = {}; o.Durations = lengths end
+			if now - on.t > (lengths[key] or 0) then lengths[key] = now - on.t end
+			u.active[key] = nil
+		end
+		return
+	end
 	if state ~= 0 or now - u.seen < SETTLE then return end
-	u.buffs[spellId] = now
+	if key then u.active[key] = { id = spellId, t = now } end
 	if o.Drinking then
 		local spell = SpellName(spellId)
 		if spell and string.find(string.lower(spell), "drink", 1, true) and (not drinkAlerted[guid] or now - drinkAlerted[guid] > DRINK_QUIET) then

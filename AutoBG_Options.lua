@@ -522,12 +522,10 @@ end
 UI.Heading(panelArena, "On each enemy", 28, -98)
 ArenaSwitch("AutoBG_Arena_Mana", "Mana and energy bars",
 	"A thin bar under each enemy: mana, rage or energy. See at a glance when the healer runs low.", 28, -118, "Mana")
-ArenaSwitch("AutoBG_Arena_Buffs", "Key buffs",
-	"Icons for the buffs an enemy gains during the match, such as shields and immunities, with the seconds since they started. A buff drops off after 30 seconds. Buffs already on at the start are not shown.", 28, -144, "Buffs")
-ArenaSwitch("AutoBG_Arena_Abilities", "Abilities used",
-	"Icons for what an enemy just used, with the seconds since. Spells with a cast time and anything used again and again are left out, so mostly the cooldown abilities remain. Grey border = ability, gold = buff.", 28, -170, "Abilities")
+ArenaSwitch("AutoBG_Arena_Abilities", "Key abilities",
+	"Icons for the few abilities that matter: Divine Shield, Blessing of Protection, Blessing of Freedom and Hammer of Justice. Gold = on now, grey = used, with the seconds since. A blessing shows on whoever received it.", 28, -144, "Abilities")
 ArenaSwitch("AutoBG_Arena_Pets", "Enemy pets",
-	"List the enemy pets and minions you have seen under the enemy frames, with their owner and health. Click one to target it. Totems are left out.", 28, -196, "Pets")
+	"List the enemy pets and minions you have seen under the enemy frames, with their owner and health. Click one to target it. Totems are left out.", 28, -170, "Pets")
 
 UI.Heading(panelArena, "Alerts and finding enemies", 264, -98)
 ArenaSwitch("AutoBG_Arena_Drinking", "Drinking alert",

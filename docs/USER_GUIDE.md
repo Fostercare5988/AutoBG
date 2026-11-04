@@ -122,12 +122,11 @@ are suppressed.
 here is built from what the game shows of them. Every part has a switch.
 
 - **Mana and energy bars:** a thin bar under each enemy row: mana, rage or energy.
-- **Key buffs:** gold-bordered icons for buffs an enemy gains during the match (shields,
-  immunities), with the seconds since. A buff drops off after 30 seconds, and buffs
-  that were already on at the start are not shown.
-- **Abilities used:** grey-bordered icons for what an enemy just used, with the seconds
-  since. Spells with a cast time and anything used again and again are left out.
-  The strip sits on the right of the row, past the cast bar if that is on the right.
+- **Key abilities:** icons on the enemy row for Divine Shield, Blessing of Protection,
+  Blessing of Freedom and Hammer of Justice, and nothing else. Grey border: the enemy used it,
+  with the seconds since. Gold border: it is on that enemy right now (a blessing shows on whoever
+  received it); once AutoBG has seen how long it lasts, the number counts down. The strip sits
+  on the right of the row, past the cast bar if that is on the right.
 - **Enemy pets:** pets and minions you have seen, under the enemy frames, with their
   owner and health. Click one to target it. Out of sight turns dim. Totems are left out.
 - **Drinking alert:** a message and a sound when an enemy starts drinking.
