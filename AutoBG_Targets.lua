@@ -298,6 +298,24 @@ local function StripRealm(name)
 end
 Targets.StripRealm = StripRealm
 
+-- The teams from one "S2C_SCOREBOARD" message; false if it holds no players.
+local function ReadArenaScoreboard(text)
+	if not text or string.sub(text, 1, 14) ~= "S2C_SCOREBOARD" then return false end
+	local players = Split(text, ";")[4]
+	if not players then return false end
+	table.wipe(arenaTeams); arenaMyTeam = nil
+	local list = Split(players, ":")
+	for i = 1, table.getn(list) do
+		local fields = Split(list[i], "|")
+		local name, team = fields[1], fields[2]
+		if name and team then
+			arenaTeams[name] = team
+			if StripRealm(name) == playerName then arenaMyTeam = team end
+		end
+	end
+	return true
+end
+
 -- Full names are authoritative. Only an unqualified name may use the unique
 -- short-name index; a different explicit realm must never resolve to this row.
 local function ResolveRosterName(rawName, guid)
@@ -927,7 +945,11 @@ end
 
 local scoreboardTicker, observedTicker
 local function AutoScoreboardTicker()
-	if activeBG and not Targets.isConfig then RequestBattlefieldScoreData() end
+	if activeBG and not Targets.isConfig then
+		RequestBattlefieldScoreData()
+		-- The client asks for the arena teams once; ask again, for players who joined late.
+		if Targets.activeArena and RequestArenaScoreInfo then RequestArenaScoreInfo() end
+	end
 end
 
 -- Match events are registered only in a battleground or the preview, so raids,
@@ -1665,6 +1687,9 @@ function Targets:BattlefieldScoreUpdate(force)
 	-- the players you can attack (LearnOpponent); a battleground starts from the
 	-- scoreboard's faction and corrects it by what you can attack.
 	local arena = Targets.activeArena
+	-- The client keeps the last arena scoreboard message; reading it here covers
+	-- one that arrived before this module listened.
+	if arena and WorldStateScoreFrame then ReadArenaScoreboard(WorldStateScoreFrame.arenaData) end
 	local numScores = GetNumBattlefieldScores()
 	for i = 1, arena and 0 or numScores do
 		local name, _, _, _, _, faction = GetBattlefieldScore(i)
@@ -1678,14 +1703,34 @@ function Targets:BattlefieldScoreUpdate(force)
 	for i = 1, numScores do
 		local name, _, _, _, _, faction, _, _, class, classToken = GetBattlefieldScore(i)
 		if name and StripRealm(name) ~= playerName and enemyCount < MAX_ENEMIES
-			and (arena and arenaMyTeam and arenaTeams[name] and arenaTeams[name] ~= arenaMyTeam
-				or not arena and faction == enemyFaction and not notEnemy[name]) then
+			and not arena and faction == enemyFaction and not notEnemy[name] then
 			enemyCount = enemyCount + 1
 			local e = roster[enemyCount]
 			e.name = name
 			local rawClass = (type(classToken) == "string" and classToken) or (type(class) == "string" and class)
 			e.classToken = ResolveClassToken(rawClass)
 			e.guid = nameToGUID[name]
+		end
+	end
+	-- An arena: every player of another team, listed by the server before anyone
+	-- is in sight. The class comes from the score row, else from a sighting.
+	if arena and arenaMyTeam then
+		for name, team in pairs(arenaTeams) do
+			if team ~= arenaMyTeam and enemyCount < ARENA_BRACKET then
+				enemyCount = enemyCount + 1
+				local e = roster[enemyCount]
+				e.name, e.guid = name, nameToGUID[name]
+				local rawClass
+				for i = 1, numScores do
+					local rowName, _, _, _, _, _, _, _, class, classToken = GetBattlefieldScore(i)
+					if rowName == name then
+						rawClass = (type(classToken) == "string" and classToken) or (type(class) == "string" and class)
+						break
+					end
+				end
+				local seen = seenEnemy[name]
+				e.classToken = ResolveClassToken(rawClass) or (seen and seen.classToken)
+			end
 		end
 	end
 
@@ -2018,21 +2063,7 @@ local function Targets_OnEvent()
 
 	elseif ev == "CHAT_MSG_ADDON" then
 		-- a1 prefix, a2 message. Only the arena scoreboard matters.
-		if a1 == "TW_ARENA" and a2 and string.sub(a2, 1, 14) == "S2C_SCOREBOARD" then
-			local players = Split(a2, ";")[4]
-			if not players then return end
-			table.wipe(arenaTeams); arenaMyTeam = nil
-			local list = Split(players, ":")
-			for i = 1, table.getn(list) do
-				local fields = Split(list[i], "|")
-				local name, team = fields[1], fields[2]
-				if name and team then
-					arenaTeams[name] = team
-					if StripRealm(name) == playerName then arenaMyTeam = team end
-				end
-			end
-			Targets:BattlefieldScoreUpdate(true)
-		end
+		if a1 == "TW_ARENA" and ReadArenaScoreboard(a2) then Targets:BattlefieldScoreUpdate(true) end
 
 	elseif ev == "UNIT_TARGET" then
 		-- "npc" (the gossip NPC) also sends UNIT_TARGET; "npctarget" is not a unit.
