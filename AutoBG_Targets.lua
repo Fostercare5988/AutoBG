@@ -1698,6 +1698,19 @@ local function SetObservedHealth(name, curHp, maxHp, dead)
 	end
 end
 
+-- In an arena a new opponent joins the list the moment it is first seen, by
+-- token (target, mouseover, nameplate) or by GUID (a cast or aura nearby).
+-- Returns the roster name, or nil for anyone who is not an opponent.
+local function LearnArenaOpponent(rawName, unit, guid)
+	if not Targets.activeArena or arenaSeen[rawName] or arenaSeenCount >= ARENA_BRACKET
+		or not UnitCanAttack("player", unit) then return nil end
+	local _, classToken = UnitClass(unit)
+	arenaSeen[rawName] = { classToken = ResolveClassToken(classToken), guid = guid }
+	arenaSeenCount = arenaSeenCount + 1
+	Targets:BattlefieldScoreUpdate(true)
+	return ResolveRosterName(rawName, guid)
+end
+
 -- Learn an enemy from its GUID alone (SuperWoW GUID units), once per roster.
 local function RosterNameForGUID(guid)
 	if not guid then return nil end
@@ -1707,7 +1720,7 @@ local function RosterNameForGUID(guid)
 	local rawName = string.sub(guid, 1, 6) == "0x0000" and UnitName(guid)
 	-- An uncached name reads as UNKNOWNOBJECT; ask again on the next event instead of forgetting the GUID.
 	if rawName == UNKNOWNOBJECT or rawName == UKNOWNBEING then return nil end
-	name = rawName and ResolveRosterName(rawName, guid)
+	name = rawName and (ResolveRosterName(rawName, guid) or LearnArenaOpponent(rawName, guid, guid))
 	if not name then unknownGUIDs[guid] = true; return nil end
 	guidToName[guid], nameToGUID[name] = name, guid
 	local row = nameToRow[name]
@@ -1721,16 +1734,7 @@ local function ObserveUnit(unit, scanAuras)
 	if not rawName then return end
 
 	local guid = UnitGUID(unit)
-	local name = ResolveRosterName(rawName, guid)
-	if not name and Targets.activeArena and not arenaSeen[rawName] and arenaSeenCount < ARENA_BRACKET
-		and UnitCanAttack("player", unit) then
-		-- A new opponent: it joins the list now and every refresh after.
-		local _, classToken = UnitClass(unit)
-		arenaSeen[rawName] = { classToken = ResolveClassToken(classToken), guid = guid }
-		arenaSeenCount = arenaSeenCount + 1
-		Targets:BattlefieldScoreUpdate(true)
-		name = ResolveRosterName(rawName, guid)
-	end
+	local name = ResolveRosterName(rawName, guid) or LearnArenaOpponent(rawName, unit, guid)
 	if not name then return end
 
 	if guid then

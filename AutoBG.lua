@@ -48,7 +48,11 @@ end
 local ARENA_ZONES = { ["lordaeron arena"] = true, ["sunstrider court"] = true, ["blood ring"] = true }
 function AutoBG_IsArenaZone()
     local inInstance, instanceType = IsInInstance()
-    return (inInstance and instanceType == "arena") or ARENA_ZONES[string.lower(GetRealZoneText() or "")] == true
+    -- ClassicAPI: true once an arena match's map loads (the world's Gurubashi
+    -- Arena is not one). Confirmed in game: an arena reports instance type "pvp".
+    return (IsActiveBattlefieldArena and IsActiveBattlefieldArena())
+        or (inInstance and instanceType == "arena")
+        or ARENA_ZONES[string.lower(GetRealZoneText() or "")] == true
 end
 
 local function UpdateZoneCache()
