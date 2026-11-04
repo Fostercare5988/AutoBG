@@ -242,10 +242,13 @@ local function OnCast(guid, kind, spellId)
 			return
 		end
 	end
+	-- Full: the oldest one makes room. Never table.remove: in this Lua it leaves a length
+	-- counter that later appends do not update.
 	if #spells >= KEEP_ABILITIES then
 		local oldest = 1
 		for i = 2, #spells do if spells[i].t < spells[oldest].t then oldest = i end end
-		table.remove(spells, oldest)
+		spells[oldest] = { id = spellId, t = now, n = 1 }
+		return
 	end
 	spells[#spells + 1] = { id = spellId, t = now, n = 1 }
 end

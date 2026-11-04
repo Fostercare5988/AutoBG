@@ -21,6 +21,7 @@ local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\barTexture.tga]]
 -- entries: one per owner (a new pet replaces the owner's old one), or per pet when
 -- the owner is unknown. byGuid finds an entry from the pet's GUID.
 local entries, byGuid, notPet = {}, {}, {}
+local count = 0 -- entries held; the list keeps its own count, never # or table.remove after a removal
 local frame, rows
 local active = false
 local renderTimer
@@ -69,7 +70,7 @@ end
 
 local function Render()
 	renderTimer = nil
-	if not rows and #entries == 0 then return end
+	if not rows and count == 0 then return end
 	if not rows then CreateRows() end
 	local main = AutoBG_Targets.MainFrame
 	local width = main:GetWidth()
@@ -104,13 +105,22 @@ end
 
 local function Remove(e)
 	byGuid[e.guid] = nil
-	for i = 1, #entries do
-		if entries[i] == e then table.remove(entries, i); return end
+	-- The last entry fills the gap.
+	for i = 1, count do
+		if entries[i] == e then entries[i] = entries[count]; entries[count] = nil; count = count - 1; return end
 	end
 end
 
+-- By owner, a plain insertion sort over the entries held.
 local function Sort()
-	table.sort(entries, function(a, b) return (a.owner or "") < (b.owner or "") end)
+	for i = 2, count do
+		local e, j = entries[i], i - 1
+		while j >= 1 and (entries[j].owner or "") > (e.owner or "") do
+			entries[j + 1] = entries[j]
+			j = j - 1
+		end
+		entries[j + 1] = e
+	end
 end
 
 -- Learn or refresh one GUID. Players and everything already rejected are skipped
@@ -129,14 +139,15 @@ local function Observe(guid)
 		local owner = ownerGuid and UnitName(ownerGuid)
 		if owner then owner = AutoBG_Targets.StripRealm(owner) end
 		if ownerGuid then
-			for i = 1, #entries do
+			for i = 1, count do
 				if entries[i].ownerGuid == ownerGuid then Remove(entries[i]); break end
 			end
 		end
-		if #entries >= MAX_PETS then return end
+		if count >= MAX_PETS then return end
 		e = { guid = guid, name = UnitName(guid) or "Pet", owner = owner, ownerGuid = ownerGuid, pct = 100 }
 		byGuid[guid] = e
-		entries[#entries + 1] = e
+		count = count + 1
+		entries[count] = e
 		Sort()
 	end
 	local hp, maxHp = ReadHealth(guid)
@@ -151,7 +162,7 @@ end
 
 -- Out of sight: dimmed, with the last health kept.
 local function Refresh()
-	for i = 1, #entries do
+	for i = 1, count do
 		local e = entries[i]
 		if UnitExists(e.guid) then
 			Observe(e.guid)
@@ -189,6 +200,7 @@ function Pets.SetActive(on)
 	else
 		if ticker then ticker:Cancel(); ticker = nil end
 		table.wipe(entries); table.wipe(byGuid); table.wipe(notPet)
+		count = 0
 		RequestRender()
 	end
 end
@@ -197,4 +209,4 @@ end
 function Pets.Refresh() RequestRender() end
 
 -- The list as { name, owner, pct, dead } rows, for tests.
-function Pets.Count() return #entries end
+function Pets.Count() return count end
