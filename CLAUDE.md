@@ -35,7 +35,7 @@ Things to know:
   One arena queue at a time, three queues in all. `AutoQueue_Arena` and
   `ArenaType` queue one with the battlegrounds. In an arena: no auto-release,
   no spirit-healer bar, their own enemy frames (bracket key 5, own size, position and options;
-  the roster is the scoreboard plus enemies seen; Targets detects an arena by
+  the roster is the enemies seen; Targets detects an arena by
   the zone too, not only the queue status) next to Spy, which also works
   there; rejoin queues the arena again. `AutoBG_IsArenaZone` (AutoBG.lua) is
   the one place that names the arena zones: Lordaeron Arena, Sunstrider Court,
@@ -45,10 +45,9 @@ Things to know:
   `ShownBattlefield` (AutoBG.lua) maps those titles to ARENA.
 - Cross-faction (2026-11-04): teams mix Alliance and Horde in Warsong, Arathi Basin
   and the arenas (not Alterac Valley), so the enemy list is corrected by what you
-  can attack, not by faction. An arena lists the other team from the server's own
-  arena scoreboard (CHAT_MSG_ADDON prefix TW_ARENA, "S2C_SCOREBOARD;<winner>;<count>;
-  name|team|x:...", read in client WorldStateFrame.lua; registered only in an arena)
-  plus attackable players seen. A battleground starts from the scoreboard, drops a
+  can attack, not by faction. An arena lists only attackable players seen (the server's
+  TW_ARENA scoreboard holds your own team only, checked 2026-11-04; a 3 s sweep adds what
+  your party targets, and health, cast and buff events add the rest). A battleground starts from the scoreboard, drops a
   roster name that is not attackable (`VerifyEnemy`) and adds a hostile player it
   lacks (`LearnOpponent`). UNVERIFIED: whether the scoreboard's faction column is
   the team or the real faction on a mixed team.

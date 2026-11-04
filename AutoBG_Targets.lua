@@ -74,43 +74,16 @@ local activeBG = false
 Targets.activeBG = false
 -- Cross-faction teams mix Alliance and Horde, so who is an enemy is decided by
 -- what you can attack, not by faction. Hostile players seen join the roster
--- (seenEnemy; the only source in an arena, whose scoreboard may not list the
--- other team: UNVERIFIED). A roster name that turns out not attackable is a
+-- (seenEnemy; the only source in an arena: the server lists only your own team,
+-- checked 2026-11-04). A roster name that turns out not attackable is a
 -- teammate (notEnemy) and leaves it. checkedEnemy: names already tested.
 local seenEnemy, seenEnemyCount = {}, 0
 local notEnemy, checkedEnemy = {}, {}
--- The arena scoreboard the server sends (client: Turtle_ArenaUI.lua and
--- WorldStateFrame.lua; CHAT_MSG_ADDON prefix TW_ARENA, "S2C_SCOREBOARD;<winning
--- team>;<count>;<name>|<team>|<x>:<name>|<team>|<x>...", asked for by the client
--- on every score update in the arena). The team of each player: enemies are the
--- players whose team is not yours, whatever their faction.
-local arenaTeams, arenaMyTeam = {}, nil
 local function ForgetSightings()
 	table.wipe(seenEnemy); seenEnemyCount = 0
 	table.wipe(notEnemy); table.wipe(checkedEnemy)
-	table.wipe(arenaTeams); arenaMyTeam = nil
 end
 
--- Addon messages reach Lua only while in an arena.
-local arenaMessagesOn = false
-local function SyncArenaMessages()
-	local on = Targets.activeArena and true or false
-	if on == arenaMessagesOn then return end
-	arenaMessagesOn = on
-	if on then Targets:RegisterEvent("CHAT_MSG_ADDON") else Targets:UnregisterEvent("CHAT_MSG_ADDON") end
-end
-
-local function Split(text, delimiter)
-	local parts, from = {}, 1
-	local a, b = string.find(text, delimiter, from, true)
-	while a do
-		parts[table.getn(parts) + 1] = string.sub(text, from, a - 1)
-		from = b + 1
-		a, b = string.find(text, delimiter, from, true)
-	end
-	parts[table.getn(parts) + 1] = string.sub(text, from)
-	return parts
-end
 Targets.activeArena = false
 local currentSize = 10
 
@@ -297,24 +270,6 @@ local function StripRealm(name)
 	return name
 end
 Targets.StripRealm = StripRealm
-
--- The teams from one "S2C_SCOREBOARD" message; false if it holds no players.
-local function ReadArenaScoreboard(text)
-	if not text or string.sub(text, 1, 14) ~= "S2C_SCOREBOARD" then return false end
-	local players = Split(text, ";")[4]
-	if not players then return false end
-	table.wipe(arenaTeams); arenaMyTeam = nil
-	local list = Split(players, ":")
-	for i = 1, table.getn(list) do
-		local fields = Split(list[i], "|")
-		local name, team = fields[1], fields[2]
-		if name and team then
-			arenaTeams[name] = team
-			if StripRealm(name) == playerName then arenaMyTeam = team end
-		end
-	end
-	return true
-end
 
 -- Full names are authoritative. Only an unqualified name may use the unique
 -- short-name index; a different explicit realm must never resolve to this row.
@@ -944,11 +899,11 @@ local function UpdateObservedTimers()
 end
 
 local scoreboardTicker, observedTicker
+local SweepArena -- defined after ObserveUnit
 local function AutoScoreboardTicker()
 	if activeBG and not Targets.isConfig then
 		RequestBattlefieldScoreData()
-		-- The client asks for the arena teams once; ask again, for players who joined late.
-		if Targets.activeArena and RequestArenaScoreInfo then RequestArenaScoreInfo() end
+		if Targets.activeArena then SweepArena() end
 	end
 end
 
@@ -1645,7 +1600,6 @@ function Targets:BattlefieldScoreUpdate(force)
 		activeBG = false
 		Targets.activeBG = false
 		Targets.activeArena = false
-		SyncArenaMessages()
 		ForgetSightings()
 		SyncTargetTimers()
 		if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
@@ -1670,7 +1624,6 @@ function Targets:BattlefieldScoreUpdate(force)
 	activeBG = true
 	Targets.activeBG = true
 	Targets.activeArena = bgName == ARENA
-	SyncArenaMessages()
 	SyncTargetTimers()
 	-- Spy rests in battlegrounds, not in arenas.
 	if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
@@ -1683,13 +1636,10 @@ function Targets:BattlefieldScoreUpdate(force)
 		Targets:SetupButtonLayout(size)
 	end
 
-	-- An arena lists the other team by the server's team data (arenaTeams) and
-	-- the players you can attack (LearnOpponent); a battleground starts from the
+	-- An arena lists the players you can attack that have been seen (LearnOpponent;
+	-- the server sends only your own team); a battleground starts from the
 	-- scoreboard's faction and corrects it by what you can attack.
 	local arena = Targets.activeArena
-	-- The client keeps the last arena scoreboard message; reading it here covers
-	-- one that arrived before this module listened.
-	if arena and WorldStateScoreFrame then ReadArenaScoreboard(WorldStateScoreFrame.arenaData) end
 	local numScores = GetNumBattlefieldScores()
 	for i = 1, arena and 0 or numScores do
 		local name, _, _, _, _, faction = GetBattlefieldScore(i)
@@ -1712,28 +1662,6 @@ function Targets:BattlefieldScoreUpdate(force)
 			e.guid = nameToGUID[name]
 		end
 	end
-	-- An arena: every player of another team, listed by the server before anyone
-	-- is in sight. The class comes from the score row, else from a sighting.
-	if arena and arenaMyTeam then
-		for name, team in pairs(arenaTeams) do
-			if team ~= arenaMyTeam and enemyCount < ARENA_BRACKET then
-				enemyCount = enemyCount + 1
-				local e = roster[enemyCount]
-				e.name, e.guid = name, nameToGUID[name]
-				local rawClass
-				for i = 1, numScores do
-					local rowName, _, _, _, _, _, _, _, class, classToken = GetBattlefieldScore(i)
-					if rowName == name then
-						rawClass = (type(classToken) == "string" and classToken) or (type(class) == "string" and class)
-						break
-					end
-				end
-				local seen = seenEnemy[name]
-				e.classToken = ResolveClassToken(rawClass) or (seen and seen.classToken)
-			end
-		end
-	end
-
 	local cap = Targets.activeArena and ARENA_BRACKET or MAX_ENEMIES
 	for name, seen in pairs(seenEnemy) do
 		local listed = false
@@ -1867,6 +1795,12 @@ local function ObserveUnit(unit, scanAuras)
 	local dead = UnitIsDeadOrGhost(unit) and true or false
 	local curHp, maxHp = ReadHealth(unit)
 	SetObservedHealth(name, curHp, maxHp, dead)
+end
+
+-- An arena sends no enemy list, so the enemies your team is looking at count as seen.
+function SweepArena()
+	for i = 1, 4 do ObserveUnit("party" .. i .. "target") end
+	ObserveUnit("targettarget")
 end
 
 function Targets:EnableConfigMode(size)
@@ -2060,10 +1994,6 @@ local function Targets_OnEvent()
 		-- ends stealth; anything added, removed or a full update is read again.
 		if a2 and not (a2.isFullUpdate or a2.addedAuraInstanceIDs or a2.removedAuraInstanceIDs) then return end
 		ObserveUnit(a1)
-
-	elseif ev == "CHAT_MSG_ADDON" then
-		-- a1 prefix, a2 message. Only the arena scoreboard matters.
-		if a1 == "TW_ARENA" and ReadArenaScoreboard(a2) then Targets:BattlefieldScoreUpdate(true) end
 
 	elseif ev == "UNIT_TARGET" then
 		-- "npc" (the gossip NPC) also sends UNIT_TARGET; "npctarget" is not a unit.
