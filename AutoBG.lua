@@ -41,8 +41,11 @@ function AutoBG_IsArenaZone()
     local inInstance, instanceType = IsInInstance()
     -- ClassicAPI: true once an arena match's map loads (the world's Gurubashi
     -- Arena is not one). Confirmed in game: an arena reports instance type "pvp".
+    -- Only inside an instance: the zone name and the arena flag can outlive the
+    -- match for a moment after you leave, which stalled the rejoin.
+    if not inInstance then return false end
     return (IsActiveBattlefieldArena and IsActiveBattlefieldArena())
-        or (inInstance and instanceType == "arena")
+        or instanceType == "arena"
         or ARENA_ZONES[string.lower(GetRealZoneText() or "")] == true
 end
 
@@ -842,7 +845,9 @@ frame:SetScript("OnEvent", function()
                 rejoinWorldReady = false
             end
         else
-            if ev == "PLAYER_ENTERING_WORLD" then rejoinWorldReady = true end
+            -- ZONE_CHANGED_NEW_AREA too: the world can load while the old zone still
+            -- reads as the arena, and the rejoin must not wait for a second load.
+            if ev ~= "ZONE_CHANGED" then rejoinWorldReady = true end
             if hasHandledEnd and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
                 TryAutoRejoin()
             elseif UnitExists("player") then
