@@ -43,6 +43,13 @@ Things to know:
   and whether Skirmish answers with BATTLEFIELDS_SHOW. It does (2026-11-04): the
   window is titled with the arena zone ("Blood Ring") and lists First Available, so
   `ShownBattlefield` (AutoBG.lua) maps those titles to ARENA.
+- Cross-faction (2026-11-04): teams mix Alliance and Horde in Warsong, Arathi Basin
+  and the arenas (not Alterac Valley), so the enemy list is corrected by what you
+  can attack, not by faction. An arena lists only attackable players seen (the
+  scoreboard is ignored there). A battleground starts from the scoreboard, drops a
+  roster name that is not attackable (`VerifyEnemy`) and adds a hostile player it
+  lacks (`LearnOpponent`). UNVERIFIED: whether the scoreboard's faction column is
+  the team or the real faction on a mixed team.
 - Requires ClassicAPI, SuperWoW and NamPower: AutoBG.lua's guard checks all
   three and says what is missing; the other files check ClassicAPI and
   SuperWoW. UnitXP is not used.
