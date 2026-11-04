@@ -74,11 +74,12 @@ local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", {
 	{ label = "Timers", height = 436 },
 	{ label = "Enemy frames", height = 542 },
 	{ label = "Spy", height = 390 },
+	{ label = "Arena", height = 330 },
 }, function(index)
 	selectedTab = index
 	Refresh[index]()
 end)
-local panelGeneral, panelTimers, panelTargets, panelSpy = pages[1], pages[2], pages[3], pages[4]
+local panelGeneral, panelTimers, panelTargets, panelSpy, panelArena = pages[1], pages[2], pages[3], pages[4], pages[5]
 
 -- -------------------------------------------------------------------------- --
 -- General: queue pops, after the match, auto queue, notifications            --
@@ -342,10 +343,6 @@ local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
 	"Show how many of your group, you included, target each enemy, in orange beside the health.", -310, "ShowTargetCount")
 local cbTgtFlagWatch = RowFeature("AutoBG_Tgt_FlagWatch", "Flag warnings",
 	"In Arathi Basin, warn when an enemy starts opening a flag, or comes out of stealth at one. Flag spots are learned as flags are assaulted. Ctrl-click the warning to announce it.", -336, "FlagWatch")
-local cbTgtArenaScan = RowFeature("AutoBG_Tgt_ArenaScan", "Find enemies fast",
-	"In an arena, look for enemies once a second by stepping through the nearby ones (UnitXP). Only when you have no target, and your target is cleared again. Your teammates' targets always count.", -336, "ArenaScan")
-local cbTgtPets = RowFeature("AutoBG_Tgt_Pets", "Enemy pets",
-	"In an arena, list the enemy pets and minions you have seen under the enemy frames, with their owner and health. Click one to target it.", -362, "ShowPets")
 
 local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, store, rerender, format)
 	return UI.Slider(name, panelTargets, text, x, y, width, minValue, maxValue, step, function(value)
@@ -413,10 +410,6 @@ UpdateTargetsWidgets = function(sz)
 	-- Flag warnings are an Arathi Basin feature (the 15v15 size): not offered
 	-- for Warsong Gulch (10v10), Alterac Valley or the arenas.
 	if sz == 15 then cbTgtFlagWatch:Show() else cbTgtFlagWatch:Hide() end
-	UI.Sync(cbTgtArenaScan, o.ArenaScan ~= false)
-	if sz == 5 then cbTgtArenaScan:Show() else cbTgtArenaScan:Hide() end
-	UI.Sync(cbTgtPets, o.ShowPets ~= false)
-	if sz == 5 then cbTgtPets:Show() else cbTgtPets:Hide() end
 	local width = (o.ButtonWidth and o.ButtonWidth[sz]) or 150
 	local height = (o.ButtonHeight and o.ButtonHeight[sz]) or 20
 	local fontSize = (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10
@@ -512,6 +505,49 @@ Refresh[4] = function()
 end
 
 -- -------------------------------------------------------------------------- --
+-- Arena: what AutoBG adds to the enemy frames in an arena                    --
+-- -------------------------------------------------------------------------- --
+local arenaSwitches = {}
+local function ArenaSwitch(name, text, tip, x, y, key)
+	arenaSwitches[key] = UI.Switch(name, panelArena, text, tip, x, y, function(value)
+		local o = AutoBG_ArenaOptions()
+		if not o then return end
+		o[key] = value
+		if AutoBG_Arena then AutoBG_Arena.Refresh() end
+		if AutoBG_ArenaPets then AutoBG_ArenaPets.Refresh() end
+		if AutoBG_Timers_UpdateVisibility then AutoBG_Timers_UpdateVisibility() end
+	end, 200)
+end
+
+UI.Heading(panelArena, "On each enemy", 28, -98)
+ArenaSwitch("AutoBG_Arena_Mana", "Mana and energy bars",
+	"A thin bar under each enemy: mana, rage or energy. See at a glance when the healer runs low.", 28, -118, "Mana")
+ArenaSwitch("AutoBG_Arena_Buffs", "Key buffs",
+	"Icons for the buffs an enemy gains during the match, such as shields and immunities, with the seconds since they started. A buff drops off after 30 seconds. Buffs already on at the start are not shown.", 28, -144, "Buffs")
+ArenaSwitch("AutoBG_Arena_Abilities", "Abilities used",
+	"Icons for what an enemy just used, with the seconds since. Spells with a cast time and anything used again and again are left out, so mostly the cooldown abilities remain. Grey border = ability, gold = buff.", 28, -170, "Abilities")
+ArenaSwitch("AutoBG_Arena_Pets", "Enemy pets",
+	"List the enemy pets and minions you have seen under the enemy frames, with their owner and health. Click one to target it. Totems are left out.", 28, -196, "Pets")
+
+UI.Heading(panelArena, "Alerts and finding enemies", 264, -98)
+ArenaSwitch("AutoBG_Arena_Drinking", "Drinking alert",
+	"A message and a sound when an enemy starts drinking.", 264, -118, "Drinking")
+ArenaSwitch("AutoBG_Arena_Callouts", "Callouts to your team",
+	"Say in your team's chat when an enemy drops to 25% health, and when one dies. Once per enemy.", 264, -144, "Callouts")
+ArenaSwitch("AutoBG_Arena_Scan", "Find enemies fast",
+	"Look for enemies once a second by stepping through the nearby ones (UnitXP). Only when you have no target, and your target is cleared again. What your teammates target always counts.", 264, -170, "Scan")
+
+UI.Heading(panelArena, "Shadow Sight", 264, -216)
+ArenaSwitch("AutoBG_Arena_ShadowSight", "Shadow Sight timers",
+	"The orbs appear 90 seconds into every round. A pickup shows 15 seconds of sight for whoever took it, and that orb is back 3 minutes later. The timers sit by the other timer bars; move them with Preview frames.", 264, -236, "ShadowSight")
+
+Refresh[5] = function()
+	local o = AutoBG_ArenaOptions()
+	if not o then return end
+	for key, widget in pairs(arenaSwitches) do UI.Sync(widget, o[key] ~= false and (key ~= "Callouts" or o[key])) end
+end
+
+-- -------------------------------------------------------------------------- --
 -- Footer: one preview for every frame, one reset for every position          --
 -- -------------------------------------------------------------------------- --
 -- One switch for every frame preview, shared by this button, closing the
@@ -595,6 +631,8 @@ function AutoBG_OpenOptions(tabKey)
 			requestedTab = 3
 		elseif k == "spy" then
 			requestedTab = 4
+		elseif k == "arena" then
+			requestedTab = 5
 		end
 	end
 	-- Choose the requested page before OnShow refreshes it. Opening Spy must not

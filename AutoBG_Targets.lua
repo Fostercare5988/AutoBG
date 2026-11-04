@@ -376,8 +376,7 @@ function Targets:EnsureOptions()
 	if o.FadeOutOfRange == nil then o.FadeOutOfRange = true end
 	if o.ShowRaidIcons == nil then o.ShowRaidIcons = true end
 	if o.ShowTargetCount == nil then o.ShowTargetCount = true end
-	if o.ArenaScan == nil then o.ArenaScan = true end
-	if o.ShowPets == nil then o.ShowPets = true end
+	o.ArenaScan, o.ShowPets = nil, nil -- moved to AutoBG_Settings.Arena (AutoBG_ArenaOptions)
 
 	-- Migrate old default dimensions once; preserve custom layouts and positions.
 	if not o.ReadabilityVersion then
@@ -970,6 +969,8 @@ local function IsTrinketSpell(spellId)
 	return sName and TRINKET_SPELL_NAMES[sName] and true or false
 end
 
+Targets.IsTrinketSpell = IsTrinketSpell
+
 local function TriggerTrinketCooldown(name)
 	if not name then return end
 	local now = GetTime()
@@ -1458,6 +1459,12 @@ end
 -- locks in combat, so a misclick cannot move the list mid-fight. While any
 -- enemy is in range it also says how many, in the stripe's green, so the
 -- stripe explains itself.
+-- The arena modules (pets, the strip and bars) run only while an arena is on.
+local function NotifyArena(on)
+	if AutoBG_ArenaPets then AutoBG_ArenaPets.SetActive(on) end
+	if AutoBG_Arena then AutoBG_Arena.SetActive(on) end
+end
+
 local function UpdateHeader()
 	local main = Targets.MainFrame
 	if not main then return end
@@ -1608,7 +1615,7 @@ function Targets:BattlefieldScoreUpdate(force)
 		activeBG = false
 		Targets.activeBG = false
 		Targets.activeArena = false
-		if AutoBG_ArenaPets then AutoBG_ArenaPets.SetActive(false) end
+		NotifyArena(false)
 		ForgetSightings()
 		SyncTargetTimers()
 		if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
@@ -1633,7 +1640,7 @@ function Targets:BattlefieldScoreUpdate(force)
 	activeBG = true
 	Targets.activeBG = true
 	Targets.activeArena = bgName == ARENA
-	if AutoBG_ArenaPets then AutoBG_ArenaPets.SetActive(Targets.activeArena) end
+	NotifyArena(Targets.activeArena)
 	SyncTargetTimers()
 	-- Spy rests in battlegrounds and arenas.
 	if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
@@ -1820,7 +1827,8 @@ local sweepSeen = {}
 function SweepArena()
 	for i = 1, 4 do ObserveUnit("party" .. i .. "target") end
 	ObserveUnit("targettarget")
-	if not UnitXP or UnitExists("target") or (AutoBG_Settings.Targets and AutoBG_Settings.Targets.ArenaScan == false) then return end
+	local arena = AutoBG_ArenaOptions()
+	if not UnitXP or UnitExists("target") or (arena and arena.Scan == false) then return end
 	table.wipe(sweepSeen)
 	for _ = 1, SWEEP_STEPS do
 		local ok, found = pcall(UnitXP, "target", "nextEnemyInCycle")
@@ -1904,6 +1912,7 @@ function Targets:ApplyRowFeatures()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	if o and o.ShowCastBars == false then ClearAllCasts() end
 	if AutoBG_ArenaPets then AutoBG_ArenaPets.Refresh() end
+	if AutoBG_Arena then AutoBG_Arena.Refresh() end
 	if Targets.isConfig then
 		Targets:EnableConfigMode(currentSize)
 	else

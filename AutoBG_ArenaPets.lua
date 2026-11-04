@@ -32,8 +32,8 @@ local function ReadHealth(unit)
 end
 
 local function Enabled()
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	return not (o and o.ShowPets == false)
+	local o = AutoBG_ArenaOptions()
+	return not (o and o.Pets == false)
 end
 
 local function CreateRows()
