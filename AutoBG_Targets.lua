@@ -376,6 +376,7 @@ function Targets:EnsureOptions()
 	if o.FadeOutOfRange == nil then o.FadeOutOfRange = true end
 	if o.ShowRaidIcons == nil then o.ShowRaidIcons = true end
 	if o.ShowTargetCount == nil then o.ShowTargetCount = true end
+	if o.ArenaScan == nil then o.ArenaScan = true end
 
 	-- Migrate old default dimensions once; preserve custom layouts and positions.
 	if not o.ReadabilityVersion then
@@ -899,11 +900,10 @@ local function UpdateObservedTimers()
 end
 
 local scoreboardTicker, observedTicker
-local SweepArena -- defined after ObserveUnit
+local SweepArena, arenaSweepTicker -- defined after ObserveUnit
 local function AutoScoreboardTicker()
 	if activeBG and not Targets.isConfig then
 		RequestBattlefieldScoreData()
-		if Targets.activeArena then SweepArena() end
 	end
 end
 
@@ -945,6 +945,13 @@ local function SyncTargetTimers()
 	elseif scoreboardTicker then
 		scoreboardTicker:Cancel()
 		scoreboardTicker = nil
+	end
+	-- An arena sends no enemy list: look for enemies once a second.
+	if activeBG and Targets.activeArena and not Targets.isConfig then
+		if not arenaSweepTicker then arenaSweepTicker = C_Timer.NewTicker(1.0, function() SweepArena() end) end
+	elseif arenaSweepTicker then
+		arenaSweepTicker:Cancel()
+		arenaSweepTicker = nil
 	end
 	if activeBG or Targets.isConfig then
 		if not observedTicker then observedTicker = C_Timer.NewTicker(0.5, UpdateObservedTimers) end
@@ -1797,10 +1804,28 @@ local function ObserveUnit(unit, scanAuras)
 	SetObservedHealth(name, curHp, maxHp, dead)
 end
 
--- An arena sends no enemy list, so the enemies your team is looking at count as seen.
+-- An arena sends no enemy list. Enemies are found by what your team targets and,
+-- with UnitXP, by stepping through the nearby enemies (UnitXP("target",
+-- "nextEnemyInCycle") selects the next one and returns true). That moves your
+-- target, so it runs only while you have none, and clears it again at the end.
+local SWEEP_STEPS = 10
+local sweepSeen = {}
 function SweepArena()
 	for i = 1, 4 do ObserveUnit("party" .. i .. "target") end
 	ObserveUnit("targettarget")
+	if not UnitXP or UnitExists("target") or (AutoBG_Settings.Targets and AutoBG_Settings.Targets.ArenaScan == false) then return end
+	table.wipe(sweepSeen)
+	for _ = 1, SWEEP_STEPS do
+		local ok, found = pcall(UnitXP, "target", "nextEnemyInCycle")
+		if not ok or not found or not UnitExists("target") then break end
+		local guid = UnitGUID("target")
+		if guid then
+			if sweepSeen[guid] then break end
+			sweepSeen[guid] = true
+		end
+		ObserveUnit("target")
+	end
+	if UnitExists("target") then ClearTarget() end
 end
 
 function Targets:EnableConfigMode(size)

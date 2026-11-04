@@ -95,6 +95,10 @@ list out of combat; in combat it stays locked, so a stray click cannot move it.
 - **Raid icons:** skull, cross and the other raid icons your group sets.
 - **Who's on them:** an orange number beside the health shows how many of your
   group, you included, target that enemy.
+- **Find enemies fast:** arenas only. An arena never sends the enemy team, so
+  AutoBG looks for them once a second: the enemies your team targets, and, with
+  UnitXP, the nearby ones in turn. The sweep runs only while you have no target and
+  clears it again. Turn it off here if the target flicker bothers you.
 - **Flag warnings:** in Arathi Basin only, an enemy you can see
   starting an Opening gets a warning ("Opening Blacksmith"), its own sound and
   a red OPENING on their row, with or without enemy frames. An opening started
