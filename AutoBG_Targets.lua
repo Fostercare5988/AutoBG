@@ -1625,9 +1625,9 @@ function Targets:BattlefieldScoreUpdate(force)
 	Targets.activeBG = true
 	Targets.activeArena = bgName == ARENA
 	SyncTargetTimers()
-	-- Spy rests in battlegrounds, not in arenas.
+	-- Spy rests in battlegrounds and arenas.
 	if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
-		AutoBG_Spy:OnBattlegroundChanged(not Targets.activeArena)
+		AutoBG_Spy:OnBattlegroundChanged(true)
 	end
 
 	local size = GetBracketSize(bgName)
