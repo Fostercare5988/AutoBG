@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (235 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (262 tests).
 
 | File | Job |
 | --- | --- |
@@ -64,7 +64,9 @@ Things to know:
   buff named "Shadow Sight" (name match, no spell ID known). Callouts say once per enemy.
 - Enemy pets (arenas only, setting `Arena.Pets`): found by GUID from health, cast and death events,
   nameplates, target and mouseover; a pet is `UnitIsMinion` and attackable, not a totem; its owner
-  is `UnitOwnerGUID` (ClassicAPI). One entry per owner, the newest pet. UNVERIFIED in game.
+  is `UnitOwnerGUID` (ClassicAPI). One entry per owner, the newest pet; a renamed pet or a late-resolving
+  owner is picked up on the 1 s pass. The owner is handed to the enemy frames (`Targets.ObserveGUID`), so a
+  hunter seen only through his pet still gets a row. UNVERIFIED in game.
 - A queued arena shows in `GetBattlefieldStatus` under the arena's name ("Blood Ring",
   confirmed 2026-11-04), not "Arena": `AutoBG_QueueMap(map)` turns it into ARENA; use it
   on every status map (rejoin check, cancel, already-queued, queue bars).
