@@ -377,6 +377,7 @@ function Targets:EnsureOptions()
 	if o.ShowRaidIcons == nil then o.ShowRaidIcons = true end
 	if o.ShowTargetCount == nil then o.ShowTargetCount = true end
 	if o.ArenaScan == nil then o.ArenaScan = true end
+	if o.ShowPets == nil then o.ShowPets = true end
 
 	-- Migrate old default dimensions once; preserve custom layouts and positions.
 	if not o.ReadabilityVersion then
@@ -1607,6 +1608,7 @@ function Targets:BattlefieldScoreUpdate(force)
 		activeBG = false
 		Targets.activeBG = false
 		Targets.activeArena = false
+		if AutoBG_ArenaPets then AutoBG_ArenaPets.SetActive(false) end
 		ForgetSightings()
 		SyncTargetTimers()
 		if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
@@ -1631,6 +1633,7 @@ function Targets:BattlefieldScoreUpdate(force)
 	activeBG = true
 	Targets.activeBG = true
 	Targets.activeArena = bgName == ARENA
+	if AutoBG_ArenaPets then AutoBG_ArenaPets.SetActive(Targets.activeArena) end
 	SyncTargetTimers()
 	-- Spy rests in battlegrounds and arenas.
 	if AutoBG_Spy and AutoBG_Spy.OnBattlegroundChanged then
@@ -1896,6 +1899,7 @@ end
 function Targets:ApplyRowFeatures()
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	if o and o.ShowCastBars == false then ClearAllCasts() end
+	if AutoBG_ArenaPets then AutoBG_ArenaPets.Refresh() end
 	if Targets.isConfig then
 		Targets:EnableConfigMode(currentSize)
 	else

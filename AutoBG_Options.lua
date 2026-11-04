@@ -344,6 +344,8 @@ local cbTgtFlagWatch = RowFeature("AutoBG_Tgt_FlagWatch", "Flag warnings",
 	"In Arathi Basin, warn when an enemy starts opening a flag, or comes out of stealth at one. Flag spots are learned as flags are assaulted. Ctrl-click the warning to announce it.", -336, "FlagWatch")
 local cbTgtArenaScan = RowFeature("AutoBG_Tgt_ArenaScan", "Find enemies fast",
 	"In an arena, look for enemies once a second by stepping through the nearby ones (UnitXP). Only when you have no target, and your target is cleared again. Your teammates' targets always count.", -336, "ArenaScan")
+local cbTgtPets = RowFeature("AutoBG_Tgt_Pets", "Enemy pets",
+	"In an arena, list the enemy pets and minions you have seen under the enemy frames, with their owner and health. Click one to target it.", -362, "ShowPets")
 
 local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, store, rerender, format)
 	return UI.Slider(name, panelTargets, text, x, y, width, minValue, maxValue, step, function(value)
@@ -413,6 +415,8 @@ UpdateTargetsWidgets = function(sz)
 	if sz == 15 then cbTgtFlagWatch:Show() else cbTgtFlagWatch:Hide() end
 	UI.Sync(cbTgtArenaScan, o.ArenaScan ~= false)
 	if sz == 5 then cbTgtArenaScan:Show() else cbTgtArenaScan:Hide() end
+	UI.Sync(cbTgtPets, o.ShowPets ~= false)
+	if sz == 5 then cbTgtPets:Show() else cbTgtPets:Hide() end
 	local width = (o.ButtonWidth and o.ButtonWidth[sz]) or 150
 	local height = (o.ButtonHeight and o.ButtonHeight[sz]) or 20
 	local fontSize = (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10

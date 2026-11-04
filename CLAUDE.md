@@ -11,6 +11,7 @@ Regression tests: `regressions/AutoBG` in VanillaForge (235 tests).
 | `AutoBG_Timers.lua` | Base and node countdowns, game start, spirit healer waves, queue times, Arathi Basin projection |
 | `AutoBG_FC.lua` | Warsong Gulch flag carrier frames |
 | `AutoBG_Targets.lua` | Enemy frames: health, cast bars, range fading, raid icons, trinkets, stealth |
+| `AutoBG_ArenaPets.lua` | Arenas only: enemy pets and minions under the enemy frames (owner, health, click to target); Targets tells it when an arena starts and ends (`SetActive`) |
 | `AutoBG_AlertCard.lua` | The popup card kit (`ns.CreateAlertCard`); the stealth and flag warnings each own one |
 | `AutoBG_Spy.lua` | Enemy list and stealth alerts outside battlegrounds; off in raids by default |
 | `AutoBG_FlagAlert.lua` | The flag warning card, Ctrl+click announce; learns the Opening spell (`AutoBG_Settings.OpeningSpell`) |
@@ -52,6 +53,9 @@ Things to know:
   roster name that is not attackable (`VerifyEnemy`) and adds a hostile player it
   lacks (`LearnOpponent`). UNVERIFIED: whether the scoreboard's faction column is
   the team or the real faction on a mixed team.
+- Enemy pets (arenas only, setting `ShowPets`): found by GUID from health, cast and death events,
+  nameplates, target and mouseover; a pet is `UnitIsMinion` and attackable, not a totem; its owner
+  is `UnitOwnerGUID` (ClassicAPI). One entry per owner, the newest pet. UNVERIFIED in game.
 - A queued arena shows in `GetBattlefieldStatus` under the arena's name ("Blood Ring",
   confirmed 2026-11-04), not "Arena": `AutoBG_QueueMap(map)` turns it into ARENA; use it
   on every status map (rejoin check, cancel, already-queued, queue bars).
