@@ -1416,7 +1416,18 @@ local function DetectBattleground()
 			return true, mapName
 		end
 	end
+	-- An arena may not show up as an active queue status (UNVERIFIED), so the
+	-- zone itself counts: Lordaeron Arena, Sunstrider Court, Blood Ring.
+	if AutoBG_IsArenaZone and AutoBG_IsArenaZone() then return true, ARENA end
 	return false, nil
+end
+
+-- The zone decides: standing in an arena is an arena, whatever map name the
+-- queue status carries.
+local function DetectMatch()
+	local inBG, bgName = DetectBattleground()
+	if inBG and bgName ~= ARENA and AutoBG_IsArenaZone and AutoBG_IsArenaZone() then bgName = ARENA end
+	return inBG, bgName
 end
 
 -- In a match the header counts living enemies. It drags out of combat and
@@ -1567,7 +1578,7 @@ Targets.RenderRoster = RenderRoster
 function Targets:BattlefieldScoreUpdate(force)
 	if Targets.isConfig then return end
 
-	local inBG, bgName = DetectBattleground()
+	local inBG, bgName = DetectMatch()
 	if not inBG then
 		local wasActive = activeBG
 		activeBG = false
