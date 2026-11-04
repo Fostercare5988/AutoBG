@@ -2,7 +2,7 @@
 
 Battleground helper: queueing and auto-enter, objective timers, flag carriers,
 enemy frames and the Spy enemy list. Player guide: `docs/USER_GUIDE.md`.
-Regression tests: `regressions/AutoBG` in VanillaForge (262 tests).
+Regression tests: `regressions/AutoBG` in VanillaForge (261 tests).
 
 | File | Job |
 | --- | --- |
@@ -11,7 +11,7 @@ Regression tests: `regressions/AutoBG` in VanillaForge (262 tests).
 | `AutoBG_Timers.lua` | Base and node countdowns, game start, spirit healer waves, queue times, Arathi Basin projection |
 | `AutoBG_FC.lua` | Warsong Gulch flag carrier frames |
 | `AutoBG_Targets.lua` | Enemy frames: health, cast bars, range fading, raid icons, trinkets, stealth |
-| `AutoBG_Arena.lua` | Arenas only: power bar and icon strip (key buffs, abilities used) on each enemy row, drinking alert, callouts to the team; `AutoBG_ArenaOptions()` (AutoBG.lua) holds the switches (`AutoBG_Settings.Arena`, the Arena tab) |
+| `AutoBG_Arena.lua` | Arenas only: power bar and icon strip (key abilities only) on each enemy row, drinking alert, callouts to the team; `AutoBG_ArenaOptions()` (AutoBG.lua) holds the switches (`AutoBG_Settings.Arena`, the Arena tab) |
 | `AutoBG_ArenaPets.lua` | Arenas only: enemy pets and minions under the enemy frames (owner, health, click to target); Targets tells it when an arena starts and ends (`SetActive`) |
 | `AutoBG_AlertCard.lua` | The popup card kit (`ns.CreateAlertCard`); the stealth and flag warnings each own one |
 | `AutoBG_Spy.lua` | Enemy list and stealth alerts outside battlegrounds; off in raids by default |
@@ -54,10 +54,13 @@ Things to know:
   roster name that is not attackable (`VerifyEnemy`) and adds a hostile player it
   lacks (`LearnOpponent`). UNVERIFIED: whether the scoreboard's faction column is
   the team or the real faction on a mixed team.
-- Arena extras (all UNVERIFIED in game): the strip shows buffs gained after a unit was first
-  seen (NamPower BUFF_ADDED_OTHER, state 0; a buff shows 30 s at most, since other units'
-  aura durations are not known) and abilities from UNIT_CASTEVENT (a spell seen with a cast
-  time START is a filler; one used 3 times within 20 s is spam; both hidden). Power from
+- Arena extras (all UNVERIFIED in game): the strip shows only KEY_ORDER in
+  AutoBG_Arena.lua, matched by spell name (Divine Shield, Blessing of Protection, Blessing of
+  Freedom, Hammer of Justice; names unverified on OctoWoW, no IDs). Gold: the buff is on the unit
+  (NamPower BUFF_ADDED_OTHER, state 0, after the unit was first seen); a blessing shows on its
+  receiver. Grey: a use seen in UNIT_CASTEVENT CAST, counting up 300 s (real cooldowns unknown).
+  Buff lengths are measured (longest add-to-remove seen, saved in `Arena.Durations`) and then
+  count down. The old Buffs switch is merged into Abilities and cleared on load. Power from
   UnitMana/UnitManaMax/UnitPowerType by GUID. Shadow Sight (OctoWoW changelog: two orbs 90 s
   into every round, 15 s of seeing the stealthed, an orb back 3 min after use) is a timer
   group in AutoBG_Timers.lua, started by the line "The Arena battle has begun!" and by the

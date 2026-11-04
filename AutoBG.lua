@@ -40,7 +40,7 @@ local ARENA_ZONES = { ["lordaeron arena"] = true, ["sunstrider court"] = true, [
 -- The arena settings (their own tab): every arena extra has a switch. Callouts
 -- speak in your team's chat, so they start off. The two arena switches that once
 -- lived with the enemy frames move here.
-local ARENA_SWITCHES = { "Scan", "Pets", "Mana", "Abilities", "Buffs", "Drinking", "ShadowSight" }
+local ARENA_SWITCHES = { "Scan", "Pets", "Mana", "Abilities", "Drinking", "ShadowSight" }
 function AutoBG_ArenaOptions()
     local s = AutoBG_Settings
     if not s then return nil end
@@ -54,6 +54,7 @@ function AutoBG_ArenaOptions()
         if o[ARENA_SWITCHES[i]] == nil then o[ARENA_SWITCHES[i]] = true end
     end
     if o.Callouts == nil then o.Callouts = false end
+    o.Buffs = nil -- merged into Abilities (the key abilities)
     return o
 end
 
