@@ -1621,7 +1621,10 @@ function Targets:BattlefieldScoreUpdate(force)
 		Targets:SetupButtonLayout(size)
 	end
 
-	local numScores = GetNumBattlefieldScores()
+	-- Cross-faction: a team mixes Alliance and Horde, so in an arena the
+	-- scoreboard's faction says nothing about who is an opponent. Only players
+	-- you can attack (LearnArenaOpponent) are listed there.
+	local numScores = Targets.activeArena and 0 or GetNumBattlefieldScores()
 	for i = 1, numScores do
 		local name, _, _, _, _, faction = GetBattlefieldScore(i)
 		if name and StripRealm(name) == playerName then
