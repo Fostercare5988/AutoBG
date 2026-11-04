@@ -95,13 +95,6 @@ list out of combat; in combat it stays locked, so a stray click cannot move it.
 - **Raid icons:** skull, cross and the other raid icons your group sets.
 - **Who's on them:** an orange number beside the health shows how many of your
   group, you included, target that enemy.
-- **Enemy pets:** arenas only. Enemy pets and minions you have seen are listed under
-  the enemy frames with their owner and health; click one to target it. Pets that go
-  out of sight turn dim. Totems are not listed.
-- **Find enemies fast:** arenas only. An arena never sends the enemy team, so
-  AutoBG looks for them once a second: the enemies your team targets, and, with
-  UnitXP, the nearby ones in turn. The sweep runs only while you have no target and
-  clears it again. Turn it off here if the target flicker bothers you.
 - **Flag warnings:** in Arathi Basin only, an enemy you can see
   starting an Opening gets a warning ("Opening Blacksmith"), its own sound and
   a red OPENING on their row, with or without enemy frames. An opening started
@@ -122,6 +115,30 @@ Different enemies share an eight-second warning limit; the same enemy has a
 60-second stealth quiet period while retained in recent-contact history.
 Enemy-row indicators still update while warnings
 are suppressed.
+
+## Arena
+
+`/abg arena` opens the Arena tab. An arena never sends the enemy team, so everything
+here is built from what the game shows of them. Every part has a switch.
+
+- **Mana and energy bars:** a thin bar under each enemy row: mana, rage or energy.
+- **Key buffs:** gold-bordered icons for buffs an enemy gains during the match (shields,
+  immunities), with the seconds since. A buff drops off after 30 seconds, and buffs
+  that were already on at the start are not shown.
+- **Abilities used:** grey-bordered icons for what an enemy just used, with the seconds
+  since. Spells with a cast time and anything used again and again are left out.
+  The strip sits on the right of the row, past the cast bar if that is on the right.
+- **Enemy pets:** pets and minions you have seen, under the enemy frames, with their
+  owner and health. Click one to target it. Out of sight turns dim. Totems are left out.
+- **Drinking alert:** a message and a sound when an enemy starts drinking.
+- **Callouts to your team:** says in raid or party chat when an enemy drops to 25% health
+  and when one dies, once each. Off until you turn it on.
+- **Find enemies fast:** looks for enemies once a second, from what your team targets
+  and, with UnitXP, by stepping through the nearby ones. It runs only while you have no
+  target and clears it again; turn it off if the target flicker bothers you.
+- **Shadow Sight timers:** the orbs appear 90 seconds into every round. A pickup shows
+  15 seconds of sight for whoever took it, and that orb is back 3 minutes later. The bars
+  sit with the other timer bars and move with Preview frames.
 
 ## Open-world Spy
 

@@ -6,7 +6,7 @@ if type(CLASSIC_API_VERSION) ~= "number" or not SUPERWOW_VERSION then
     return
 end
 
-local timers = { AB = {}, AV = {}, WSG = {}, Global = {} }
+local timers = { AB = {}, AV = {}, WSG = {}, Global = {}, Shadow = {} }
 local spiritHealerSyncTime = 0
 local spiritHealerSynced = false
 -- Raid members seen as ghosts. A ghost comes back only through a spirit
@@ -443,6 +443,10 @@ local StartTimerFrame = CreateBarTimerFrame("AutoBG_StartTimerFrame", nil,      
 local NodeBarFrame    = CreateBarTimerFrame("AutoBG_NodeFrame",       "Arathi Basin",    220, -100, 5)
 local AVNodeFrame     = CreateBarTimerFrame("AutoBG_AVNodeFrame",     "Alterac Valley",  220, -150, 10)
 local WSGFlagFrame    = CreateBarTimerFrame("AutoBG_WSGFlagFrame",    "Warsong Gulch",  -110, -150, 2)
+-- Arena: the Shadow Sight orbs (OctoWoW changelog: two orbs 90 s into every round, 15 s of
+-- seeing the stealthed, an orb back 3 minutes after it was used).
+local SHADOW_ICON = "Interface\\Icons\\Spell_Shadow_DetectInvisibility"
+local ShadowFrame = CreateBarTimerFrame("AutoBG_ShadowSightFrame", "Shadow Sight", 110, -150, 4, SHADOW_ICON)
 StartTimerFrame.announceStyle, WSGFlagFrame.announceStyle = "start", "flag"
 NodeBarFrame.announceStyle, AVNodeFrame.announceStyle = "node", "node"
 
@@ -557,6 +561,7 @@ function AutoBG_LoadTimerPositions()
     AutoBG_LoadPosition(NodeBarFrame, "AutoBG_NodeFrame",    "TOP",  220, -100)
     AutoBG_LoadPosition(AVNodeFrame,  "AutoBG_AVNodeFrame",  "TOP",  220, -150)
     AutoBG_LoadPosition(WSGFlagFrame, "AutoBG_WSGFlagFrame", "TOP", -110, -150)
+    AutoBG_LoadPosition(ShadowFrame, "AutoBG_ShadowSightFrame", "TOP", 110, -150)
     AutoBG_LoadPosition(StartTimerFrame, "AutoBG_StartTimerFrame", "TOP", 0, -60)
 
     -- The projection sits beside the score display unless it was moved.
@@ -584,6 +589,7 @@ function AutoBG_ResetTimerPositions()
         AutoBG_Settings.Positions["AutoBG_NodeFrame"] = nil
         AutoBG_Settings.Positions["AutoBG_AVNodeFrame"] = nil
         AutoBG_Settings.Positions["AutoBG_WSGFlagFrame"] = nil
+        AutoBG_Settings.Positions["AutoBG_ShadowSightFrame"] = nil
         AutoBG_Settings.Positions["AutoBG_StartTimerFrame"] = nil
         AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] = nil
     end
@@ -594,6 +600,7 @@ function AutoBG_ResetTimerPositions()
     AVNodeFrame:ClearAllPoints();  AVNodeFrame:SetPoint("TOP",  UIParent, "TOP",  220, -150) -- octowow-ignore: AP-31
     WSGFlagFrame:ClearAllPoints(); WSGFlagFrame:SetPoint("TOP", UIParent, "TOP", -110, -150) -- octowow-ignore: AP-31
     StartTimerFrame:ClearAllPoints(); StartTimerFrame:SetPoint("TOP", UIParent, "TOP", 0, -60) -- octowow-ignore: AP-31
+    ShadowFrame:ClearAllPoints(); ShadowFrame:SetPoint("TOP", UIParent, "TOP", 110, -150) -- octowow-ignore: AP-31
 
     ABProjectionFrame:ClearAllPoints()
     if AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
@@ -621,6 +628,11 @@ local AV_TEST_DATA = {
 local WSG_TEST_DATA = {
     { name = "Alliance Flag", remaining = 11, faction = "Alliance" },
     { name = "Horde Flag",    remaining = 17, faction = "Horde"    },
+}
+local SHADOW_TEST_DATA = {
+    { name = "Orbs appear",         remaining = 62  },
+    { name = "Shadow Sight: Grom",  remaining = 11  },
+    { name = "Orb back",            remaining = 140 },
 }
 local START_TEST_DATA = {
     { name = "Game Starts",  remaining = 45, faction = nil },
@@ -1068,6 +1080,10 @@ local function UpdateAllTimers()
     -- 3. WSG flag returns (23 s), colored by flag
     RenderCountdownBars(WSGFlagFrame, timers.WSG, AutoBG_Settings.WSGTimers, isWSG, 23, WSG_TEST_DATA, "faction")
 
+    -- 3b. Arena: Shadow Sight orbs, pickups and returns
+    local arenaOptions = AutoBG_ArenaOptions and AutoBG_ArenaOptions()
+    RenderCountdownBars(ShadowFrame, timers.Shadow, arenaOptions and arenaOptions.ShadowSight, isArena, 180, SHADOW_TEST_DATA, "time")
+
     -- 4. Respawn: the spirit healer's 30-second wave
     local respawnRow = RespawnFrame.rows[1]
     local battleground = inPVP and not isArena
@@ -1141,7 +1157,8 @@ SyncUpdateTicker = function()
          (s.StartTimer ~= false and next(timers.Global)) or
          isAB or -- the projection is always on
          (isAV and s.AVTimers and next(timers.AV)) or
-         (isWSG and s.WSGTimers and next(timers.WSG)))))
+         (isWSG and s.WSGTimers and next(timers.WSG)) or
+         (isArena and next(timers.Shadow)))))
     if needed and not updateTicker then
         local ticker
         ticker = C_Timer.NewTicker(1, function()
@@ -1159,6 +1176,19 @@ end
 -- The settings window's frame preview shows sample rows in every group.
 function AutoBG_Timers_SetPreview(on)
     preview = on and true or false
+end
+
+-- Someone picked up a Shadow Sight orb (AutoBG_Arena sees the buff): 15 seconds of
+-- sight for them, and that orb is back 3 minutes later (OctoWoW changelog).
+function AutoBG_Timers_ShadowSight(who, isEnemy)
+    local now, shadow = GetTime(), timers.Shadow
+    shadow["Orbs appear"] = nil
+    shadow["Shadow Sight: " .. who .. (isEnemy and " (enemy)" or "")] = { expire = now + 15, max = 15 }
+    local key, n = "Orb back", 1
+    while shadow[key] do n = n + 1; key = "Orb back " .. n end
+    shadow[key] = { expire = now + 180, max = 180 }
+    UpdateAllTimers()
+    SyncUpdateTicker()
 end
 
 function AutoBG_Timers_UpdateVisibility()
@@ -1240,6 +1270,14 @@ local function ParseCombatMessage(msg, ev)
     if not AutoBG_Settings or not msg or not inPVP then return end
     local lower = string.lower(msg)
     local faction = GetFactionFromMessage(msg, ev)
+
+    -- A round begins: the Shadow Sight orbs appear 90 seconds in (OctoWoW changelog).
+    if isArena and string.find(lower, "arena battle has begun", 1, true) then
+        table.wipe(timers.Shadow)
+        timers.Shadow["Orbs appear"] = { expire = GetTime() + 90, max = 90 }
+        UpdateAllTimers()
+        SyncUpdateTicker()
+    end
 
     -- The flag watch learns from the same messages where flags stand and who holds them.
     if AutoBG_FlagWatch and isAB then
@@ -1354,6 +1392,10 @@ EventFrame:SetScript("OnEvent", function()
         if not isAV then
             table.wipe(timers.AV)
             if AVNodeFrame and AVNodeFrame:IsShown() then AVNodeFrame:Hide() end
+        end
+        if not isArena then
+            table.wipe(timers.Shadow)
+            if ShadowFrame:IsShown() then ShadowFrame:Hide() end
         end
         if not isWSG then
             table.wipe(timers.WSG)

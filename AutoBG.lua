@@ -37,6 +37,26 @@ local currentArena = false
 -- player (2026-11-03). UNVERIFIED: the instance type an arena reports; test
 -- in the arena with /run print(GetRealZoneText(), IsInInstance()).
 local ARENA_ZONES = { ["lordaeron arena"] = true, ["sunstrider court"] = true, ["blood ring"] = true }
+-- The arena settings (their own tab): every arena extra has a switch. Callouts
+-- speak in your team's chat, so they start off. The two arena switches that once
+-- lived with the enemy frames move here.
+local ARENA_SWITCHES = { "Scan", "Pets", "Mana", "Abilities", "Buffs", "Drinking", "ShadowSight" }
+function AutoBG_ArenaOptions()
+    local s = AutoBG_Settings
+    if not s then return nil end
+    if type(s.Arena) ~= "table" then s.Arena = {} end
+    local o, t = s.Arena, s.Targets
+    if t then
+        if t.ArenaScan ~= nil then o.Scan = t.ArenaScan; t.ArenaScan = nil end
+        if t.ShowPets ~= nil then o.Pets = t.ShowPets; t.ShowPets = nil end
+    end
+    for i = 1, #ARENA_SWITCHES do
+        if o[ARENA_SWITCHES[i]] == nil then o[ARENA_SWITCHES[i]] = true end
+    end
+    if o.Callouts == nil then o.Callouts = false end
+    return o
+end
+
 -- The queue status names an arena queue by the arena ("Blood Ring", confirmed in
 -- game 2026-11-04), not "Arena"; this gives ARENA for it, any other map unchanged.
 function AutoBG_QueueMap(map)
@@ -1160,12 +1180,14 @@ SlashCmdList["AUTOBG"] = function(msg)
         if AutoBG_TargetCarrier then AutoBG_TargetCarrier("enemy") end
     elseif cmd == "ffc" then
         if AutoBG_TargetCarrier then AutoBG_TargetCarrier("friendly") end
+    elseif cmd == "arena" then
+        AutoBG_OpenOptions("arena")
     elseif cmd == "focus" then
         if AutoBG_FocusCarrier then AutoBG_FocusCarrier("enemy") end
     elseif cmd == "reset" then
         AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|arena|all], /abg cancel, /abg targets, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|arena|all], /abg cancel, /abg targets, /abg arena, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
     else
         AutoBG_OpenOptions("general")
     end

@@ -15,6 +15,7 @@ AutoBG_Timers.lua
 AutoBG_FC.lua
 AutoBG_Targets.lua
 AutoBG_ArenaPets.lua
+AutoBG_Arena.lua
 AutoBG_AlertCard.lua
 AutoBG_Spy.lua
 AutoBG_FlagAlert.lua

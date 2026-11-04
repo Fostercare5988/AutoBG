@@ -11,6 +11,7 @@ Regression tests: `regressions/AutoBG` in VanillaForge (235 tests).
 | `AutoBG_Timers.lua` | Base and node countdowns, game start, spirit healer waves, queue times, Arathi Basin projection |
 | `AutoBG_FC.lua` | Warsong Gulch flag carrier frames |
 | `AutoBG_Targets.lua` | Enemy frames: health, cast bars, range fading, raid icons, trinkets, stealth |
+| `AutoBG_Arena.lua` | Arenas only: power bar and icon strip (key buffs, abilities used) on each enemy row, drinking alert, callouts to the team; `AutoBG_ArenaOptions()` (AutoBG.lua) holds the switches (`AutoBG_Settings.Arena`, the Arena tab) |
 | `AutoBG_ArenaPets.lua` | Arenas only: enemy pets and minions under the enemy frames (owner, health, click to target); Targets tells it when an arena starts and ends (`SetActive`) |
 | `AutoBG_AlertCard.lua` | The popup card kit (`ns.CreateAlertCard`); the stealth and flag warnings each own one |
 | `AutoBG_Spy.lua` | Enemy list and stealth alerts outside battlegrounds; off in raids by default |
@@ -53,7 +54,15 @@ Things to know:
   roster name that is not attackable (`VerifyEnemy`) and adds a hostile player it
   lacks (`LearnOpponent`). UNVERIFIED: whether the scoreboard's faction column is
   the team or the real faction on a mixed team.
-- Enemy pets (arenas only, setting `ShowPets`): found by GUID from health, cast and death events,
+- Arena extras (all UNVERIFIED in game): the strip shows buffs gained after a unit was first
+  seen (NamPower BUFF_ADDED_OTHER, state 0; a buff shows 30 s at most, since other units'
+  aura durations are not known) and abilities from UNIT_CASTEVENT (a spell seen with a cast
+  time START is a filler; one used 3 times within 20 s is spam; both hidden). Power from
+  UnitMana/UnitManaMax/UnitPowerType by GUID. Shadow Sight (OctoWoW changelog: two orbs 90 s
+  into every round, 15 s of seeing the stealthed, an orb back 3 min after use) is a timer
+  group in AutoBG_Timers.lua, started by the line "The Arena battle has begun!" and by the
+  buff named "Shadow Sight" (name match, no spell ID known). Callouts say once per enemy.
+- Enemy pets (arenas only, setting `Arena.Pets`): found by GUID from health, cast and death events,
   nameplates, target and mouseover; a pet is `UnitIsMinion` and attackable, not a totem; its owner
   is `UnitOwnerGUID` (ClassicAPI). One entry per owner, the newest pet. UNVERIFIED in game.
 - A queued arena shows in `GetBattlefieldStatus` under the arena's name ("Blood Ring",
