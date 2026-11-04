@@ -24,7 +24,7 @@ local SPAM_USES, SPAM_WINDOW = 3, 20 -- used 3 times within 20 s of each other: 
 local SETTLE = 1.5            -- buffs announced this soon after first sight are the ones already on
 local DRINK_QUIET = 10
 local LOW_HEALTH, REARM_HEALTH = 25, 50
-local ICON_MAX = 18
+local ICON_DEFAULT = 18
 local FONT = "Fonts\\ARIALN.TTF"
 local BUFF_COLOR, ABILITY_COLOR = { 0.95, 0.78, 0.2 }, { 0.45, 0.45, 0.45 }
 -- UnitPowerType: 0 mana, 1 rage, 2 focus, 3 energy.
@@ -37,7 +37,7 @@ local nameCache, iconCache = {}, {}
 local drinkAlerted, lowSent, deadSent = {}, {}, {}
 local decorated = false
 local ticker
-local anchorKey = {}
+local anchorKey, iconSize = {}, {}
 
 local function Options() return AutoBG_ArenaOptions() or {} end
 
@@ -91,14 +91,14 @@ local function Decorate()
 			btn.PowerBar:Hide()
 			local strip = CreateFrame("Frame", nil, btn)
 			btn.Strip = strip
-			strip:SetHeight(ICON_MAX)
-			strip:SetWidth(SLOTS * (ICON_MAX + 1))
+			strip:SetHeight(ICON_DEFAULT)
+			strip:SetWidth(SLOTS * (ICON_DEFAULT + 1))
 			strip.slots = {}
 			for s = 1, SLOTS do
 				local slot = CreateFrame("Frame", nil, strip)
 				strip.slots[s] = slot
-				slot:SetWidth(ICON_MAX)
-				slot:SetHeight(ICON_MAX)
+				slot:SetWidth(ICON_DEFAULT)
+				slot:SetHeight(ICON_DEFAULT)
 				if s == 1 then slot:SetPoint("LEFT", strip, "LEFT", 0, 0)
 				else slot:SetPoint("LEFT", strip.slots[s - 1], "RIGHT", 1, 0) end
 				slot.Border = slot:CreateTexture(nil, "BACKGROUND")
@@ -117,6 +117,23 @@ local function Decorate()
 	end
 end
 
+-- Icons are as tall as the row (less its edge), so they grow with the row's size setting.
+local function SizeStrip(i, btn)
+	local size = math.max(14, math.floor(btn:GetHeight() or 20) - 2)
+	if iconSize[i] == size then return end
+	iconSize[i] = size
+	local strip = btn.Strip
+	strip:SetHeight(size)
+	strip:SetWidth(SLOTS * (size + 1))
+	local font = math.max(9, math.floor(size * 0.5))
+	for s = 1, SLOTS do
+		local slot = strip.slots[s]
+		slot:SetWidth(size)
+		slot:SetHeight(size)
+		slot.Age:SetFont(FONT, font, "OUTLINE")
+	end
+end
+
 -- The strip sits on the right of the row, past the cast bar or trinket if they are
 -- on that side; repositioned only when the layout changes.
 local function PlaceStrip(i, btn)
@@ -124,6 +141,7 @@ local function PlaceStrip(i, btn)
 	local castRight = o and o.CastPos == "RIGHT"
 	local trinketRight = o and o.TrinketPos == "RIGHT" and o.ShowTrinket and o.ShowTrinket[5]
 	local anchor = (castRight and o.ShowCastBars ~= false and btn.Cast) or (trinketRight and btn.Trinket) or btn
+	SizeStrip(i, btn)
 	if anchorKey[i] == anchor then return end
 	anchorKey[i] = anchor
 	btn.Strip:ClearAllPoints()
@@ -331,7 +349,7 @@ function Arena.SetActive(on)
 	else
 		if ticker then ticker:Cancel(); ticker = nil end
 		table.wipe(units); table.wipe(drinkAlerted); table.wipe(lowSent); table.wipe(deadSent)
-		table.wipe(anchorKey)
+		table.wipe(anchorKey); table.wipe(iconSize)
 		if decorated then
 			for i = 1, MAX_ROWS do
 				local btn = AutoBG_Targets.TargetButton[i]
@@ -343,7 +361,7 @@ end
 
 -- A switch changed in the Arena tab.
 function Arena.Refresh()
-	table.wipe(anchorKey)
+	table.wipe(anchorKey); table.wipe(iconSize)
 	Tick()
 end
 
