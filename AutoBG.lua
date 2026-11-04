@@ -578,10 +578,13 @@ local function HandleMatchEnd()
     end
 end
 
+-- An arena queue may be reported under ARENA or under the arena's own name, so
+-- for ARENA any queue that is not a battleground counts.
 local function IsQueuedFor(bg)
     for i = 1, MAX_BATTLEFIELD_QUEUES do
         local status, map = GetBattlefieldStatus(i)
-        if (status == "queued" or status == "confirm") and map == bg then return true end
+        if (status == "queued" or status == "confirm") and
+           (map == bg or (bg == ARENA and map and not BATTLEGROUNDS[map])) then return true end
     end
     return false
 end
@@ -627,10 +630,12 @@ TryAutoRejoin = function()
     end
     request.attempts = request.attempts + 1
     request.phase = "list"
-    request.deadline = GetTime() + 1.5
+    -- The server confirms an arena queue more slowly than a battleground.
+    local wait = request.bg == ARENA and 4 or 1.5
+    request.deadline = GetTime() + wait
     pendingAutoRejoin = request.bg
     AutoBG_TriggerBattlegroundFinder(request.bg, true)
-    ScheduleRejoin(request, 1.5)
+    ScheduleRejoin(request, wait)
 end
 
 -- Ensure Auto-Rejoin target is captured regardless of how the player leaves the battleground
@@ -916,7 +921,7 @@ frame:SetScript("OnEvent", function()
             if request then
                 -- A list reply is not confirmation; submit once and await status.
                 request.phase = "queue"
-                request.deadline = GetTime() + 1.5
+                request.deadline = GetTime() + (request.bg == ARENA and 4 or 1.5)
             end
             local row = CrossFactionRow()
             SetSelectedBattlefield(row)
