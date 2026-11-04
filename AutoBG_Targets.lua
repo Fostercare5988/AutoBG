@@ -1763,13 +1763,17 @@ end
 local function RosterNameForGUID(guid)
 	if not guid then return nil end
 	local name = guidToName[guid]
-	if name or unknownGUIDs[guid] then return name end
+	local skip = unknownGUIDs[guid]
+	if name or skip == true or (skip and GetTime() < skip) then return name end
 	-- Player GUIDs start with 0x0000; creatures and pets never match the roster.
-	local rawName = string.sub(guid, 1, 6) == "0x0000" and UnitName(guid)
+	local isPlayer = string.sub(guid, 1, 6) == "0x0000"
+	local rawName = isPlayer and UnitName(guid)
 	-- An uncached name reads as UNKNOWNOBJECT; ask again on the next event instead of forgetting the GUID.
 	if rawName == UNKNOWNOBJECT or rawName == UKNOWNBEING then return nil end
 	name = rawName and EnemyName(rawName, guid, guid)
-	if not name then unknownGUIDs[guid] = true; return nil end
+	-- A creature or pet is never an enemy player. A player who did not make the roster
+	-- (name not loaded yet, roster full for a moment) is looked at again after 5 s.
+	if not name then unknownGUIDs[guid] = isPlayer and (GetTime() + 5) or true; return nil end
 	guidToName[guid], nameToGUID[name] = name, guid
 	local row = nameToRow[name]
 	if row and Targets.TargetButton[row] then Targets.TargetButton[row].targetGUID = guid end
