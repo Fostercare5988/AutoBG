@@ -40,7 +40,9 @@ Things to know:
   there; rejoin queues the arena again. `AutoBG_IsArenaZone` (AutoBG.lua) is
   the one place that names the arena zones: Lordaeron Arena, Sunstrider Court,
   Blood Ring (confirmed by the player 2026-11-03). UNVERIFIED: the arena's instance type
-  and whether Skirmish answers with BATTLEFIELDS_SHOW.
+  and whether Skirmish answers with BATTLEFIELDS_SHOW. It does (2026-11-04): the
+  window is titled with the arena zone ("Blood Ring") and lists First Available, so
+  `ShownBattlefield` (AutoBG.lua) maps those titles to ARENA.
 - Requires ClassicAPI, SuperWoW and NamPower: AutoBG.lua's guard checks all
   three and says what is missing; the other files check ClassicAPI and
   SuperWoW. UnitXP is not used.
