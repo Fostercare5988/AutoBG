@@ -46,8 +46,9 @@ Things to know:
 - Cross-faction (2026-11-04): teams mix Alliance and Horde in Warsong, Arathi Basin
   and the arenas (not Alterac Valley), so the enemy list is corrected by what you
   can attack, not by faction. An arena lists only attackable players seen (the server's
-  TW_ARENA scoreboard holds your own team only, checked 2026-11-04; a 3 s sweep adds what
-  your party targets, and health, cast and buff events add the rest). A battleground starts from the scoreboard, drops a
+  TW_ARENA scoreboard holds your own team only, checked 2026-11-04; a 1 s sweep (`SweepArena`) adds what
+  your party targets and, with UnitXP, steps through nearby enemies; health, cast and buff
+  events add the rest). A battleground starts from the scoreboard, drops a
   roster name that is not attackable (`VerifyEnemy`) and adds a hostile player it
   lacks (`LearnOpponent`). UNVERIFIED: whether the scoreboard's faction column is
   the team or the real faction on a mixed team.
@@ -56,7 +57,9 @@ Things to know:
   left, which made AutoBG think it was in the arena and stalled auto-rejoin.
 - Requires ClassicAPI, SuperWoW and NamPower: AutoBG.lua's guard checks all
   three and says what is missing; the other files check ClassicAPI and
-  SuperWoW. UnitXP is not used.
+  SuperWoW. UnitXP is optional: only the arena sweep uses it (`UnitXP("target",
+  "nextEnemyInCycle")` selects the next enemy and returns true, so it moves your target:
+  only with none selected, cleared after; setting `ArenaScan`; UNVERIFIED in game).
 - `AutoBG_SetPreview(on)` in Options is the one switch for every preview
   (`/abg test`, `/abg t`, the button, closing the window). Options owns the
   timer and carrier preview flag and passes it on (`AutoBG_Timers_SetPreview`,

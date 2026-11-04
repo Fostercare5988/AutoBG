@@ -342,6 +342,8 @@ local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
 	"Show how many of your group, you included, target each enemy, in orange beside the health.", -310, "ShowTargetCount")
 local cbTgtFlagWatch = RowFeature("AutoBG_Tgt_FlagWatch", "Flag warnings",
 	"In Arathi Basin, warn when an enemy starts opening a flag, or comes out of stealth at one. Flag spots are learned as flags are assaulted. Ctrl-click the warning to announce it.", -336, "FlagWatch")
+local cbTgtArenaScan = RowFeature("AutoBG_Tgt_ArenaScan", "Find enemies fast",
+	"In an arena, look for enemies once a second by stepping through the nearby ones (UnitXP). Only when you have no target, and your target is cleared again. Your teammates' targets always count.", -336, "ArenaScan")
 
 local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, store, rerender, format)
 	return UI.Slider(name, panelTargets, text, x, y, width, minValue, maxValue, step, function(value)
@@ -409,6 +411,8 @@ UpdateTargetsWidgets = function(sz)
 	-- Flag warnings are an Arathi Basin feature (the 15v15 size): not offered
 	-- for Warsong Gulch (10v10), Alterac Valley or the arenas.
 	if sz == 15 then cbTgtFlagWatch:Show() else cbTgtFlagWatch:Hide() end
+	UI.Sync(cbTgtArenaScan, o.ArenaScan ~= false)
+	if sz == 5 then cbTgtArenaScan:Show() else cbTgtArenaScan:Hide() end
 	local width = (o.ButtonWidth and o.ButtonWidth[sz]) or 150
 	local height = (o.ButtonHeight and o.ButtonHeight[sz]) or 20
 	local fontSize = (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10
