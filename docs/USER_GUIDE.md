@@ -95,6 +95,9 @@ list out of combat; in combat it stays locked, so a stray click cannot move it.
 - **Raid icons:** skull, cross and the other raid icons your group sets.
 - **Who's on them:** an orange number beside the health shows how many of your
   group, you included, target that enemy.
+- **Enemy pets:** arenas only. Enemy pets and minions you have seen are listed under
+  the enemy frames with their owner and health; click one to target it. Pets that go
+  out of sight turn dim. Totems are not listed.
 - **Find enemies fast:** arenas only. An arena never sends the enemy team, so
   AutoBG looks for them once a second: the enemies your team targets, and, with
   UnitXP, the nearby ones in turn. The sweep runs only while you have no target and
