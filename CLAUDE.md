@@ -35,7 +35,8 @@ Things to know:
   One arena queue at a time, three queues in all. `AutoQueue_Arena` and
   `ArenaType` queue one with the battlegrounds. In an arena: no auto-release,
   no spirit-healer bar, their own enemy frames (bracket key 5, own size, position and options;
-  the roster is the scoreboard plus enemies seen) next to Spy, which also works
+  the roster is the scoreboard plus enemies seen; Targets detects an arena by
+  the zone too, not only the queue status) next to Spy, which also works
   there; rejoin queues the arena again. `AutoBG_IsArenaZone` (AutoBG.lua) is
   the one place that names the arena zones: Lordaeron Arena, Sunstrider Court,
   Blood Ring (confirmed by the player 2026-11-03). UNVERIFIED: the arena's instance type
