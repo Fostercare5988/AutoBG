@@ -36,8 +36,8 @@ Things to know:
   `ArenaType` queue one with the battlegrounds. In an arena: no auto-release,
   no spirit-healer bar, their own enemy frames (bracket key 5, own size, position and options;
   the roster is the enemies seen; Targets detects an arena by
-  the zone too, not only the queue status) next to Spy, which also works
-  there; rejoin queues the arena again. `AutoBG_IsArenaZone` (AutoBG.lua) is
+  the zone too, not only the queue status); Spy rests there, as in
+  battlegrounds; rejoin queues the arena again. `AutoBG_IsArenaZone` (AutoBG.lua) is
   the one place that names the arena zones: Lordaeron Arena, Sunstrider Court,
   Blood Ring (confirmed by the player 2026-11-03). UNVERIFIED: the arena's instance type
   and whether Skirmish answers with BATTLEFIELDS_SHOW. It does (2026-11-04): the
@@ -90,7 +90,7 @@ Things to know:
   only in a battleground or the preview (`SyncMatchEvents`). Match-end chat
   (AutoBG.lua) and objective lines (Timers) only inside a battleground. Spy:
   sightings only while its list works (`SyncTelemetry` in `MaintainTicker`);
-  it rests in any battleground instance, whatever the queue status says.
+  it rests in any battleground or arena instance, whatever the queue status says.
   Carrier health: NamPower UNIT_HEALTH_GUID while a carrier is tracked; a
   0.5 s ticker finds the unit and reads the distance.
 - Casts come from SuperWoW UNIT_CASTEVENT alone (enemy frames and Spy). It

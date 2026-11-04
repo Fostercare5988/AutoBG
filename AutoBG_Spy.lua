@@ -75,15 +75,14 @@ local inRaid, inBattleground = false, false
 local function UpdateInstanceState()
 	local inInstance, instanceType = IsInInstance()
 	inRaid = (inInstance and instanceType == "raid") and true or false
-	-- An arena is not a battleground: Spy works there (enemy frames stay off).
-	local inArena = AutoBG_IsArenaZone and AutoBG_IsArenaZone()
-	inBattleground = (inInstance and instanceType == "pvp" and not inArena) and true or false
+	-- Arenas count too: the enemy frames own the enemies there.
+	inBattleground = (inInstance and (instanceType == "pvp" or instanceType == "arena")) and true or false
 end
 
--- In a battleground the enemy frames own the enemies. The queue status leaves
--- "active" before the loading screen, so the instance type counts too.
+-- In a battleground or arena the enemy frames own the enemies. The queue status
+-- leaves "active" before the loading screen, so the instance type counts too.
 local function InBattleground()
-	return inBattleground or (Targets.activeBG and not Targets.activeArena)
+	return inBattleground or Targets.activeBG
 end
 
 function Spy:IsRaidDisabled()
