@@ -45,11 +45,16 @@ Things to know:
   `ShownBattlefield` (AutoBG.lua) maps those titles to ARENA.
 - Cross-faction (2026-11-04): teams mix Alliance and Horde in Warsong, Arathi Basin
   and the arenas (not Alterac Valley), so the enemy list is corrected by what you
-  can attack, not by faction. An arena lists only attackable players seen (the
-  scoreboard is ignored there). A battleground starts from the scoreboard, drops a
+  can attack, not by faction. An arena lists the other team from the server's own
+  arena scoreboard (CHAT_MSG_ADDON prefix TW_ARENA, "S2C_SCOREBOARD;<winner>;<count>;
+  name|team|x:...", read in client WorldStateFrame.lua; registered only in an arena)
+  plus attackable players seen. A battleground starts from the scoreboard, drops a
   roster name that is not attackable (`VerifyEnemy`) and adds a hostile player it
   lacks (`LearnOpponent`). UNVERIFIED: whether the scoreboard's faction column is
   the team or the real faction on a mixed team.
+- An arena is told by `AutoBG_IsArenaZone` only (IsActiveBattlefieldArena, the zone
+  names), never by the queue status: the status can still say "active" after you
+  left, which made AutoBG think it was in the arena and stalled auto-rejoin.
 - Requires ClassicAPI, SuperWoW and NamPower: AutoBG.lua's guard checks all
   three and says what is missing; the other files check ClassicAPI and
   SuperWoW. UnitXP is not used.

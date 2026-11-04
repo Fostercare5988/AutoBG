@@ -32,15 +32,6 @@ local currentZoneText = ""
 local currentZonePVP = false
 local currentArena = false
 
--- The map of the battlefield you are in: its name, or ARENA ("Arena") in an
--- arena, as the queue status names it.
-local function ActiveBattlefieldMap()
-    for i = 1, MAX_BATTLEFIELD_QUEUES do
-        local status, map = GetBattlefieldStatus(i)
-        if status == "active" then return map end
-    end
-end
-
 -- The arena zones (2v2, 3v3, 5v5). The one place that names them; Timers,
 -- Targets and Spy ask AutoBG_IsArenaZone. The zone names are confirmed by the
 -- player (2026-11-03). UNVERIFIED: the instance type an arena reports; test
@@ -58,7 +49,9 @@ end
 local function UpdateZoneCache()
     currentZoneText = GetRealZoneText() or ""
     local inInstance, instanceType = IsInInstance()
-    currentArena = AutoBG_IsArenaZone() or ActiveBattlefieldMap() == ARENA
+    -- The zone decides, never the queue status: it can still say "active" for a
+    -- moment after you left, which stalled the rejoin.
+    currentArena = AutoBG_IsArenaZone() and true or false
     currentZonePVP = ((inInstance and instanceType == "pvp") or currentArena) and true or false
 end
 

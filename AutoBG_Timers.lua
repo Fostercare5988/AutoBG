@@ -60,10 +60,6 @@ local function UpdateZoneCache()
     isWSG = inPVP and string.find(cachedZone, "warsong") ~= nil
     -- An arena has no spirit healer.
     isArena = AutoBG_IsArenaZone and AutoBG_IsArenaZone() or false
-    for i = 1, MAX_BATTLEFIELD_QUEUES do
-        local status, map = GetBattlefieldStatus(i)
-        if status == "active" and map == ARENA then isArena = true end
-    end
 end
 UpdateZoneCache()
 
