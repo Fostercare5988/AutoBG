@@ -37,6 +37,12 @@ local currentArena = false
 -- player (2026-11-03). UNVERIFIED: the instance type an arena reports; test
 -- in the arena with /run print(GetRealZoneText(), IsInInstance()).
 local ARENA_ZONES = { ["lordaeron arena"] = true, ["sunstrider court"] = true, ["blood ring"] = true }
+-- The queue status names an arena queue by the arena ("Blood Ring", confirmed in
+-- game 2026-11-04), not "Arena"; this gives ARENA for it, any other map unchanged.
+function AutoBG_QueueMap(map)
+    if map and ARENA_ZONES[string.lower(map)] then return ARENA end
+    return map
+end
 function AutoBG_IsArenaZone()
     local inInstance, instanceType = IsInInstance()
     -- ClassicAPI: true once an arena match's map loads (the world's Gurubashi
@@ -159,6 +165,7 @@ function AutoBG_CancelAllQueues()
         notifiedQueues[i] = false
         invitedMaps[i] = nil
         local status, map = GetBattlefieldStatus(i)
+        map = AutoBG_QueueMap(map)
         if status and status ~= "none" and status ~= "active" then
             -- The client's Leave Queue: LeaveArenaQueue for the arena queue, else
             -- AcceptBattlefieldPort with a nil flag (0 is true in Lua).
@@ -424,6 +431,7 @@ function AutoBG_QueueAllBGs()
         local alreadyQueued = false
         for q = 1, MAX_BATTLEFIELD_QUEUES do
             local status, mapName = GetBattlefieldStatus(q)
+            mapName = AutoBG_QueueMap(mapName)
             if status and status ~= "none" and mapName and string.find(string.lower(mapName), string.lower(bg)) then
                 alreadyQueued = true; break
             end
@@ -578,13 +586,10 @@ local function HandleMatchEnd()
     end
 end
 
--- An arena queue may be reported under ARENA or under the arena's own name, so
--- for ARENA any queue that is not a battleground counts.
 local function IsQueuedFor(bg)
     for i = 1, MAX_BATTLEFIELD_QUEUES do
         local status, map = GetBattlefieldStatus(i)
-        if (status == "queued" or status == "confirm") and
-           (map == bg or (bg == ARENA and map and not BATTLEGROUNDS[map])) then return true end
+        if (status == "queued" or status == "confirm") and AutoBG_QueueMap(map) == bg then return true end
     end
     return false
 end

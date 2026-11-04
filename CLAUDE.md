@@ -52,6 +52,9 @@ Things to know:
   roster name that is not attackable (`VerifyEnemy`) and adds a hostile player it
   lacks (`LearnOpponent`). UNVERIFIED: whether the scoreboard's faction column is
   the team or the real faction on a mixed team.
+- A queued arena shows in `GetBattlefieldStatus` under the arena's name ("Blood Ring",
+  confirmed 2026-11-04), not "Arena": `AutoBG_QueueMap(map)` turns it into ARENA; use it
+  on every status map (rejoin check, cancel, already-queued, queue bars).
 - An arena is told by `AutoBG_IsArenaZone` only (IsActiveBattlefieldArena, the zone
   names), never by the queue status: the status can still say "active" after you
   left, which made AutoBG think it was in the arena and stalled auto-rejoin.
