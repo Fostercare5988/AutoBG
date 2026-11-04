@@ -58,6 +58,14 @@ local function UpdateZoneCache()
     currentZonePVP = ((inInstance and instanceType == "pvp") or currentArena) and true or false
 end
 
+-- The battlemaster window of an arena is titled with the arena (confirmed in
+-- game: "Blood Ring" for Skirmish), so it counts as ARENA.
+local function ShownBattlefield()
+    local shown = GetBattlefieldInfo()
+    if shown and ARENA_ZONES[string.lower(shown)] then return ARENA end
+    return shown
+end
+
 -- What the match you are in queues as again: the battleground, or ARENA.
 local function MatchName()
     return currentArena and ARENA or currentZoneText
@@ -276,7 +284,7 @@ local function AutoBG_HideBattlefieldWindow()
 end
 
 BattlefieldFrame:HookScript("OnShow", function()
-    if GetTime() < suppressBattlefieldFrameUntil and GetBattlefieldInfo() == suppressedBattlefieldBG then
+    if GetTime() < suppressBattlefieldFrameUntil and ShownBattlefield() == suppressedBattlefieldBG then
         AutoBG_HideBattlefieldWindow()
     end
 end)
@@ -360,7 +368,7 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
     end
     if bg.arena then
         -- Skirmish asks the server like a battleground does; a rated queue starts at once.
-        -- UNVERIFIED: test in game that Skirmish answers with BATTLEFIELDS_SHOW for "Arena".
+        -- Skirmish answers with BATTLEFIELDS_SHOW (window titled with the arena zone).
         AutoBG_Print("Queueing |cFFFFFF00" .. ARENA_TYPES[AutoBG_Settings.ArenaType] .. "|r arena...")
         JoinArenaQueue(AutoBG_Settings.ArenaType)
         return
@@ -888,13 +896,13 @@ frame:SetScript("OnEvent", function()
         if request then
             if not UnitExists("player") or IsPlayerDeadOrGhost() or
                (request.phase ~= "list" and request.phase ~= "queue") then return end
-            local shownBG = GetBattlefieldInfo()
+            local shownBG = ShownBattlefield()
             if shownBG ~= request.bg then return end
             if AutoBG_HasDeserter() then FinishRejoin(); return end
             if request.phase == "queue" then AutoBG_HideBattlefieldWindow(); return end
         end
         -- List replies can arrive after a later manual or batch request.
-        if pendingAutoRejoin and GetBattlefieldInfo() ~= pendingAutoRejoin then return end
+        if pendingAutoRejoin and ShownBattlefield() ~= pendingAutoRejoin then return end
         if pendingAutoRejoin or isAutoQueueing then
             if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
                 AutoBG_Print("Auto-Queue / Auto-Rejoin skipped: You are tagged as |cFFFF5555AFK|r.")
@@ -902,7 +910,7 @@ frame:SetScript("OnEvent", function()
                 isAutoQueueing = false
                 return
             end
-            local bgTitle = pendingAutoRejoin or GetBattlefieldInfo() or "Battleground"
+            local bgTitle = pendingAutoRejoin or ShownBattlefield() or "Battleground"
             if request then
                 -- A list reply is not confirmation; submit once and await status.
                 request.phase = "queue"
@@ -919,7 +927,7 @@ frame:SetScript("OnEvent", function()
             local generation = queueGeneration
             local function HideRequestedWindow()
                 if generation == queueGeneration and GetTime() < suppressBattlefieldFrameUntil and
-                   GetBattlefieldInfo() == suppressedBattlefieldBG then
+                   ShownBattlefield() == suppressedBattlefieldBG then
                     AutoBG_HideBattlefieldWindow()
                 end
             end
@@ -931,7 +939,7 @@ frame:SetScript("OnEvent", function()
             AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (" .. (row > 0 and "Cross-Faction" or "First Available") .. ").")
             pendingAutoRejoin = nil
             if not rejoinRequest then hasHandledEnd = false end
-        elseif GetTime() < suppressBattlefieldFrameUntil and GetBattlefieldInfo() == suppressedBattlefieldBG then
+        elseif GetTime() < suppressBattlefieldFrameUntil and ShownBattlefield() == suppressedBattlefieldBG then
             AutoBG_HideBattlefieldWindow()
         end
 
