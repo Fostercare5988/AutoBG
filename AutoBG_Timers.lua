@@ -36,6 +36,7 @@ local function RefreshQueuedBattlegrounds()
     queuedCount = 0
     for i = 1, MAX_BATTLEFIELD_QUEUES do
         local status, mapName, instanceID = GetBattlefieldStatus(i)
+        mapName = AutoBG_QueueMap(mapName)
         if status == "queued" then
             queuedCount = queuedCount + 1
             local queue = queuedBattlegrounds[queuedCount]
