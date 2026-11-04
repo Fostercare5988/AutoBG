@@ -123,6 +123,39 @@ local function Sort()
 	end
 end
 
+local function Known(name)
+	return name and name ~= UNKNOWNOBJECT and name ~= UKNOWNBEING
+end
+
+-- Keep an entry true to the unit: a pet can be renamed (or still be uncached when
+-- first seen), its owner can resolve late, and the owner, a player seen only through
+-- the pet, is handed to the enemy frames until they list that player.
+local function Identify(e)
+	local changed = false
+	local name = UnitName(e.guid)
+	if Known(name) and name ~= e.name then e.name, changed = name, true end
+	if not e.ownerGuid then
+		local g = UnitOwnerGUID(e.guid)
+		if g then
+			for i = 1, count do
+				if entries[i] ~= e and entries[i].ownerGuid == g then Remove(entries[i]); break end
+			end
+			e.ownerGuid, changed = g, true
+		end
+	end
+	if e.ownerGuid then
+		if not e.ownerSeen and string.sub(e.ownerGuid, 1, 6) == "0x0000" then
+			e.ownerSeen = AutoBG_Targets.ObserveGUID(e.ownerGuid)
+		end
+		local owner = UnitName(e.ownerGuid)
+		if Known(owner) then
+			owner = AutoBG_Targets.StripRealm(owner)
+			if owner ~= e.owner then e.owner, changed = owner, true end
+		end
+	end
+	if changed then Sort(); RequestRender() end
+end
+
 -- Learn or refresh one GUID. Players and everything already rejected are skipped
 -- cheaply; a pet is any attackable minion that is not a totem.
 local function Observe(guid)
@@ -135,20 +168,22 @@ local function Observe(guid)
 			notPet[guid] = true
 			return
 		end
+		-- A new pet replaces its owner's old one.
 		local ownerGuid = UnitOwnerGUID(guid)
-		local owner = ownerGuid and UnitName(ownerGuid)
-		if owner then owner = AutoBG_Targets.StripRealm(owner) end
 		if ownerGuid then
 			for i = 1, count do
 				if entries[i].ownerGuid == ownerGuid then Remove(entries[i]); break end
 			end
 		end
 		if count >= MAX_PETS then return end
-		e = { guid = guid, name = UnitName(guid) or "Pet", owner = owner, ownerGuid = ownerGuid, pct = 100 }
+		local name = UnitName(guid)
+		e = { guid = guid, name = Known(name) and name or "Pet", ownerGuid = ownerGuid, pct = 100 }
 		byGuid[guid] = e
 		count = count + 1
 		entries[count] = e
-		Sort()
+		Identify(e)
+	elseif not e.ownerSeen or not e.owner or e.name == "Pet" then
+		Identify(e)
 	end
 	local hp, maxHp = ReadHealth(guid)
 	local pct = (maxHp and maxHp > 0 and hp) and math.floor(hp / maxHp * 100 + 0.5) or e.pct
@@ -160,16 +195,20 @@ local function Observe(guid)
 	if not e.rendered then e.rendered = true; RequestRender() end
 end
 
--- Out of sight: dimmed, with the last health kept.
+-- Once a second: a pet seen again is refreshed (a rename shows), one out of sight
+-- is dimmed with its last health kept. An entry Observe removed is skipped over.
 local function Refresh()
-	for i = 1, count do
+	local i = 1
+	while i <= count do
 		local e = entries[i]
 		if UnitExists(e.guid) then
+			Identify(e)
 			Observe(e.guid)
 		elseif not e.far and not e.dead then
 			e.far = true
 			RequestRender()
 		end
+		if entries[i] == e then i = i + 1 end
 	end
 end
 
@@ -208,5 +247,6 @@ end
 -- Settings changed (the switch in the options).
 function Pets.Refresh() RequestRender() end
 
--- The list as { name, owner, pct, dead } rows, for tests.
+-- The once-a-second pass, and the entries held, for tests.
+Pets.Tick = Refresh
 function Pets.Count() return count end

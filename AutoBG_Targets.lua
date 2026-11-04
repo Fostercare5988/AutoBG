@@ -1843,6 +1843,13 @@ function SweepArena()
 	if UnitExists("target") then ClearTarget() end
 end
 
+-- A player known only by GUID (an enemy's pet names its owner): ask for a row.
+-- True once that player is on the list.
+function Targets.ObserveGUID(guid)
+	ObserveUnit(guid)
+	return guidToName[guid] ~= nil
+end
+
 function Targets:EnableConfigMode(size)
 	Targets.isConfig = true
 	SyncTargetTimers()
