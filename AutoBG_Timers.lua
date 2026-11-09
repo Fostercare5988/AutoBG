@@ -42,7 +42,9 @@ local function RefreshQueuedBattlegrounds()
             local queue = queuedBattlegrounds[queuedCount]
             if not queue then queue = {}; queuedBattlegrounds[queuedCount] = queue end
             -- OctoWoW's name for the row: "Warsong Gulch (Cross-Faction)".
-            queue.id, queue.map, queue.title = i, mapName, OctoBGQueueName(mapName, instanceID)
+            -- Clients older than revision 2026.10.31 lack OctoBGQueueName: show the plain map name.
+            queue.id, queue.map = i, mapName
+            queue.title = OctoBGQueueName and OctoBGQueueName(mapName, instanceID) or mapName
         end
     end
 end
