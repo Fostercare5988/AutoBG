@@ -146,8 +146,8 @@ function AutoBG_ResetFCPositions()
         AutoBG_Settings.Positions["AutoBG_AllianceFC"] = nil
         AutoBG_Settings.Positions["AutoBG_HordeFC"] = nil
     end
-    AllianceFC:ClearAllPoints(); AllianceFC:SetPoint("TOP", UIParent, "TOP", -130, -150) -- octowow-ignore: AP-31
-    HordeFC:ClearAllPoints(); HordeFC:SetPoint("TOP", UIParent, "TOP", 130, -150) -- octowow-ignore: AP-31
+    AllianceFC:ClearAllPoints(); AllianceFC:SetPoint("TOP", UIParent, "TOP", -130, -150)
+    HordeFC:ClearAllPoints(); HordeFC:SetPoint("TOP", UIParent, "TOP", 130, -150)
 end
 
 local function NotifyCarrierChanged()

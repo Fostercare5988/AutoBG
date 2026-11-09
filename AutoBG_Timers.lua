@@ -596,13 +596,13 @@ function AutoBG_ResetTimerPositions()
         AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] = nil
     end
 
-    QueueFrame:ClearAllPoints();   QueueFrame:SetPoint("TOP",   UIParent, "TOP", -220, -100) -- octowow-ignore: AP-31
-    RespawnFrame:ClearAllPoints(); RespawnFrame:SetPoint("TOP", UIParent, "TOP",    0, -100) -- octowow-ignore: AP-31
-    NodeBarFrame:ClearAllPoints(); NodeBarFrame:SetPoint("TOP", UIParent, "TOP",  220, -100) -- octowow-ignore: AP-31
-    AVNodeFrame:ClearAllPoints();  AVNodeFrame:SetPoint("TOP",  UIParent, "TOP",  220, -150) -- octowow-ignore: AP-31
-    WSGFlagFrame:ClearAllPoints(); WSGFlagFrame:SetPoint("TOP", UIParent, "TOP", -110, -150) -- octowow-ignore: AP-31
-    StartTimerFrame:ClearAllPoints(); StartTimerFrame:SetPoint("TOP", UIParent, "TOP", 0, -60) -- octowow-ignore: AP-31
-    ShadowFrame:ClearAllPoints(); ShadowFrame:SetPoint("TOP", UIParent, "TOP", 110, -150) -- octowow-ignore: AP-31
+    QueueFrame:ClearAllPoints();   QueueFrame:SetPoint("TOP",   UIParent, "TOP", -220, -100)
+    RespawnFrame:ClearAllPoints(); RespawnFrame:SetPoint("TOP", UIParent, "TOP",    0, -100)
+    NodeBarFrame:ClearAllPoints(); NodeBarFrame:SetPoint("TOP", UIParent, "TOP",  220, -100)
+    AVNodeFrame:ClearAllPoints();  AVNodeFrame:SetPoint("TOP",  UIParent, "TOP",  220, -150)
+    WSGFlagFrame:ClearAllPoints(); WSGFlagFrame:SetPoint("TOP", UIParent, "TOP", -110, -150)
+    StartTimerFrame:ClearAllPoints(); StartTimerFrame:SetPoint("TOP", UIParent, "TOP", 0, -60)
+    ShadowFrame:ClearAllPoints(); ShadowFrame:SetPoint("TOP", UIParent, "TOP", 110, -150)
 
     ABProjectionFrame:ClearAllPoints()
     if AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
