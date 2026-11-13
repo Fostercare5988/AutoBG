@@ -154,7 +154,7 @@ local function NotifyCarrierChanged()
     if AutoBG_Targets and AutoBG_Targets.OnCarrierChanged then
         AutoBG_Targets:OnCarrierChanged()
     end
-    if SyncCarrierTicker then SyncCarrierTicker() end
+    SyncCarrierTicker()
 end
 
 local function UpdateFCButton(frame, carrierName)
@@ -169,7 +169,7 @@ local function UpdateFCButton(frame, carrierName)
         frame.healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
         frame.hpText:SetText("???")
         frame.distText:SetText("|cFF808080? yd|r")
-        if frame.debuffText then frame.debuffText:SetText("") end
+        frame.debuffText:SetText("")
         frame:Show()
     else
         frame:Hide()
@@ -181,11 +181,7 @@ EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_ALLIANCE")
 EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_HORDE")
 EventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-EventFrame:RegisterEvent("ZONE_CHANGED")
 EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
--- NamPower: debuff stack changes by GUID replace polling the carrier's auras.
-EventFrame:RegisterEvent("DEBUFF_ADDED_OTHER")
-EventFrame:RegisterEvent("DEBUFF_REMOVED_OTHER")
 
 local ShowCarrierHealth
 
@@ -201,11 +197,11 @@ EventFrame:SetScript("OnEvent", function()
 
     if ev == "DEBUFF_ADDED_OTHER" or ev == "DEBUFF_REMOVED_OTHER" then
         -- NamPower native globals: arg1 guid, arg3 spell ID, arg4 stacks, arg7 state (1 = removed).
-        if isWSG then OnCarrierDebuff(arg1, arg3, arg4, arg7) end
+        OnCarrierDebuff(arg1, arg3, arg4, arg7)
         return
     end
 
-    if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
+    if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED_NEW_AREA" then
         UpdateZoneCache()
         if not isWSG then
             carrierAlliance = nil; carrierHorde = nil
@@ -220,7 +216,7 @@ EventFrame:SetScript("OnEvent", function()
             UpdateFCButton(AllianceFC, nil); UpdateFCButton(HordeFC, nil)
             NotifyCarrierChanged()
         end
-        if SyncCarrierTicker then SyncCarrierTicker() end
+        SyncCarrierTicker()
         return
     end
 
@@ -335,7 +331,6 @@ end
 local ASSAULT_DEBUFFS = { ["Focused Assault"] = true, ["Brutal Assault"] = true }
 
 local function SetCarrierStacks(frame, stacks)
-    if not frame.debuffText then return end
     SetCarrierText(frame, "displayStacks", frame.debuffText, stacks > 0 and ("|cFFFF2020[" .. stacks .. "]|r") or "")
 end
 
@@ -388,7 +383,7 @@ local function ScanCarrier(carrierName, frame)
     BindCarrier(frame, nil)
     SetCarrierText(frame, "displayHP", frame.hpText, "???")
     SetCarrierText(frame, "displayDistance", frame.distText, "|cFF808080? yd|r")
-    if frame.debuffText then SetCarrierText(frame, "displayStacks", frame.debuffText, "") end
+    SetCarrierText(frame, "displayStacks", frame.debuffText, "")
 end
 
 -- Health follows UNIT_HEALTH_GUID; twice a second finds the carrier's unit,
@@ -435,13 +430,19 @@ local function ScanFlagCarriers()
     elseif HordeFC:IsShown() then HordeFC:Hide() end
 end
 
-local healthEventsOn = false
+-- NamPower's GUID events fire for every unit around you once registered (the
+-- debuffs for every raid member and mob), so they are on only while a carrier
+-- is tracked: health, and the assault stacks without polling the carrier's auras.
+local CARRIER_EVENTS = { "UNIT_HEALTH_GUID", "DEBUFF_ADDED_OTHER", "DEBUFF_REMOVED_OTHER" }
+local carrierEventsOn = false
 SyncCarrierTicker = function()
     local s = AutoBG_Settings
     local live = s and s.FCFrame and isWSG and (carrierAlliance or carrierHorde) and true or false
-    if healthEventsOn ~= live then
-        healthEventsOn = live
-        if live then EventFrame:RegisterEvent("UNIT_HEALTH_GUID") else EventFrame:UnregisterEvent("UNIT_HEALTH_GUID") end
+    if carrierEventsOn ~= live then
+        carrierEventsOn = live
+        for i = 1, #CARRIER_EVENTS do
+            if live then EventFrame:RegisterEvent(CARRIER_EVENTS[i]) else EventFrame:UnregisterEvent(CARRIER_EVENTS[i]) end
+        end
     end
     local needed = live or (s and s.FCFrame and preview)
     if needed and not scanTicker then

@@ -38,23 +38,26 @@ local currentArena = false
 -- in the arena with /run print(GetRealZoneText(), IsInInstance()).
 local ARENA_ZONES = { ["lordaeron arena"] = true, ["sunstrider court"] = true, ["blood ring"] = true }
 -- The arena settings (their own tab): every arena extra has a switch. Callouts
--- speak in your team's chat, so they start off. The two arena switches that once
--- lived with the enemy frames move here.
+-- speak in your team's chat, so they start off. Durations holds the buff lengths
+-- measured in play (AutoBG_Arena.lua). Any other key is cleared.
 local ARENA_SWITCHES = { "Scan", "Pets", "Mana", "Abilities", "Drinking", "ShadowSight" }
+local ARENA_KEYS = { Callouts = true, Durations = true }
+for i = 1, #ARENA_SWITCHES do ARENA_KEYS[ARENA_SWITCHES[i]] = true end
+local arenaOptions -- the table filled last; asked once a second, filled once
 function AutoBG_ArenaOptions()
     local s = AutoBG_Settings
     if not s then return nil end
+    if s.Arena and s.Arena == arenaOptions then return arenaOptions end
     if type(s.Arena) ~= "table" then s.Arena = {} end
-    local o, t = s.Arena, s.Targets
-    if t then
-        if t.ArenaScan ~= nil then o.Scan = t.ArenaScan; t.ArenaScan = nil end
-        if t.ShowPets ~= nil then o.Pets = t.ShowPets; t.ShowPets = nil end
+    local o = s.Arena
+    for key in pairs(o) do
+        if not ARENA_KEYS[key] then o[key] = nil end
     end
     for i = 1, #ARENA_SWITCHES do
         if o[ARENA_SWITCHES[i]] == nil then o[ARENA_SWITCHES[i]] = true end
     end
     if o.Callouts == nil then o.Callouts = false end
-    o.Buffs = nil -- merged into Abilities (the key abilities)
+    arenaOptions = o
     return o
 end
 
@@ -71,7 +74,7 @@ function AutoBG_IsArenaZone()
     -- Only inside an instance: the zone name and the arena flag can outlive the
     -- match for a moment after you leave, which stalled the rejoin.
     if not inInstance then return false end
-    return (IsActiveBattlefieldArena and IsActiveBattlefieldArena())
+    return IsActiveBattlefieldArena()
         or instanceType == "arena"
         or ARENA_ZONES[string.lower(GetRealZoneText() or "")] == true
 end
@@ -187,6 +190,14 @@ local defaultSettings = {
     -- Countdown look
     ObjectiveWidth = 225, ObjectiveHeight = 25, ObjectiveScale = 1, ObjectiveOpacity = 0.9,
 }
+-- Saved keys that are not settings: each module's own table and what AutoBG
+-- learned in play. A new one is a line here; anything else is cleared on load.
+local SAVED_TABLES = {
+    Targets = true, Spy = true, Arena = true, -- the modules' settings
+    LastPlayedBG = true,                      -- quick queue, rejoin
+    FlagSpots = true, OpeningSpell = true,    -- the flag watch (AutoBG_FlagWatch.lua)
+    ABTicks = true,                           -- Arathi Basin ticks (AutoBG_Timers.lua)
+}
 
 -- Each battleground: its icon on the queue bar and the type OctoWoW's queue
 -- request takes (JoinBattlegroundQueue, the client's own minimap menu).
@@ -299,14 +310,9 @@ local function IsPlayerDeadOrGhost()
     return UnitIsDeadOrGhost("player")
 end
 
+-- StaticPopup_Hide hides every dialog of the kind (StaticPopup.lua).
 local function DismissBattlefieldPopups()
     StaticPopup_Hide("CONFIRM_BATTLEFIELD_ENTRY")
-    for s = 1, 4 do
-        local dlg = _G["StaticPopup" .. s]
-        if dlg and dlg:IsShown() and dlg.which == "CONFIRM_BATTLEFIELD_ENTRY" then
-            dlg:Hide()
-        end
-    end
 end
 
 -- Deserter Debuff Engine & Lifecycle Tracking
@@ -736,7 +742,6 @@ frame:RegisterEvent("PLAYER_UNGHOST")
 frame:RegisterEvent("UI_ERROR_MESSAGE")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("PLAYER_LEAVING_WORLD")
-frame:RegisterEvent("ZONE_CHANGED")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 -- The match-end lines matter only inside a battleground.
 local MATCH_CHAT = { "CHAT_MSG_BG_SYSTEM_NEUTRAL", "CHAT_MSG_BG_SYSTEM_ALLIANCE", "CHAT_MSG_BG_SYSTEM_HORDE", "CHAT_MSG_SYSTEM" }
@@ -877,29 +882,19 @@ frame:SetScript("OnEvent", function()
                 if AutoBG_Settings[k] == nil then AutoBG_Settings[k] = v end
             end
         end
-        -- Blood Ring was removed: OctoWoW has no queue type for it. Thorn Gorge
-        -- has no auto-queue switch either.
-        AutoBG_Settings.AutoQueue_BR = nil
-        AutoBG_Settings.AutoQueue_TG = nil
-        -- The frame preview is never kept: a reload during it starts clean.
-        AutoBG_Settings.TestAllTimers = nil
-        -- Dynamic invite window clobbered by early leaves is retired.
-        AutoBG_Settings.InviteWindow = nil
+        -- A saved key nothing owns goes (KNOWN_PATTERNS KP-64), so a retired
+        -- setting needs no line of its own: AutoBG owns its defaults and these.
+        for key in pairs(AutoBG_Settings) do
+            if defaultSettings[key] == nil and not SAVED_TABLES[key] then AutoBG_Settings[key] = nil end
+        end
         -- Older/manual SavedVariables must not break queue comparisons or sliders.
         if not ARENA_TYPES[AutoBG_Settings.ArenaType] then AutoBG_Settings.ArenaType = 0 end
         local delay = tonumber(AutoBG_Settings.AutoAcceptDelay) or 0
         if delay ~= delay then delay = 0 end
         AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(AutoBG_MAX_ENTER_DELAY, math.floor(delay)))
-        -- Drop settings that now belong to FostercareTweaks.
-        AutoBG_Settings.HideCastbar = nil
-        AutoBG_Settings.HideStanceBar = nil
-        -- Faction-colored countdowns and the AB projection are always on now.
-        AutoBG_Settings.NodeColors = nil
-        AutoBG_Settings.ABProjection = nil
 
         AutoBG_Targets:EnsureOptions()
-        -- A finished list-order migration left its marker behind.
-        AutoBG_Spy:EnsureOptions().StableRowsMigration = nil
+        AutoBG_Spy:EnsureOptions()
 
         UpdateZoneCache()
         SyncMatchChat()
@@ -914,7 +909,7 @@ frame:SetScript("OnEvent", function()
             rejoinRequest.readyDeadline = nil
         end
 
-    elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
+    elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED_NEW_AREA" then
         if ev == "PLAYER_ENTERING_WORLD" then matchSide = nil end
         local wasInBattleground = currentZonePVP
         UpdateZoneCache()
@@ -933,7 +928,7 @@ frame:SetScript("OnEvent", function()
         else
             -- ZONE_CHANGED_NEW_AREA too: the world can load while the old zone still
             -- reads as the arena, and the rejoin must not wait for a second load.
-            if ev ~= "ZONE_CHANGED" then rejoinWorldReady = true end
+            rejoinWorldReady = true
             if hasHandledEnd and AutoBG_Settings and AutoBG_Settings.AutoRejoin then
                 TryAutoRejoin()
             elseif UnitExists("player") then
@@ -1008,21 +1003,10 @@ frame:SetScript("OnEvent", function()
             SetSelectedBattlefield(row)
             JoinBattlefield(row)
 
+            -- For 4 s the OnShow hook hides the window again if the server reopens it.
             suppressBattlefieldFrameUntil = GetTime() + 4.0
             suppressedBattlefieldBG = bgTitle
             AutoBG_HideBattlefieldWindow()
-
-            local generation = queueGeneration
-            local function HideRequestedWindow()
-                if generation == queueGeneration and GetTime() < suppressBattlefieldFrameUntil and
-                   ShownBattlefield() == suppressedBattlefieldBG then
-                    AutoBG_HideBattlefieldWindow()
-                end
-            end
-            C_Timer.After(0.04, HideRequestedWindow)
-            C_Timer.After(0.15, HideRequestedWindow)
-            C_Timer.After(0.35, HideRequestedWindow)
-            C_Timer.After(0.8, HideRequestedWindow)
 
             AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (" .. (row > 0 and QUEUE_MODE_LABEL[QueueMode(bgTitle)] or "First Available") .. ").")
             pendingAutoRejoin = nil
@@ -1064,8 +1048,9 @@ frame:SetScript("OnEvent", function()
         end
 
     elseif ev == "UI_ERROR_MESSAGE" then
-        if a1 and (string.find(string.lower(a1), "cannot queue") or string.find(string.lower(a1), "while dead")) then
-            if isAutoQueueing then
+        local lower = isAutoQueueing and a1 and string.lower(a1)
+        if lower and (string.find(lower, "cannot queue") or string.find(lower, "while dead")) then
+            do
                 isAutoQueueing = false
                 FinishRejoin()
                 needsQueueAfterResurrect = IsPlayerDeadOrGhost() and true or false
@@ -1104,9 +1089,8 @@ hooksecurefunc("WorldStateScoreFrame_Update", function()
     end
     if not AutoBG_Settings or not AutoBG_Settings.ScoreColor then return end
 
-    local offset = (WorldStateScoreScrollFrame and FauxScrollFrame_GetOffset(WorldStateScoreScrollFrame)) or 0
-    local maxButtons = MAX_WORLDSTATE_SCORE_BUTTONS or 20
-    for i = 1, maxButtons do
+    local offset = FauxScrollFrame_GetOffset(WorldStateScoreScrollFrame)
+    for i = 1, MAX_WORLDSTATE_SCORE_BUTTONS do
         local name, _, _, _, _, faction, _, _, class, classToken = GetBattlefieldScore(offset + i)
         if name and name ~= "" then
             -- WorldStateScoreTemplate: $parentNameButton > $parentName.

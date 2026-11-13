@@ -51,6 +51,8 @@ local SPY_DEFAULTS = {
 	Enabled = true, SoundAlert = false, StealthAlert = true, StealthProximityOnly = true,
 	AutoHide = false, Timeout = 30, MaxRows = 5, Scale = 1.0, DisableInRaids = true,
 }
+-- The lists Spy keeps besides its settings; any other key is cleared (KP-64).
+local SPY_LISTS = { KoS = true, Ignore = true, Stats = true }
 -- Defaults are filled once per settings table; every event reads the cached one.
 local spySettings
 local function GetSpySettings()
@@ -58,6 +60,9 @@ local function GetSpySettings()
 	if saved and saved == spySettings then return saved end
 	if not AutoBG_Settings then AutoBG_Settings = {} end
 	AutoBG_Settings.Spy = AutoBG_Settings.Spy or {}
+	for key in pairs(AutoBG_Settings.Spy) do
+		if SPY_DEFAULTS[key] == nil and not SPY_LISTS[key] then AutoBG_Settings.Spy[key] = nil end
+	end
 	for key, value in pairs(SPY_DEFAULTS) do
 		if AutoBG_Settings.Spy[key] == nil then AutoBG_Settings.Spy[key] = value end
 	end
@@ -712,7 +717,7 @@ function Spy:HandleCommand(text)
 		local opt = GetSpySettings()
 		opt.DisableInRaids = not opt.DisableInRaids
 		AutoBG_Print("Spy in raids: " .. (opt.DisableInRaids and "|cFFFF0000Disabled|r" or "|cFF00FF00Enabled|r"), true)
-		if Spy.RenderRows then Spy:RenderRows() end
+		Spy:RenderRows()
 		if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
 		return true
 	elseif sub == "stats" then
@@ -1144,7 +1149,7 @@ end
 
 function Spy:RenderRows()
 	if renderTimer then renderTimer:Cancel(); renderTimer = nil end
-	if FlushObservations then FlushObservations() end
+	FlushObservations()
 	MaintainTicker()
 	if not Spy.Frame then return end
 	local f, opt = Spy.Frame, GetSpySettings()

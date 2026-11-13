@@ -352,6 +352,16 @@ function Targets:InvalidateRosterCache()
 	prevEnemyCount = -1
 end
 
+-- What AutoBG_Settings.Targets holds: per-size tables, shared switches, the
+-- flag watch switch and the readability migration's marker.
+local TARGET_KEYS = {
+	EnableBracket = true, ButtonFontSize = true, ButtonScale = true, ButtonOpacity = true,
+	ButtonWidth = true, ButtonHeight = true, ButtonShowHealthText = true, ButtonHideRealm = true,
+	DimStealthed = true, ShowTrinket = true, StealthAlert = true, CastPos = true, TrinketPos = true,
+	ShowCastBars = true, FadeOutOfRange = true, ShowRaidIcons = true, ShowTargetCount = true,
+	FlagWatch = true, ReadabilityVersion = true,
+}
+
 function Targets:EnsureOptions()
 	if type(AutoBG_Settings) ~= "table" then
 		AutoBG_Settings = {}
@@ -361,24 +371,19 @@ function Targets:EnsureOptions()
 	end
 
 	local o = AutoBG_Settings.Targets
-	-- Leftovers of finished position migrations and of an older Spy table
-	-- that lived here; no code reads them.
-	o.pos, o.IndependentPositionsVersion, o.IndependentPositioning, o.Spy = nil, nil, nil, nil
-	o.ButtonSortBy = nil -- Always class, then name; the setting had no control.
-	if AutoBG_Settings.Positions then AutoBG_Settings.Positions.AutoBG_TargetsMainFrame = nil end
+	-- A key no setting below owns goes (KNOWN_PATTERNS KP-64).
+	for key in pairs(o) do
+		if not TARGET_KEYS[key] then o[key] = nil end
+	end
 	o.EnableBracket = o.EnableBracket or {}
 	o.ButtonFontSize = o.ButtonFontSize or {}
 	o.ButtonScale = o.ButtonScale or {}
 	o.ButtonOpacity = o.ButtonOpacity or {}
 	o.ButtonWidth = o.ButtonWidth or {}
 	o.ButtonHeight = o.ButtonHeight or {}
-	o.ButtonShowHealthBar = nil -- Permanent behavior; retire the saved toggle.
 	o.ButtonShowHealthText = o.ButtonShowHealthText or {}
 	o.ButtonHideRealm = o.ButtonHideRealm or {}
-	o.ShowStealthIcon = nil -- Permanent behavior; retire the saved toggle.
 	o.DimStealthed = o.DimStealthed or {}
-	o.ShowStealthText = nil -- Permanent behavior; retire the saved toggle.
-	o.ShowFlagCarrier = nil -- Permanent behavior; retire the saved toggle.
 	o.ShowTrinket = o.ShowTrinket or {}
 	if o.StealthAlert == nil then o.StealthAlert = true end
 	-- New installs put the trinket and the cast bars on the left. Older saves
@@ -391,7 +396,6 @@ function Targets:EnsureOptions()
 	if o.FadeOutOfRange == nil then o.FadeOutOfRange = true end
 	if o.ShowRaidIcons == nil then o.ShowRaidIcons = true end
 	if o.ShowTargetCount == nil then o.ShowTargetCount = true end
-	o.ArenaScan, o.ShowPets = nil, nil -- moved to AutoBG_Settings.Arena (AutoBG_ArenaOptions)
 
 	-- Migrate old default dimensions once; preserve custom layouts and positions.
 	if not o.ReadabilityVersion then
@@ -873,7 +877,7 @@ local function UpdateRowStatus()
 			end
 		end
 	end
-	if rangeChanged and Targets.RefreshHeader then Targets.RefreshHeader() end
+	if rangeChanged then Targets.RefreshHeader() end
 end
 Targets.UpdateRowStatus = UpdateRowStatus
 
@@ -935,7 +939,7 @@ local MATCH_EVENTS = {
 }
 -- An enemy is only ever on these tokens; the raid's own health, auras and casts
 -- are dropped by the engine before Lua runs (ClassicAPI RegisterUnitEvent).
-local ENEMY_UNIT_EVENTS = { "UNIT_AURA_DELTA", "UNIT_HEALTH", "UNIT_NAME_UPDATE" }
+local ENEMY_UNIT_EVENTS = { "UNIT_AURA_DELTA", "UNIT_NAME_UPDATE" }
 local ENEMY_UNITS = { "target", "focus", "mouseover" }
 for i = 1, 40 do ENEMY_UNITS[3 + i] = "nameplate" .. i end
 local matchEventsOn = false
@@ -2043,7 +2047,7 @@ local function Targets_OnEvent()
 		if ev == "PLAYER_ENTERING_WORLD" then ForgetSightings() end
 		prevEnemyCount = -1
 		Targets:OnCarrierChanged()
-		RequestBattlefieldScoreData()
+		if DetectMatch() then RequestBattlefieldScoreData() end
 		Targets:BattlefieldScoreUpdate()
 
 	elseif ev == "PLAYER_REGEN_DISABLED" or ev == "PLAYER_REGEN_ENABLED" then
@@ -2051,9 +2055,6 @@ local function Targets_OnEvent()
 
 	elseif ev == "UPDATE_BATTLEFIELD_SCORE" then
 		Targets:BattlefieldScoreUpdate()
-
-	elseif ev == "UNIT_HEALTH" then
-		ObserveUnit(a1, false)
 
 	elseif ev == "UNIT_AURA_DELTA" then
 		-- ClassicAPI 1.17.10: a refresh alone (only updated IDs) never starts or
@@ -2088,7 +2089,7 @@ local function Targets_OnEvent()
 		local name = RosterNameForGUID(a1)
 		if name and nameToRow[name] then
 			local curHp, maxHp = ReadHealth(a1)
-			SetObservedHealth(name, curHp, maxHp, (curHp or 0) <= 0)
+			SetObservedHealth(name, curHp, maxHp, (UnitIsDeadOrGhost(a1) or (curHp or 0) <= 0) and true or false)
 		end
 
 	elseif ev == "UNIT_DIED" then

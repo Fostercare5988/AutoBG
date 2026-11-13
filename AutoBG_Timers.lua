@@ -251,7 +251,7 @@ local function AnimateTimerRows()
         if expiry then
             local remaining = expiry - now
             if remaining <= 0 then
-                if RenderTimers then RenderTimers() end
+                RenderTimers()
                 return
             end
             if SetRowClock(row, remaining) then SetSpark(row, remaining) end
@@ -1344,16 +1344,16 @@ local function StartCountdown(lower)
 end
 
 local function ParseCombatMessage(msg, ev)
-    if not AutoBG_Settings or not msg or not inPVP then return end
+    if not AutoBG_Settings or not msg or not inPVP then return false end
     local lower = string.lower(msg)
     local faction = GetFactionFromMessage(msg, ev)
+    local changed = false
 
     -- A round begins: the Shadow Sight orbs appear 90 seconds in (OctoWoW changelog).
     if isArena and string.find(lower, "arena battle has begun", 1, true) then
         table.wipe(timers.Shadow)
         timers.Shadow["Orbs appear"] = { expire = GetTime() + 90, max = 90 }
-        UpdateAllTimers()
-        SyncUpdateTicker()
+        changed = true
     end
 
     -- "Grom claims the Stables! ... the Horde will control it": Grom plays for the Horde.
@@ -1375,8 +1375,9 @@ local function ParseCombatMessage(msg, ev)
         if node then
             if string.find(lower, "claims") or string.find(lower, "assaulted") or string.find(lower, "claimed") then
                 timers.AB[node] = { expire = GetTime() + 60, faction = faction }
+                changed = true
             elseif string.find(lower, "taken") or string.find(lower, "defended") or string.find(lower, "captured") then
-                timers.AB[node] = nil
+                timers.AB[node], changed = nil, true
             end
         end
     end
@@ -1387,13 +1388,15 @@ local function ParseCombatMessage(msg, ev)
         if node and AV_MINES[node] then
             if string.find(lower, "has taken") then
                 timers.AV[node] = { expire = GetTime() + 300, faction = faction }
+                changed = true
             end
         elseif node then
             -- 5 min on OctoWoW (confirmed in play, 2026-10-21)
             if string.find(lower, "claims") or string.find(lower, "assaulted") or string.find(lower, "under attack") then
                 timers.AV[node] = { expire = GetTime() + 300, faction = faction }
+                changed = true
             elseif string.find(lower, "taken") or string.find(lower, "defended") or string.find(lower, "destroyed") or string.find(lower, "captured") then
-                timers.AV[node] = nil
+                timers.AV[node], changed = nil, true
             end
         end
     end
@@ -1403,16 +1406,19 @@ local function ParseCombatMessage(msg, ev)
         and StartCountdown(lower)
     if sec then
         timers.Global["Game Starts"] = { expire = GetTime() + sec, max = sec }
+        changed = true
     elseif string.find(lower, "begun") or string.find(lower, "let the battle begin") or string.find(lower, "gates? (.-)open") then
+        changed = changed or timers.Global["Game Starts"] ~= nil
         timers.Global["Game Starts"] = nil
     end
 
     -- 4. WSG Flag Respawns: 23s on OctoWoW (confirmed in play, 2026-10-21)
     if AutoBG_Settings.WSGTimers and isWSG then
-        if     string.find(lower, "captured the alliance flag") then timers.WSG["Alliance Flag"] = { expire = GetTime() + 23 }
-        elseif string.find(lower, "captured the horde flag")    then timers.WSG["Horde Flag"]    = { expire = GetTime() + 23 }
+        if     string.find(lower, "captured the alliance flag") then timers.WSG["Alliance Flag"] = { expire = GetTime() + 23 }; changed = true
+        elseif string.find(lower, "captured the horde flag")    then timers.WSG["Horde Flag"]    = { expire = GetTime() + 23 }; changed = true
         end
     end
+    return changed
 end
 
 -- =========================================================
@@ -1437,7 +1443,6 @@ EventFrame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
 EventFrame:RegisterEvent("UPDATE_WORLD_STATES")
 EventFrame:RegisterEvent("PLAYER_UNGHOST")
 EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-EventFrame:RegisterEvent("ZONE_CHANGED")
 EventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 
 EventFrame:SetScript("OnEvent", function()
@@ -1458,7 +1463,7 @@ EventFrame:SetScript("OnEvent", function()
         worldStateDirty = true
         if isAB and AutoBG_Settings then LearnABTicks() end
     end
-    if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
+    if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED_NEW_AREA" then
         UpdateZoneCache()
         SyncMatchChat()
         -- Revivals are timed only in a battleground, and only raid members count.
@@ -1467,8 +1472,8 @@ EventFrame:SetScript("OnEvent", function()
         worldStateDirty = true
         if not isAB then
             table.wipe(timers.AB)
-            if NodeBarFrame and NodeBarFrame:IsShown() then NodeBarFrame:Hide() end
-            if ABProjectionFrame and ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
+            if NodeBarFrame:IsShown() then NodeBarFrame:Hide() end
+            if ABProjectionFrame:IsShown() then ABProjectionFrame:Hide() end
             lastRecordedARes, lastRecordedHRes = nil, nil
             interpolatedARes, interpolatedHRes = nil, nil
             lastRecordedABases, lastRecordedHBases = nil, nil
@@ -1477,7 +1482,7 @@ EventFrame:SetScript("OnEvent", function()
         end
         if not isAV then
             table.wipe(timers.AV)
-            if AVNodeFrame and AVNodeFrame:IsShown() then AVNodeFrame:Hide() end
+            if AVNodeFrame:IsShown() then AVNodeFrame:Hide() end
         end
         if not isArena then
             table.wipe(timers.Shadow)
@@ -1485,18 +1490,18 @@ EventFrame:SetScript("OnEvent", function()
         end
         if not isWSG then
             table.wipe(timers.WSG)
-            if WSGFlagFrame and WSGFlagFrame:IsShown() then WSGFlagFrame:Hide() end
+            if WSGFlagFrame:IsShown() then WSGFlagFrame:Hide() end
         end
         if not inPVP then
             if RespawnFrame:IsShown() then RespawnFrame:Hide() end
-            if StartTimerFrame and StartTimerFrame:IsShown() then StartTimerFrame:Hide() end
+            if StartTimerFrame:IsShown() then StartTimerFrame:Hide() end
             table.wipe(timers.Global)
         end
         if ev == "PLAYER_ENTERING_WORLD" then
             RefreshQueuedBattlegrounds()
             AutoBG_LoadTimerPositions()
             table.wipe(timers.Global)
-            if StartTimerFrame and StartTimerFrame:IsShown() then StartTimerFrame:Hide() end
+            if StartTimerFrame:IsShown() then StartTimerFrame:Hide() end
             lastR1Status, lastR1Score = "", ""
             lastR2Bases, lastR2Score = "", ""
             lastRecordedARes, lastRecordedHRes = nil, nil
@@ -1513,7 +1518,10 @@ EventFrame:SetScript("OnEvent", function()
         -- (PLAYER_ALIVE also fires on release, so it cannot time a wave.)
         if inPVP then SyncSpiritWave(GetTime()) end
     elseif ev ~= "ADDON_LOADED" and ev ~= "UPDATE_BATTLEFIELD_STATUS" and ev ~= "UPDATE_WORLD_STATES" then
-        ParseCombatMessage(msg, ev)
+        -- A line that starts or stops no timer changes nothing on screen.
+        if not ParseCombatMessage(msg, ev) then return end
     end
+    -- The score ticks often; the once-a-second pass draws the estimate.
+    if ev == "UPDATE_WORLD_STATES" then return end
     AutoBG_Timers_UpdateVisibility()
 end)
