@@ -146,6 +146,9 @@ local defaultSettings = {
     LastPlayedBG = nil,
     Positions = {}, SkipIfAFK = true,
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
+    -- Which row Warsong and Arathi join: "xf" Cross-Faction, "fx" Factioned,
+    -- "fa" First Available. Alterac Valley has no mixed teams (2026-11-04).
+    QueueMode_WSG = "xf", QueueMode_AB = "xf",
     -- Arena queued with them: ArenaType 0 Skirmish, 1-3 Rated 2v2/3v3/5v5.
     AutoQueue_Arena = false, ArenaType = 0,
     StartTimer = true,
@@ -804,11 +807,24 @@ local function ProcessBattlefieldQueue(id)
 end
 
 -- OctoWoW lists Cross-Faction and Factioned as reserved instance numbers after
--- First Available (BattlefieldFrame.lua, OCTO_BG_ROW_XF_ID). The player's
--- choice, 2026-11-03: always Cross-Faction where a battleground offers it.
-local function CrossFactionRow()
+-- First Available (BattlefieldFrame.lua, OCTO_BG_ROW_XF_ID / OCTO_BG_ROW_FX_ID).
+-- The player picks the row per battleground (QueueMode_WSG, QueueMode_AB; default
+-- Cross-Faction). A row the list lacks falls back to First Available (0).
+local QUEUE_MODE_KEY = { ["Warsong Gulch"] = "QueueMode_WSG", ["Arathi Basin"] = "QueueMode_AB" }
+local QUEUE_MODE_ROW = { xf = "OCTO_BG_ROW_XF_ID", fx = "OCTO_BG_ROW_FX_ID" }
+local QUEUE_MODE_LABEL = { xf = "Cross-Faction", fx = "Factioned", fa = "First Available" }
+local function QueueMode(bgTitle)
+    local key = QUEUE_MODE_KEY[bgTitle]
+    local mode = key and AutoBG_Settings and AutoBG_Settings[key]
+    if mode == "fa" or mode == "fx" then return mode end
+    return "xf"
+end
+local function QueueRow(bgTitle)
+    local want = QUEUE_MODE_ROW[QueueMode(bgTitle)]
+    if not want then return 0 end
+    local id = _G[want]
     for k = 1, GetNumBattlefields() do
-        if GetBattlefieldInstanceInfo(k) == OCTO_BG_ROW_XF_ID then return k end
+        if GetBattlefieldInstanceInfo(k) == id then return k end
     end
     return 0
 end
@@ -949,7 +965,7 @@ frame:SetScript("OnEvent", function()
                 request.phase = "queue"
                 request.deadline = GetTime() + (request.bg == ARENA and 4 or 1.5)
             end
-            local row = CrossFactionRow()
+            local row = QueueRow(bgTitle)
             SetSelectedBattlefield(row)
             JoinBattlefield(row)
 
@@ -969,7 +985,7 @@ frame:SetScript("OnEvent", function()
             C_Timer.After(0.35, HideRequestedWindow)
             C_Timer.After(0.8, HideRequestedWindow)
 
-            AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (" .. (row > 0 and "Cross-Faction" or "First Available") .. ").")
+            AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (" .. (row > 0 and QUEUE_MODE_LABEL[QueueMode(bgTitle)] or "First Available") .. ").")
             pendingAutoRejoin = nil
             if not rejoinRequest then hasHandledEnd = false end
         elseif GetTime() < suppressBattlefieldFrameUntil and ShownBattlefield() == suppressedBattlefieldBG then
