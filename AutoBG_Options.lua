@@ -136,8 +136,8 @@ local function QueueModePicker(name, key, y)
 	UI.Tooltip(button, "Click to change the row this battleground queues for.\nMixed: Cross-Faction teams.\nOwn faction: Factioned, your faction only.\nAny: First Available, the server decides.\nA row the list lacks falls back to First available.")
 	return function(mode) button:SetText(QUEUE_MODE_TEXT[mode] or QUEUE_MODE_TEXT.xf) end
 end
-local ShowQueueWSG = QueueModePicker("AutoBG_Opt_QueueModeWSG", "QueueMode_WSG", -115)
-local ShowQueueAB = QueueModePicker("AutoBG_Opt_QueueModeAB", "QueueMode_AB", -141)
+local ShowQueueWSG = QueueModePicker("AutoBG_Opt_QueueModeWSG", "QueueMode_WSG", -119)
+local ShowQueueAB = QueueModePicker("AutoBG_Opt_QueueModeAB", "QueueMode_AB", -145)
 local cbQueueAV = Setting("AutoBG_Opt_QueueAV", panelGeneral, "Alterac Valley",
 	"Include Alterac Valley when you queue.", 264, -170, "AutoQueue_AV", nil, 172)
 local cbAutoQueue = Setting("AutoBG_Opt_AutoQueue", panelGeneral, "Queue on login",
