@@ -60,7 +60,10 @@ in its side's color (red Horde, blue Alliance) with a picture of what it
 counts: each AB base its own, AV bunkers and towers a keep, graveyards a
 headstone, mines a pick, WSG flags the banner. The time comes first ("21" under a
 minute, "1:51" above, gold in the last seconds) and the name after it. Queue
-bars fill toward the estimated wait. Adjust countdown width,
+bars fill toward the estimated wait; a queue that pops shows how long its
+invite has left ("Warsong Gulch: enter"). The Arathi Basin estimate learns
+what each number of bases earns on this server from the score as you play,
+and starts with `~` while a count has not been seen yet. Adjust countdown width,
 height, scale and opacity there. Ctrl + left-click a timer announces its remaining
 time to battleground chat.
 

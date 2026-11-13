@@ -31,20 +31,30 @@ local worldStateDirty = true
 local preview = false
 
 -- Queue membership changes on this event; waited/estimated times remain live reads.
+-- An invite (status "confirm") gets a row that runs down to its end, as the
+-- client times it (GetBattlefieldPortExpiration in ms, BattlefieldFrame.lua).
 local function RefreshQueuedBattlegrounds()
     lastQueueSecond = nil
     queuedCount = 0
+    local now = GetTime()
     for i = 1, MAX_BATTLEFIELD_QUEUES do
         local status, mapName, instanceID = GetBattlefieldStatus(i)
         mapName = AutoBG_QueueMap(mapName)
-        if status == "queued" then
+        if status == "queued" or status == "confirm" then
             queuedCount = queuedCount + 1
             local queue = queuedBattlegrounds[queuedCount]
             if not queue then queue = {}; queuedBattlegrounds[queuedCount] = queue end
             -- OctoWoW's name for the row: "Warsong Gulch (Cross-Faction)".
             -- Clients older than revision 2026.10.31 lack OctoBGQueueName: show the plain map name.
-            queue.id, queue.map = i, mapName
             queue.title = OctoBGQueueName and OctoBGQueueName(mapName, instanceID) or mapName
+            local expiry
+            if status == "confirm" then
+                -- The same invite keeps its end; a new one starts its own.
+                expiry = (queue.id == i and queue.map == mapName and queue.expiry)
+                    or now + GetBattlefieldPortExpiration(i) / 1000
+                if not (queue.id == i and queue.map == mapName and queue.expiry) then queue.length = expiry - now end
+            end
+            queue.id, queue.map, queue.expiry = i, mapName, expiry
         end
     end
 end
@@ -746,6 +756,21 @@ local function ApplyQueueRow(row, mapName, title, waited, estimate)
     if not row:IsShown() then row:Show() end
 end
 
+-- An invite: the row drains to the moment it runs out, gold in its last seconds.
+local function ApplyInviteRow(row, mapName, title, expiry, length, now)
+    mapName = mapName or "Battleground"
+    SetRowIcon(row, AutoBG_GetBGIcon(mapName) or NEUTRAL_ICON)
+    SetRowName(row, (title or mapName) .. ": enter", (QUEUE_ABBREV[mapName] or mapName) .. " invite ends in", " ")
+    PaintRow(row, "spirit")
+    SetRowDuration(row, math.max(1, length or 80))
+    row.urgentAt = 10
+    row.fillExpiry = expiry
+    row.estText = nil
+    SetRowFill(row, expiry - now, expiry)
+    SetRowClock(row, expiry - now)
+    if not row:IsShown() then row:Show() end
+end
+
 -- =========================================================
 -- Arathi Basin Mathematical Projection Engine
 -- =========================================================
@@ -760,6 +785,26 @@ local AB_RPS = {
 }
 
 local AB_TICK_INTERVAL = { [0] = 0, [1] = 12, [2] = 9, [3] = 6, [4] = 3, [5] = 1 }
+
+-- The two tables above are the vanilla ticks, in no OctoWoW source. What each
+-- base count really earns is learned in play from the score, one whole tick at
+-- a time, and saved (AutoBG_Settings.ABTicks[bases] = { gain, every }). Until a
+-- count has been seen the vanilla tick stands in and the estimate shows "~".
+local function LearnedTick(bases)
+    local ticks = AutoBG_Settings and AutoBG_Settings.ABTicks
+    return ticks and ticks[bases]
+end
+local function Rate(bases)
+    local t = LearnedTick(bases)
+    if t then return t.gain / t.every end
+    local vanilla = AB_RPS[bases]
+    return vanilla or 0
+end
+local function Interval(bases)
+    local t = LearnedTick(bases)
+    local vanilla = AB_TICK_INTERVAL[bases]
+    return t and t.every or vanilla or 0
+end
 
 local function ReadABWorldStateInfo()
     local aRes, hRes, aBases, hBases
@@ -803,6 +848,30 @@ local function GetABWorldStateInfo()
     return observedARes, observedHRes, observedABases, observedHBases
 end
 
+-- Per side: the score, when it last changed, the base count and since when.
+local abSeen = { {}, {} }
+local function LearnSide(side, res, bases, now)
+    if not res then return end
+    if side.bases ~= bases then side.bases, side.since = bases, now end
+    if side.res == res then return end
+    local gain = side.res and res - side.res
+    local every = side.at and math.floor(now - side.at + 0.5)
+    -- One whole tick: the base count held from the last change to this one.
+    if gain and gain > 0 and every >= 1 and every <= 30 and bases > 0 and side.since <= side.at then
+        local ticks = AutoBG_Settings.ABTicks or {}
+        AutoBG_Settings.ABTicks = ticks
+        local t = ticks[bases]
+        if not (t and t.gain == gain and t.every == every) then ticks[bases] = { gain = gain, every = every } end
+    end
+    side.res, side.at = res, now
+end
+local function LearnABTicks()
+    local aRes, hRes, aBases, hBases = GetABWorldStateInfo()
+    local now = GetTime()
+    LearnSide(abSeen[1], aRes, aBases, now)
+    LearnSide(abSeen[2], hRes, hBases, now)
+end
+
 local pendingCapsBuffer, pendingCapsPool = {}, {}
 local function CapTimeSort(x, y) return x.time < y.time end
 local function GetABPendingCaps()
@@ -832,8 +901,8 @@ local function ProjectWithCaps(aRes, hRes, aBases, hBases, caps)
         local cap = caps[idx]
         local dt = cap.time - t
         if dt > 0 then
-            local ar = AB_RPS[ab] or 0
-            local hr = AB_RPS[hb] or 0
+            local ar = Rate(ab)
+            local hr = Rate(hb)
             local aPT = ar > 0 and (AB_MAX_RESOURCES - a) / ar or 999999
             local hPT = hr > 0 and (AB_MAX_RESOURCES - h) / hr or 999999
             if aPT <= dt or hPT <= dt then
@@ -856,8 +925,8 @@ local function ProjectWithCaps(aRes, hRes, aBases, hBases, caps)
         end
     end
 
-    local ar = AB_RPS[ab] or 0
-    local hr = AB_RPS[hb] or 0
+    local ar = Rate(ab)
+    local hr = Rate(hb)
     local aPT = ar > 0 and (AB_MAX_RESOURCES - a) / ar or 999999
     local hPT = hr > 0 and (AB_MAX_RESOURCES - h) / hr or 999999
     local hAtAWin = math.min(AB_MAX_RESOURCES, h + hr * aPT)
@@ -876,8 +945,8 @@ local function BasesToWin(aRes, hRes, faction, winning)
     end
     local verb = winning and "Hold" or "Need"
     for b = 1, 5 do
-        local myRate = AB_RPS[b] or 0
-        local theirRate = AB_RPS[5 - b] or 0
+        local myRate = Rate(b)
+        local theirRate = Rate(5 - b)
         local myTime = myRate > 0 and (AB_MAX_RESOURCES - myRes) / myRate or 999999
         local theirTime = theirRate > 0 and (AB_MAX_RESOURCES - theirRes) / theirRate or 999999
         if myTime < theirTime then
@@ -889,8 +958,8 @@ end
 
 local function CalculateABProjection(aRes, hRes, aBases, hBases)
     if not aRes or not hRes then return nil end
-    local aRate = AB_RPS[aBases] or 0
-    local hRate = AB_RPS[hBases] or 0
+    local aRate = Rate(aBases)
+    local hRate = Rate(hBases)
 
     local caps = GetABPendingCaps()
     local aTime, hTime, simAAtHWin, simHAtAWin
@@ -922,6 +991,8 @@ local function CalculateABProjection(aRes, hRes, aBases, hBases)
 
     local myFaction = AutoBG_MySide() or "Alliance"
     local playerWins = not tie and winner == myFaction
+    -- A base count whose tick was never seen here: the estimate is a guess.
+    local guess = (aBases > 0 and not LearnedTick(aBases)) or (hBases > 0 and not LearnedTick(hBases))
     local etaStr, announceStr
     local verdict = tie and "Tie" or (playerWins and "Win" or "Loss")
     local etaColor = tie and "|cFFFFD100" or (playerWins and "|cFF00FF00" or "|cFFFF5555")
@@ -934,9 +1005,9 @@ local function CalculateABProjection(aRes, hRes, aBases, hBases)
         local totSec = math.floor(math.max(0, eta) + 0.05)
         local mins = math.floor(totSec / 60)
         local secs = totSec - mins * 60
-        etaStr = string.format("%s %02d:%02d", verdict, mins, secs)
-        announceStr = tie and string.format("Too close to call at %02d:%02d", mins, secs)
-            or string.format("%s in %02d:%02d", verdict, mins, secs)
+        etaStr = string.format("%s%s %02d:%02d", guess and "~" or "", verdict, mins, secs)
+        announceStr = tie and string.format("Too close to call at %s%02d:%02d", guess and "about " or "", mins, secs)
+            or string.format("%s in %s%02d:%02d", verdict, guess and "about " or "", mins, secs)
     end
 
     local basesNeeded = BasesToWin(aRes, hRes, myFaction, playerWins)
@@ -1003,9 +1074,9 @@ local function UpdateABProjection(isTestAll, isAB)
         interpolatedARes = aRes
         lastATickTime = now
     elseif aBases ~= lastRecordedABases then
-        local oldRate = AB_RPS[lastRecordedABases or 0] or 0
+        local oldRate = Rate(lastRecordedABases or 0)
         local elapsed = lastATickTime and math.max(0, now - lastATickTime) or 0
-        interpolatedARes = math.min(AB_MAX_RESOURCES, interpolatedARes + oldRate * math.min(AB_TICK_INTERVAL[lastRecordedABases or 0] or 0, elapsed))
+        interpolatedARes = math.min(AB_MAX_RESOURCES, interpolatedARes + oldRate * math.min(Interval(lastRecordedABases or 0), elapsed))
         lastATickTime = now
     end
     lastRecordedABases = aBases
@@ -1015,21 +1086,21 @@ local function UpdateABProjection(isTestAll, isAB)
         interpolatedHRes = hRes
         lastHTickTime = now
     elseif hBases ~= lastRecordedHBases then
-        local oldRate = AB_RPS[lastRecordedHBases or 0] or 0
+        local oldRate = Rate(lastRecordedHBases or 0)
         local elapsed = lastHTickTime and math.max(0, now - lastHTickTime) or 0
-        interpolatedHRes = math.min(AB_MAX_RESOURCES, interpolatedHRes + oldRate * math.min(AB_TICK_INTERVAL[lastRecordedHBases or 0] or 0, elapsed))
+        interpolatedHRes = math.min(AB_MAX_RESOURCES, interpolatedHRes + oldRate * math.min(Interval(lastRecordedHBases or 0), elapsed))
         lastHTickTime = now
     end
     lastRecordedHBases = hBases
 
-    local aRate = AB_RPS[aBases or 0] or 0
-    local hRate = AB_RPS[hBases or 0] or 0
+    local aRate = Rate(aBases or 0)
+    local hRate = Rate(hBases or 0)
 
     local elapsedA = lastATickTime and math.max(0, now - lastATickTime) or 0
     local elapsedH = lastHTickTime and math.max(0, now - lastHTickTime) or 0
 
-    local maxTickA = AB_TICK_INTERVAL[aBases] or 0
-    local maxTickH = AB_TICK_INTERVAL[hBases] or 0
+    local maxTickA = Interval(aBases)
+    local maxTickH = Interval(hBases)
 
     local curARes = math.min(AB_MAX_RESOURCES, interpolatedARes + aRate * (maxTickA > 0 and math.min(maxTickA, elapsedA) or 0))
     local curHRes = math.min(AB_MAX_RESOURCES, interpolatedHRes + hRate * (maxTickH > 0 and math.min(maxTickH, elapsedH) or 0))
@@ -1136,10 +1207,19 @@ local function UpdateAllTimers()
             else
                 for queueIndex = 1, math.min(queuedCount, #QueueFrame.rows) do
                     local queue = queuedBattlegrounds[queueIndex]
-                    local waited = GetBattlefieldTimeWaited(queue.id)
-                    local estimate = GetBattlefieldEstimatedWaitTime(queue.id)
-                    shown = shown + 1
-                    ApplyQueueRow(QueueFrame.rows[shown], queue.map, queue.title, math.floor(waited / 1000), math.floor(estimate / 1000))
+                    if queue.expiry then
+                        if queue.expiry > now then
+                            shown = shown + 1
+                            ApplyInviteRow(QueueFrame.rows[shown], queue.map, queue.title, queue.expiry, queue.length, now)
+                        end
+                    else
+                        local waited = GetBattlefieldTimeWaited(queue.id)
+                        local estimate = GetBattlefieldEstimatedWaitTime(queue.id)
+                        shown = shown + 1
+                        local row = QueueFrame.rows[shown]
+                        row.urgentAt = nil
+                        ApplyQueueRow(row, queue.map, queue.title, math.floor(waited / 1000), math.floor(estimate / 1000))
+                    end
                 end
             end
         end
@@ -1376,6 +1456,7 @@ EventFrame:SetScript("OnEvent", function()
         RefreshQueuedBattlegrounds()
     elseif ev == "UPDATE_WORLD_STATES" then
         worldStateDirty = true
+        if isAB and AutoBG_Settings then LearnABTicks() end
     end
     if ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
         UpdateZoneCache()
@@ -1392,6 +1473,7 @@ EventFrame:SetScript("OnEvent", function()
             interpolatedARes, interpolatedHRes = nil, nil
             lastRecordedABases, lastRecordedHBases = nil, nil
             lastATickTime, lastHTickTime = nil, nil
+            table.wipe(abSeen[1]); table.wipe(abSeen[2])
         end
         if not isAV then
             table.wipe(timers.AV)
@@ -1421,6 +1503,7 @@ EventFrame:SetScript("OnEvent", function()
             interpolatedARes, interpolatedHRes = nil, nil
             lastRecordedABases, lastRecordedHBases = nil, nil
             lastATickTime, lastHTickTime = nil, nil
+            table.wipe(abSeen[1]); table.wipe(abSeen[2])
             spiritHealerSyncTime = GetTime()
             spiritHealerSynced   = false
             table.wipe(raidGhosts)
