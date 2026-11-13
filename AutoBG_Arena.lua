@@ -179,7 +179,7 @@ local function FillStrip(btn, u, o, now)
 		local on, used = u.active[name], u.used[name]
 		local ok = false
 		if on then
-			local length = durations and durations[name]
+			local length = durations and durations[on.id]
 			ok = ShowSlot(strip.slots[shown + 1], on.id, length and math.max(0, length - (now - on.t)) or (now - on.t), BUFF_COLOR)
 		elseif used and now - used.t <= USED_SHOW then
 			ok = ShowSlot(strip.slots[shown + 1], used.id, now - used.t, ABILITY_COLOR)
@@ -263,12 +263,13 @@ local function OnBuff(guid, spellId, state, added)
 	if not name then return end
 	local u, now = Unit(guid), GetTime()
 	if not added then
-		-- The longest a key buff was seen to last is its length (an early cancel is shorter).
+		-- The longest a key buff was seen to last is its length (an early cancel is
+		-- shorter), kept per spell ID: the ranks of a blessing last differently.
 		local on = key and u.active[key]
 		if on then
 			local lengths = o.Durations
 			if not lengths then lengths = {}; o.Durations = lengths end
-			if now - on.t > (lengths[key] or 0) then lengths[key] = now - on.t end
+			if now - on.t > (lengths[on.id] or 0) then lengths[on.id] = now - on.t end
 			u.active[key] = nil
 		end
 		return

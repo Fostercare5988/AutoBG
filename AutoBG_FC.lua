@@ -233,6 +233,8 @@ EventFrame:SetScript("OnEvent", function()
     end
     if h_pick then
         local name = string.gsub(h_pick, "^%s*(.-)%s*$", "%1")
+        -- Whoever carries the Horde flag plays for the Alliance.
+        AutoBG_NoteSide(name, "Alliance")
         if carrierAlliance ~= name then
             carrierAlliance = name
             UpdateFCButton(AllianceFC, carrierAlliance)
@@ -247,6 +249,7 @@ EventFrame:SetScript("OnEvent", function()
     end
     if a_pick then
         local name = string.gsub(a_pick, "^%s*(.-)%s*$", "%1")
+        AutoBG_NoteSide(name, "Horde")
         if carrierHorde ~= name then
             carrierHorde = name
             UpdateFCButton(HordeFC, carrierHorde)
@@ -466,13 +469,14 @@ function AutoBG_FC_UpdateVisibility()
 end
 
 -- The enemy frames read the enemy carrier; /abg efc, ffc and focus use both.
+-- By the side you play on, which on a mixed team need not be your faction.
 function AutoBG_GetFriendlyCarrier()
-    if UnitFactionGroup("player") == "Horde" then return carrierHorde end
+    if AutoBG_MySide() == "Horde" then return carrierHorde end
     return carrierAlliance
 end
 
 function AutoBG_GetEnemyCarrier()
-    if UnitFactionGroup("player") == "Horde" then return carrierAlliance end
+    if AutoBG_MySide() == "Horde" then return carrierAlliance end
     return carrierHorde
 end
 

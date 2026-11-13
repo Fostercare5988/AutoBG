@@ -5,8 +5,9 @@ enemy alerts for World of Warcraft 1.12.1, build 5875.
 
 ## Features
 
-- Queue selected battlegrounds (Cross-Faction where offered) and an arena
-  (Skirmish or rated), accept invitations with an optional delay, leave
+- Queue selected battlegrounds (Cross-Faction, Factioned or First Available,
+  per battleground) and an arena (Skirmish or rated), accept invitations with
+  an optional delay that never outlasts the invite, leave
   completed matches and request the same queue again.
 - Show objective, gate, flag-respawn, queue and spirit-healer countdowns.
 - Track Warsong flag carriers with health, distance, target and focus controls.

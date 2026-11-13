@@ -21,16 +21,19 @@ without resetting other choices.
 
 Choose battlegrounds under General, then press **Queue now**.
 **Leave queues** cancels outstanding queue work and existing queues.
-The available battleground list comes from the server. AutoBG joins a
-battleground's **Cross-Faction** row when the server offers it, else First
-Available. **Queue an arena** adds the arena picked under it (Skirmish, or a
+The available battleground list comes from the server. The button beside
+Warsong Gulch and Arathi Basin picks the row each one joins: **Mixed**
+(Cross-Faction, the default), **Own faction** (Factioned) or **Any** (First
+Available); a row the server does not list falls back to First Available.
+**Queue an arena** adds the arena picked under it (Skirmish, or a
 rated 2v2, 3v3 or 5v5, which needs an arena team); `/abg q arena` queues it
 alone. You can hold three queues at once and one of them an arena; choices
 beyond that are reported and skipped. Release spirit never acts in an arena.
 
 - **Accept queue pops:** enter when an invitation arrives. **Enter delay** waits
-  0 to 78 seconds first; an invite runs out after about 80 seconds. If an
-  invite ends before AutoBG enters, chat says so; lower the delay then.
+  0 to 78 seconds first; an invite runs out after about 80 seconds. AutoBG
+  always enters a second before the invite runs out, also when a reload or a
+  loading screen left it less time. If an invite still ends first, chat says so.
   Leaving the queue yourself is not reported. **Pause while AFK** stops accepting, queueing and
   rejoining while you are AFK.
 - **Leave when it ends:** leave a completed match. Current or queued casts and
@@ -60,6 +63,11 @@ minute, "1:51" above, gold in the last seconds) and the name after it. Queue
 bars fill toward the estimated wait. Adjust countdown width,
 height, scale and opacity there. Ctrl + left-click a timer announces its remaining
 time to battleground chat.
+
+Teams on OctoWoW can mix factions, so AutoBG works out which side you play on
+from the match itself: a member of your group carrying a flag or claiming a
+base shows it. The enemy carrier (`/abg efc`, the flag on the enemy frames), the
+Arathi Basin win estimate and the flag warnings follow that side.
 
 Left-click a carrier card to target the player, right-click to focus them. With
 a spell on the cursor, a left-click casts it on the carrier. Carrier cards also
@@ -125,7 +133,7 @@ here is built from what the game shows of them. Every part has a switch.
 - **Key abilities:** icons on the enemy row for Divine Shield, Blessing of Protection,
   Blessing of Freedom and Hammer of Justice, and nothing else. Grey border: the enemy used it,
   with the seconds since. Gold border: it is on that enemy right now (a blessing shows on whoever
-  received it); once AutoBG has seen how long it lasts, the number counts down. The strip sits
+  received it); once AutoBG has seen how long that rank lasts, the number counts down. The strip sits
   on the right of the row, past the cast bar if that is on the right.
 - **Enemy pets:** pets and minions you have seen, under the enemy frames, with their
   owner and health. Click one to target it. Out of sight turns dim. Totems are left out.

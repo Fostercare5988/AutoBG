@@ -920,7 +920,7 @@ local function CalculateABProjection(aRes, hRes, aBases, hBases)
         eta = hTime
     end
 
-    local myFaction = UnitFactionGroup("player") or "Alliance"
+    local myFaction = AutoBG_MySide() or "Alliance"
     local playerWins = not tie and winner == myFaction
     local etaStr, announceStr
     local verdict = tie and "Tie" or (playerWins and "Win" or "Loss")
@@ -1242,15 +1242,10 @@ local function GetFactionFromMessage(msg, ev)
     if not player then _, _, player = string.find(msg, "^(%S+) has assaulted") end
 
     if player then
-        local myFaction  = UnitFactionGroup("player")
-        -- ClassicAPI finds the named player in the group or around you; a
-        -- player it cannot find is taken for an enemy.
-        local isFriendly = string.lower(UnitName("player") or "") == string.lower(player)
-        if not isFriendly then
-            local unit = UnitTokenFromName(player, true)
-            isFriendly = unit and UnitFactionGroup(unit) == myFaction
-        end
-        return isFriendly and myFaction or ((myFaction == "Horde") and "Alliance" or "Horde")
+        -- You and your group play for your side, whatever your factions; a
+        -- player who is neither is taken for an enemy.
+        local mine = AutoBG_MySide()
+        return AutoBG_SideOf(player) or ((mine == "Horde") and "Alliance" or "Horde")
     end
     return nil
 end
@@ -1279,6 +1274,13 @@ local function ParseCombatMessage(msg, ev)
         timers.Shadow["Orbs appear"] = { expire = GetTime() + 90, max = 90 }
         UpdateAllTimers()
         SyncUpdateTicker()
+    end
+
+    -- "Grom claims the Stables! ... the Horde will control it": Grom plays for the Horde.
+    if faction and (isAB or isAV) then
+        local _, _, who = string.find(msg, "^(%S+) claims")
+        if not who then _, _, who = string.find(msg, "^(%S+) has assaulted") end
+        if who then AutoBG_NoteSide(who, faction) end
     end
 
     -- The flag watch learns from the same messages where flags stand and who holds them.

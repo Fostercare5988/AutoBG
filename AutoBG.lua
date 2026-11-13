@@ -98,6 +98,38 @@ local function MatchName()
     return currentArena and ARENA or currentZoneText
 end
 
+-- The side you play on in this match. OctoWoW's mixed teams put both factions
+-- on each side (a teammate of the other faction showed in the enemy list,
+-- 2026-11-13), so your faction is only the first guess. A player seen playing
+-- for a side settles it: one of your group is on your side, one you can attack
+-- on the other. Forgotten at every loading screen.
+local OTHER_SIDE = { Alliance = "Horde", Horde = "Alliance" }
+local matchSide
+function AutoBG_MySide()
+    return matchSide or UnitFactionGroup("player")
+end
+-- The side name plays for when it shows: yours for you and your group, the
+-- other one for a player you can attack; nil for anyone else. ClassicAPI
+-- finds the named player in the group or around you.
+function AutoBG_SideOf(name)
+    if not name then return nil end
+    local mine = AutoBG_MySide()
+    if name == UnitName("player") then return mine end
+    local unit = UnitTokenFromName(name, true)
+    if not unit and string.find(name, "-", 1, true) then
+        unit = UnitTokenFromName((string.gsub(name, "-.*$", "")), true)
+    end
+    if not unit then return nil end
+    if UnitInParty(unit) or UnitInRaid(unit) then return mine end
+    if UnitIsPlayer(unit) and UnitCanAttack("player", unit) then return OTHER_SIDE[mine] end
+end
+-- name was seen playing for side ("Alliance" or "Horde").
+function AutoBG_NoteSide(name, side)
+    if not OTHER_SIDE[side] then return end
+    local seen = AutoBG_SideOf(name)
+    if seen then matchSide = (seen == AutoBG_MySide()) and side or OTHER_SIDE[side] end
+end
+
 function AutoBG_SavePosition(frame, name)
     if not frame or not name or not AutoBG_Settings then return end
     AutoBG_Settings.Positions = AutoBG_Settings.Positions or {}
@@ -293,6 +325,8 @@ end
 
 function AutoBG_HasDeserter()
     -- One ClassicAPI lookup by name, then by spell ID, instead of building every aura.
+    -- The ID is the 1.12 one, in no OctoWoW source.
+    -- UNVERIFIED: test in game: /run print(GetSpellInfo(26013)) prints Deserter.
     local aura = C_UnitAuras.GetAuraDataBySpellName("player", "Deserter", "HARMFUL")
         or C_UnitAuras.GetPlayerAuraBySpellID(26013)
     if not aura then return false, 0 end
@@ -720,10 +754,13 @@ frame:RegisterUnitEvent("UNIT_AURA_DELTA", "player")
 
 -- An invite runs out after about 80 seconds (measured in play: one ran out at
 -- 79s, 2026-10-21), so the enter delay tops out at 78, a second to spare. A
--- saved longer delay is clamped on load. An invite that ends
--- before a scheduled enter is reported, so a delay that is too long shows.
+-- saved longer delay is clamped on load. Each enter also comes a second before
+-- its own invite runs out: the client knows how long it has left
+-- (GetBattlefieldPortExpiration in ms, as BattlefieldFrame.lua shows it), which
+-- is less after a reload or a loading screen. An invite that still ends before
+-- the scheduled enter is reported.
 AutoBG_MAX_ENTER_DELAY = 78
-local inviteStart = {}
+local inviteStart, enterDelay = {}, {}
 
 -- The minimap's Leave Queue calls AcceptBattlefieldPort(id) with no accept:
 -- the player left, so a scheduled enter is off and nothing ran out.
@@ -732,8 +769,7 @@ hooksecurefunc("AcceptBattlefieldPort", function(id, accept)
 end)
 
 local function ReportMissedEnter(id)
-    local started = inviteStart[id]
-    local delay = AutoBG_Settings.AutoAcceptDelay or 0
+    local started, delay = inviteStart[id], enterDelay[id] or 0
     if not (started and notifiedQueues[id] == true and AutoBG_Settings.AutoAccept and delay > 0) then return end
     local lasted = math.floor(GetTime() - started)
     AutoBG_Print("The invite for |cFFFFFF00" .. (invitedMaps[id] or "Battleground") .. "|r ended after |cFFFFFF00"
@@ -760,8 +796,10 @@ local function ProcessBattlefieldQueue(id)
                     FlashTaskbar()
                     return
                 end
-                local delay = math.min(AutoBG_Settings.AutoAcceptDelay or 0, AutoBG_MAX_ENTER_DELAY)
-                if delay < 0 then delay = 0 end
+                local delay = math.max(0, math.min(AutoBG_Settings.AutoAcceptDelay or 0, AutoBG_MAX_ENTER_DELAY))
+                local left = GetBattlefieldPortExpiration(id) / 1000
+                if left > 0 then delay = math.max(0, math.min(delay, math.floor(left) - 1)) end
+                enterDelay[id] = delay
                 local qId, bg = id, mapName or "Battleground"
                 if delay <= 0 then
                     notifiedQueues[qId] = "accepted"
@@ -795,7 +833,7 @@ local function ProcessBattlefieldQueue(id)
         end
     else
         if status ~= "active" then ReportMissedEnter(id) end
-        inviteStart[id] = nil
+        inviteStart[id], enterDelay[id] = nil, nil
         inviteGeneration[id] = (inviteGeneration[id] or 0) + 1
         notifiedQueues[id] = false
         invitedMaps[id] = nil
@@ -877,6 +915,7 @@ frame:SetScript("OnEvent", function()
         end
 
     elseif ev == "PLAYER_ENTERING_WORLD" or ev == "ZONE_CHANGED" or ev == "ZONE_CHANGED_NEW_AREA" then
+        if ev == "PLAYER_ENTERING_WORLD" then matchSide = nil end
         local wasInBattleground = currentZonePVP
         UpdateZoneCache()
         SyncMatchChat()

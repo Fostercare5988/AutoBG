@@ -26,7 +26,7 @@ local SAME_SPOT_SQUARED = 15 * 15
 local REPEAT = 15               -- seconds before the same enemy at the same flag warns again
 local UNKNOWN_FLAG = "a flag"   -- an opening at a flag whose spot is not learned yet
 
-local active, mapID, enemyFaction, ticker, cleaned
+local active, mapID, ticker, cleaned
 local nodeHolder = {} -- node -> faction holding it or taking it
 local watch = {}      -- enemy name -> { y, x, still, fresh, dead, casting, node, warnedNode, warnedAt }
 local openers = {}    -- caster GUID -> enemy name, while their Opening cast runs
@@ -134,6 +134,11 @@ local function Warn(name, node, classToken, guid, now)
 	if AutoBG_FlagAlert then AutoBG_FlagAlert:Show(name, classToken, guid, node) end
 end
 
+-- The side you play against; on a mixed team not the other faction.
+local function EnemySide()
+	return AutoBG_MySide() == "Horde" and "Alliance" or "Horde"
+end
+
 local function Tick()
 	if not Enabled() then return end
 	if not mapID then ReadMap() end
@@ -166,7 +171,7 @@ local function Tick()
 				w.fresh = not w.dead
 			end
 			w.y, w.x = y, x
-			if node and not moved and w.fresh and nodeHolder[node] ~= enemyFaction then
+			if node and not moved and w.fresh and nodeHolder[node] ~= EnemySide() then
 				w.still = w.still + 1
 				if w.still >= STILL_TICKS then Warn(name, node, classToken, guid, now) end
 			else
@@ -241,7 +246,6 @@ local function UpdateZone()
 	if active then
 		if not cleaned then DropOtherSpots(); cleaned = true end
 		ReadMap()
-		enemyFaction = UnitFactionGroup("player") == "Horde" and "Alliance" or "Horde"
 		for _, name in ipairs(CAST_EVENTS) do FlagWatch:RegisterEvent(name) end
 		if not ticker then ticker = C_Timer.NewTicker(TICK, Tick) end
 	else
