@@ -271,6 +271,21 @@ local function StripRealm(name)
 end
 Targets.StripRealm = StripRealm
 
+-- Your own party or raid is never the enemy, whatever its faction or the
+-- scoreboard says (a cross-faction teammate showed in the enemy list, 2026-11-13).
+-- Rebuilt on every roster pass; keyed by short name.
+local groupNames = {}
+local function RefreshGroupNames()
+	table.wipe(groupNames)
+	local raid = GetNumRaidMembers()
+	local unit, count = "raid", raid
+	if raid == 0 then unit, count = "party", GetNumPartyMembers() end
+	for i = 1, count do
+		local n = UnitName(unit .. i)
+		if n then groupNames[StripRealm(n)] = true end
+	end
+end
+
 -- Full names are authoritative. Only an unqualified name may use the unique
 -- short-name index; a different explicit realm must never resolve to this row.
 local function ResolveRosterName(rawName, guid)
@@ -1667,10 +1682,12 @@ function Targets:BattlefieldScoreUpdate(force)
 	end
 
 	enemyCount = 0
+	RefreshGroupNames()
 	for i = 1, numScores do
 		local name, _, _, _, _, faction, _, _, class, classToken = GetBattlefieldScore(i)
 		if name and StripRealm(name) ~= playerName and enemyCount < MAX_ENEMIES
-			and not arena and faction == enemyFaction and not notEnemy[name] then
+			and not arena and faction == enemyFaction and not notEnemy[name]
+			and not groupNames[StripRealm(name)] then
 			enemyCount = enemyCount + 1
 			local e = roster[enemyCount]
 			e.name = name
@@ -1686,7 +1703,7 @@ function Targets:BattlefieldScoreUpdate(force)
 		for i = 1, enemyCount do
 			if StripRealm(roster[i].name) == short then listed = true; break end
 		end
-		if not listed and enemyCount < cap then
+		if not listed and enemyCount < cap and not groupNames[short] then
 			enemyCount = enemyCount + 1
 			local e = roster[enemyCount]
 			e.name, e.classToken, e.guid = name, seen.classToken, seen.guid
