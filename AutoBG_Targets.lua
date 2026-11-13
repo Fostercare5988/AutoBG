@@ -475,6 +475,62 @@ function Targets:OnCarrierChanged()
 	end
 end
 
+-- A dead enemy's row counts down to the spirit healer's next wave, when they
+-- come back (Timers.lua follows the wave; "~" until one has been seen). The
+-- clock is a ClassicAPI duration text binding on the health text, so no Lua
+-- runs while it counts, and one timer wakes the rows at the wave.
+-- Battlegrounds only: an arena has no spirit healer.
+local respawnFormats
+local function RespawnFormat(synced)
+	if not respawnFormats then
+		respawnFormats = {}
+		local R = Enum.NumericRuleFormatRounding
+		for _, prefix in ipairs({ "", "~" }) do
+			local look = C_StringUtil.CreateNumericRuleFormatter()
+			look:SetBreakpoints({ { threshold = 0, step = 1, rounding = R.Up, format = "|cffff4040DEAD|r " .. prefix .. "%d" } })
+			respawnFormats[prefix] = { { property = Enum.DurationTextBindingProperty.RemainingDuration, formatter = look } }
+		end
+	end
+	return respawnFormats[synced and "" or "~"]
+end
+
+local function RespawnShown()
+	return activeBG and not Targets.activeArena and not Targets.isConfig and AutoBG_NextSpiritWave ~= nil
+end
+
+-- The row's clock runs to the wave at `at`; nil gives the text back to the row.
+local function SetRespawnClock(btn, at, synced)
+	if btn.respawnAt == at and btn.respawnSynced == synced then return end
+	btn.respawnAt, btn.respawnSynced = at, synced
+	btn.healthTextValue = nil
+	if not at then
+		if btn.respawnClock then btn.respawnClock:SetEnabled(false) end
+		return
+	end
+	if not btn.respawnClock then
+		btn.respawnSpan = C_DurationUtil.CreateDuration()
+		btn.respawnClock = C_DurationUtil.CreateDurationTextBinding()
+		btn.respawnClock:SetFontString(btn.HealthText)
+	end
+	btn.respawnSpan:SetTimeSpan(GetTime(), at)
+	btn.respawnClock:SetDuration(btn.respawnSpan)
+	btn.respawnClock:SetTextFormat("{}", RespawnFormat(synced))
+	btn.respawnClock:SetEnabled(true)
+end
+
+local waveTimer, waveAt
+local ArmWave -- below the health code: wakes the dead rows at the wave
+
+local function StopRespawns()
+	if waveTimer then waveTimer:Cancel() end
+	waveTimer, waveAt = nil, nil
+	if not Targets.TargetButton then return end
+	for i = 1, MAX_ENEMIES do
+		local btn = Targets.TargetButton[i]
+		if btn then SetRespawnClock(btn, nil) end
+	end
+end
+
 local function UpdateRowStealthVisual(index, name)
 	if not Targets.TargetButton then return end
 	local btn = Targets.TargetButton[index]
@@ -534,7 +590,7 @@ local function UpdateRowStealthVisual(index, name)
 		if near then btn.RangeMark:Show() else btn.RangeMark:Hide() end
 	end
 
-	local text, showText
+	local text, showText, respawnAt, synced
 	if openingNode[name] and not dead then
 		text = "|cffff4040OPENING|r"
 		showText = true
@@ -544,13 +600,17 @@ local function UpdateRowStealthVisual(index, name)
 	else
 		local pct = healthPct[name] or 100
 		if not o or o.ButtonShowHealthText[size] then
+			if dead and RespawnShown() then respawnAt, synced = AutoBG_NextSpiritWave() end
 			text = dead and "|cffff4040DEAD|r" or (pct .. "%")
 			showText = true
 		else
 			showText = false
 		end
 	end
-	if showText and btn.healthTextValue ~= text then
+	SetRespawnClock(btn, respawnAt, synced)
+	if respawnAt then
+		ArmWave(respawnAt)
+	elseif showText and btn.healthTextValue ~= text then
 		btn.healthTextValue = text
 		btn.HealthText:SetText(text)
 	end
@@ -1562,6 +1622,7 @@ local function RenderRoster()
 	for i = displayCount + 1, MAX_ENEMIES do
 		local btn = Targets.TargetButton[i]
 		btn.targetName, btn.targetGUID, btn.classToken = nil, nil, nil
+		SetRespawnClock(btn, nil)
 	end
 	-- Hidden rows still need current identities for their Spy integration.
 	for name in pairs(nameToGUID) do if not nameToRow[name] then nameToGUID[name] = nil end end
@@ -1653,6 +1714,7 @@ function Targets:BattlefieldScoreUpdate(force)
 		wipe(shortNameToFull)
 		wipe(healthPct)
 		wipe(deadState)
+		StopRespawns()
 		Targets.MainFrame:Hide()
 		return
 	end
@@ -1753,6 +1815,39 @@ local function SetObservedHealth(name, curHp, maxHp, dead)
 	if row and Targets.MainFrame:IsShown() then
 		RenderHealthForRow(row, name)
 	end
+end
+
+-- At the wave, a dead enemy the client cannot see (the living do not see
+-- ghosts) is back at full health; one still lying in sight has not released
+-- and waits for the next wave. A guessed wave revives nobody, and a wave that
+-- moved (Timers saw the real one) only resets the clocks.
+-- UNVERIFIED: test in game that a dead enemy's row comes back at the wave while a corpse in sight stays DEAD
+local function OnWave()
+	local armed = waveAt
+	waveTimer, waveAt = nil, nil
+	if not Targets.TargetButton or not RespawnShown() then return end
+	local at, synced = AutoBG_NextSpiritWave()
+	local passed = synced and math.abs(at - 30 - armed) < 1
+	for i = 1, MAX_ENEMIES do
+		local btn = Targets.TargetButton[i]
+		local name = btn and btn.respawnAt and btn.targetName
+		if name and deadState[name] then
+			local guid = nameToGUID[name]
+			if passed and not (guid and UnitExists(guid) and UnitIsDeadOrGhost(guid)) then
+				SetObservedHealth(name, nil, nil, false)
+			else
+				UpdateRowStealthVisual(i, name)
+			end
+		end
+	end
+end
+
+ArmWave = function(at)
+	if waveAt == at then return end
+	if waveTimer then waveTimer:Cancel() end
+	waveAt = at
+	-- A moment after the wave, so the next one asked for is the one after.
+	waveTimer = C_Timer.NewTimer(math.max(0, at - GetTime()) + 0.1, OnWave)
 end
 
 -- A hostile player the roster lacks joins it the moment it is first seen, by

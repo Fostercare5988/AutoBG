@@ -89,6 +89,10 @@ from small but readable to large. Picking a size outside a battleground previews
 
 During a match the header shows how many enemies are alive. Drag it to move the
 list out of combat; in combat it stays locked, so a stray click cannot move it.
+A dead enemy's row counts down to the spirit healer's next wave, when they come
+back ("DEAD 21"; `~` until AutoBG has seen a wave). At the wave the row turns
+alive again, unless their body still lies in sight. Arenas have no wave, so
+there it just says DEAD.
 
 **On each enemy** (shared by every size):
 

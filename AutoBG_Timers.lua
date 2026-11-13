@@ -21,6 +21,14 @@ local function SyncSpiritWave(at)
     spiritHealerSyncTime = at
     spiritHealerSynced = true
 end
+
+-- The next wave, for the enemy frames' dead rows: its time (GetTime) and
+-- whether a wave has been seen. Counted in whole waves from the last sync, so
+-- every caller gets the same number for the same wave.
+function AutoBG_NextSpiritWave()
+    local now = GetTime()
+    return spiritHealerSyncTime + 30 * (math.floor((now - spiritHealerSyncTime) / 30) + 1), spiritHealerSynced
+end
 local updateTicker = nil
 local SyncUpdateTicker
 local queuedBattlegrounds = {}
@@ -1222,24 +1230,27 @@ local function UpdateAllTimers()
     local arenaOptions = AutoBG_ArenaOptions and AutoBG_ArenaOptions()
     RenderCountdownBars(ShadowFrame, timers.Shadow, arenaOptions and arenaOptions.ShadowSight, isArena, 180, SHADOW_TEST_DATA, "time")
 
-    -- 4. Respawn: the spirit healer's 30-second wave
+    -- 4. Respawn: the spirit healer's 30-second wave. It is followed in every
+    -- battleground, bar or not: the enemy frames count dead enemies to it.
     local respawnRow = RespawnFrame.rows[1]
     local battleground = inPVP and not isArena
+    if battleground then
+        local healerTime = GetAreaSpiritHealerTime()
+        if healerTime > 0 then SyncSpiritWave(now - (30 - healerTime)) end
+        if spiritHealerSyncTime == 0 then spiritHealerSyncTime = now end
+        -- Learn who is a ghost once a second; UNIT_HEALTH times their revival.
+        if now >= nextGhostScan then
+            nextGhostScan = now + 1
+            for i = 1, GetNumRaidMembers() do
+                local unit = RAID_UNITS[i]
+                if UnitIsGhost(unit) then raidGhosts[unit] = true end
+            end
+        end
+    end
     if (battleground or isTestAll) and AutoBG_Settings.RessTimer then
         ApplyObjectiveAppearance(RespawnFrame)
         local remaining, prefix, expiry = 24, "", nil
         if battleground then
-            local healerTime = GetAreaSpiritHealerTime()
-            if healerTime > 0 then SyncSpiritWave(now - (30 - healerTime)) end
-            if spiritHealerSyncTime == 0 then spiritHealerSyncTime = now end
-            -- Learn who is a ghost once a second; UNIT_HEALTH times their revival.
-            if now >= nextGhostScan then
-                nextGhostScan = now + 1
-                for i = 1, GetNumRaidMembers() do
-                    local unit = RAID_UNITS[i]
-                    if UnitIsGhost(unit) then raidGhosts[unit] = true end
-                end
-            end
             remaining = 30 - ((now - spiritHealerSyncTime) % 30)
             -- "~" until a wave has been seen: the countdown is a guess.
             prefix = spiritHealerSynced and "" or "~"
@@ -1299,13 +1310,11 @@ SyncUpdateTicker = function()
     -- Test mode always shows the AB projection, so it always needs the ticker.
     -- Queue rows and every row's clock run by themselves; rows that run out
     -- wake their group (ShowRows), so nothing outside a battleground needs it.
+    -- A battleground always does: the spirit wave is followed there.
     local needed = s and (preview or
-        (inPVP and (s.RessTimer or
+        (inPVP and (not isArena or
          (s.StartTimer ~= false and next(timers.Global)) or
-         isAB or -- the projection is always on
-         (isAV and s.AVTimers and next(timers.AV)) or
-         (isWSG and s.WSGTimers and next(timers.WSG)) or
-         (isArena and next(timers.Shadow)))))
+         next(timers.Shadow))))
     if needed and not updateTicker then
         local ticker
         ticker = C_Timer.NewTicker(1, function()
