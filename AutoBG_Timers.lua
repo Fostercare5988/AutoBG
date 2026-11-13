@@ -25,7 +25,7 @@ local updateTicker = nil
 local SyncUpdateTicker
 local queuedBattlegrounds = {}
 local queuedCount = 0
-local lastQueueSecond, lastQueuePreview, lastQueueEnabled = nil, nil, nil
+local queueDirty, lastQueuePreview, lastQueueEnabled = true, nil, nil
 local worldStateDirty = true
 -- The frame preview (the settings window's Preview button); never saved.
 local preview = false
@@ -34,7 +34,7 @@ local preview = false
 -- An invite (status "confirm") gets a row that runs down to its end, as the
 -- client times it (GetBattlefieldPortExpiration in ms, BattlefieldFrame.lua).
 local function RefreshQueuedBattlegrounds()
-    lastQueueSecond = nil
+    queueDirty = true
     queuedCount = 0
     local now = GetTime()
     for i = 1, MAX_BATTLEFIELD_QUEUES do
@@ -129,8 +129,7 @@ local BAR_COLORS = {
     spirit   = { 0.38, 0.76, 0.95 },
 }
 local TRACK_SHADE  = 0.22 -- the empty part of a bar: its own color, dark
-local TIME_COLOR   = { 1, 1, 1 }
-local URGENT_COLOR = { 1, 0.80, 0.25 }
+local URGENT_TEXT  = "|cffffcc40" -- the clock in a row's last seconds
 
 local RenderTimers -- forward declaration: a row that runs out re-sorts its group
 
@@ -175,7 +174,7 @@ local function ApplyObjectiveAppearance(frame)
 end
 
 -- The spark rides the bar's texture, so it follows the fill by itself; it is
--- hidden only when the bar is nearly full or empty.
+-- hidden only when the bar is nearly full or empty (checked on each logic pass).
 local function SetSpark(row, value)
     local duration = row.fillDuration
     local share = (duration and duration > 0) and value / duration or 0
@@ -187,10 +186,11 @@ local function SetSpark(row, value)
     end
 end
 
--- Sets the fill. A row with an expiry drains by itself (SetTimerDuration,
--- ClassicAPI): the bar follows the time span with no write per frame. A row
--- without one (preview, queue) holds a value.
-local function SetRowFill(row, value, expiry)
+-- Sets the fill. A row with an end drains by itself (SetTimerDuration,
+-- ClassicAPI): the bar follows the time span with no write per frame; filling
+-- (a queue toward its estimate) when `filling`. A row without one (preview, a
+-- queue with no estimate) holds a value.
+local function SetRowFill(row, value, expiry, filling)
     local duration = row.fillDuration
     if expiry then
         local start = expiry - duration
@@ -198,10 +198,11 @@ local function SetRowFill(row, value, expiry)
             row.timerStart, row.timerEnd = start, expiry
             row.timer:SetTimeSpan(start, expiry)
         end
-        if row.fillMode ~= "timer" then
-            row.fillMode = "timer"
+        filling = filling and true or false
+        if row.fillMode ~= "timer" or row.fillFilling ~= filling then
+            row.fillMode, row.fillFilling = "timer", filling
             row.bar:SetTimerDuration(row.timer, Enum.StatusBarInterpolation.Immediate,
-                Enum.StatusBarTimerDirection.RemainingTime)
+                filling and Enum.StatusBarTimerDirection.ElapsedTime or Enum.StatusBarTimerDirection.RemainingTime)
         end
     else
         if row.fillMode ~= "value" or row.valueMax ~= duration then
@@ -221,48 +222,80 @@ local function FormatClock(seconds)
     return (s < 10) and (m .. ":0" .. s) or (m .. ":" .. s)
 end
 
--- Rewrites the time only when the shown second changes.
-local function SetRowClock(row, seconds)
-    local sec = row.roundUp and math.ceil(seconds) or math.floor(seconds)
-    if sec < 0 then sec = 0 end
-    if row.displaySec == sec then return false end
-    row.displaySec = sec
-    local text = FormatClock(sec)
-    row.timeFs:SetText((row.clockPrefix or "") .. text)
-    local urgent = (row.urgentAt and sec <= row.urgentAt) and true or false
-    if row.displayUrgent ~= urgent then
-        local c = urgent and URGENT_COLOR or TIME_COLOR
-        row.timeFs:SetTextColor(c[1], c[2], c[3])
-        row.displayUrgent = urgent
+-- The clock's look: whole seconds (rounded up for the respawn wave), "1:51"
+-- from a minute up, gold in the last seconds, "~" while it is a guess. One
+-- ClassicAPI formatter per look (C_StringUtil.CreateNumericRuleFormatter),
+-- made once; the breakpoint rounds first, so 59.5 rounded up reads "1:00".
+local R = Enum.NumericRuleFormatRounding
+local clockLooks, clockFormats = {}, {}
+local function ClockLook(roundUp, urgentAt, prefix)
+    prefix = prefix or ""
+    local key = (roundUp and "u" or "d") .. (urgentAt or "-") .. prefix
+    local look = clockLooks[key]
+    if look then return look end
+    local rounding = roundUp and R.Up or R.Down
+    local points = {
+        { threshold = 0, step = 1, rounding = rounding, format = prefix .. "%d" },
+        { threshold = roundUp and 59 or 60, step = 1, rounding = rounding, format = prefix .. "%d:%02d",
+          components = { { div = 60, step = 1, rounding = R.Down }, { mod = 60 } } },
+    }
+    if urgentAt then
+        -- Gold up to the second urgentAt shows, whichever way the row rounds.
+        points[1].format = URGENT_TEXT .. prefix .. "%d|r"
+        table.insert(points, 2, { threshold = roundUp and urgentAt or urgentAt + 1, step = 1, rounding = rounding, format = prefix .. "%d" })
     end
-    row.announceText = (row.announceName or "") .. (row.announceJoin or ": ") .. text
-    return true
+    look = C_StringUtil.CreateNumericRuleFormatter()
+    look:SetBreakpoints(points)
+    clockLooks[key] = look
+    -- The two ways a binding reads its span: time left, or time since it began.
+    clockFormats[look] = {
+        down = { { property = Enum.DurationTextBindingProperty.RemainingDuration, formatter = look } },
+        up = { { property = Enum.DurationTextBindingProperty.ElapsedDuration, formatter = look } },
+    }
+    return look
 end
 
--- Animation only: the clock text of the shown rows, written when the second
--- changes. A row that runs out asks for one render, which drops it or starts
--- its next cycle.
-local function AnimateTimerRows()
-    local frame = this
-    local now = GetTime()
-    for i = 1, frame.activeCount or 0 do
-        local row = frame.rows[i]
-        local expiry = row.fillExpiry
-        if expiry then
-            local remaining = expiry - now
-            if remaining <= 0 then
-                RenderTimers()
-                return
-            end
-            if SetRowClock(row, remaining) then SetSpark(row, remaining) end
+-- A running row's clock is written by ClassicAPI (a duration text binding on
+-- the row's span: no Lua per frame, and only when the text changes). A
+-- countdown reads the time left; a queue counts up from when it began
+-- (row.countFrom). A row that stands still (preview, a queue with no estimate
+-- yet) is written here once.
+local function SetRowClock(row, seconds)
+    local look = ClockLook(row.roundUp, row.urgentAt, row.clockPrefix)
+    if row.fillExpiry or row.countFrom then
+        local mode = row.countFrom and "up" or "down"
+        if row.countFrom then row.clockSpan:SetTimeSpan(row.countFrom, row.countFrom + 86400) end
+        if row.clockLook ~= look or row.clockMode ~= mode then
+            row.clockLook, row.clockMode = look, mode
+            row.clock:SetDuration(row.countFrom and row.clockSpan or row.timer)
+            row.clock:SetTextFormat("{}", clockFormats[look][mode])
         end
+        if not row.clockOn then row.clockOn = true; row.clock:SetEnabled(true) end
+        row.displaySec = nil
+        return
     end
+    if row.clockOn then row.clockOn, row.clockLook = false, nil; row.clock:SetEnabled(false) end
+    local sec = row.roundUp and math.ceil(seconds) or math.floor(seconds)
+    if sec < 0 then sec = 0 end
+    if row.displaySec == sec and row.displayLook == look then return end
+    row.displaySec, row.displayLook = sec, look
+    row.timeFs:SetText(look:FormatNumber(sec))
+end
+
+-- The Ctrl-click line ("Stables (Horde) captured in 21"), read when asked.
+local function RowClockText(row)
+    local sec = row.displaySec
+    if not sec then
+        local t = row.countFrom and (GetTime() - row.countFrom) or ((row.fillExpiry or 0) - GetTime())
+        sec = math.max(0, row.roundUp and math.ceil(t) or math.floor(t))
+    end
+    return (row.announceName or "") .. (row.announceJoin or ": ") .. FormatClock(sec)
 end
 
 local function OnRowEnter()
-    if not this.announceText or this.announceText == "" then return end
+    if not this.announceName then return end
     GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-    GameTooltip:SetText(this.announceText, 1, 1, 1)
+    GameTooltip:SetText(RowClockText(this), 1, 1, 1)
     if this.estText then GameTooltip:AddLine(this.estText, 0.9, 0.9, 0.5) end
     GameTooltip:AddLine("Ctrl-click: announce in chat", 0.7, 0.7, 0.7)
     GameTooltip:Show()
@@ -271,7 +304,7 @@ end
 local function OnRowLeave() GameTooltip:Hide() end
 
 local function OnRowClick()
-    if IsControlKeyDown() and this.announceText then AutoBG_SendAnnouncement(this.announceText) end
+    if IsControlKeyDown() and this.announceName then AutoBG_SendAnnouncement(RowClockText(this)) end
 end
 
 local function CreateTimerRow(frame, name)
@@ -325,6 +358,7 @@ local function CreateTimerRow(frame, name)
     row.spark, row.sparkShown = spark, false
     spark:SetPoint("CENTER", bar:GetStatusBarTexture(), "RIGHT", 0, 0)
     row.timer = C_DurationUtil.CreateDuration()
+    row.clockSpan = C_DurationUtil.CreateDuration() -- a queue's clock counts up from its start
 
     local timeFs = top:CreateFontString(nil, "OVERLAY")
     timeFs:SetPoint("LEFT", bar, "LEFT", 5, 0)
@@ -332,6 +366,8 @@ local function CreateTimerRow(frame, name)
     timeFs:SetShadowOffset(1, -1)
     timeFs:SetShadowColor(0, 0, 0, 1)
     row.timeFs = timeFs
+    row.clock = C_DurationUtil.CreateDurationTextBinding()
+    row.clock:SetFontString(timeFs)
 
     local labelFs = top:CreateFontString(nil, "OVERLAY")
     labelFs:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
@@ -392,17 +428,37 @@ local function CreateBarTimerFrame(name, titleText, xOffset, yOffset, maxRows, d
         frame.rows[i] = row
     end
 
-    frame:SetScript("OnUpdate", AnimateTimerRows)
     return frame
 end
 
 -- Shows the first count rows of a group and fits its height to them.
+-- A group wakes once, when its soonest row runs out: that row leaves (or the
+-- respawn wave starts again) at once, with nothing checked in between.
 local function ShowRows(frame, count)
     frame.activeCount = count
     for i = count + 1, #frame.rows do
         local row = frame.rows[i]
-        row.fillExpiry = nil
+        row.fillExpiry, row.countFrom = nil, nil
+        if row.clockOn then row.clockOn, row.clockLook = false, nil; row.clock:SetEnabled(false) end
         if row:IsShown() then row:Hide() end
+    end
+    local soonest
+    for i = 1, count do
+        local expiry = frame.rows[i].fillExpiry
+        if expiry and (not soonest or expiry < soonest) then soonest = expiry end
+    end
+    if frame.wakeAt ~= soonest then
+        if frame.wake then frame.wake:Cancel(); frame.wake = nil end
+        frame.wakeAt = soonest
+        if soonest then
+            local wake
+            wake = C_Timer.NewTimer(math.max(0, soonest - GetTime()), function()
+                if frame.wake ~= wake then return end
+                frame.wake, frame.wakeAt = nil, nil
+                RenderTimers()
+            end)
+            frame.wake = wake
+        end
     end
     if count > 0 then
         local height = frame.headerHeight + count * frame.rowHeight + (count - 1) * BAR_ROW_GAP
@@ -676,7 +732,7 @@ local function ApplyTimerRowData(row, name, faction, remaining, maxTime, colorMo
     PaintRow(row, colorKey)
     SetRowDuration(row, maxTime)
     row.urgentAt = 10
-    row.fillExpiry = expiry
+    row.fillExpiry, row.countFrom = expiry, nil
     SetRowFill(row, remaining, expiry)
     SetRowClock(row, remaining)
     if not row:IsShown() then row:Show() end
@@ -742,7 +798,11 @@ end
 -- estimated wait (full and still without an estimate).
 local QUEUE_ABBREV = { ["Warsong Gulch"] = "WSG", ["Arathi Basin"] = "AB", ["Alterac Valley"] = "AV", ["Thorn Gorge"] = "TG" }
 
-local function ApplyQueueRow(row, mapName, title, waited, estimate)
+-- now is given for a live queue: its clock then counts up by itself from when
+-- it began, and the bar fills toward the estimate by itself, both redone only
+-- when the queue status changes (as Capping does: UPDATE_BATTLEFIELD_STATUS).
+-- The preview's rows stand still.
+local function ApplyQueueRow(row, mapName, title, waited, estimate, now)
     mapName = mapName or "Battleground"
     SetRowIcon(row, AutoBG_GetBGIcon(mapName) or NEUTRAL_ICON)
     SetRowName(row, title or mapName, "In " .. (QUEUE_ABBREV[mapName] or mapName) .. " queue for", " ")
@@ -750,9 +810,14 @@ local function ApplyQueueRow(row, mapName, title, waited, estimate)
     local full = estimate > 0 and estimate or 1
     SetRowDuration(row, full)
     row.fillExpiry = nil
-    SetRowFill(row, estimate > 0 and math.min(waited, estimate) or full, nil)
+    row.countFrom = now and (now - waited) or nil
+    if row.countFrom and estimate > 0 then
+        SetRowFill(row, math.min(waited, estimate), row.countFrom + estimate, true)
+    else
+        SetRowFill(row, estimate > 0 and math.min(waited, estimate) or full, nil)
+    end
     SetRowClock(row, waited)
-    row.estText = estimate > 0 and ("Estimated: " .. FormatClock(estimate)) or nil
+    row.estText = estimate > 0 and ("Estimated: " .. FormatClock(math.floor(estimate))) or nil
     if not row:IsShown() then row:Show() end
 end
 
@@ -764,7 +829,7 @@ local function ApplyInviteRow(row, mapName, title, expiry, length, now)
     PaintRow(row, "spirit")
     SetRowDuration(row, math.max(1, length or 80))
     row.urgentAt = 10
-    row.fillExpiry = expiry
+    row.fillExpiry, row.countFrom = expiry, nil
     row.estText = nil
     SetRowFill(row, expiry - now, expiry)
     SetRowClock(row, expiry - now)
@@ -1193,10 +1258,9 @@ local function UpdateAllTimers()
         ShowRows(RespawnFrame, 0)
     end
 
-    -- 5. Queue waits, once a second
-    local queueSecond = math.floor(now)
-    if lastQueueSecond ~= queueSecond or lastQueuePreview ~= isTestAll or lastQueueEnabled ~= AutoBG_Settings.QueueTimers then
-        lastQueueSecond, lastQueuePreview, lastQueueEnabled = queueSecond, isTestAll, AutoBG_Settings.QueueTimers
+    -- 5. Queue waits: redrawn when a queue changes; the rows run by themselves
+    if queueDirty or lastQueuePreview ~= isTestAll or lastQueueEnabled ~= AutoBG_Settings.QueueTimers then
+        queueDirty, lastQueuePreview, lastQueueEnabled = false, isTestAll, AutoBG_Settings.QueueTimers
         local shown = 0
         if AutoBG_Settings.QueueTimers then
             ApplyObjectiveAppearance(QueueFrame)
@@ -1218,7 +1282,7 @@ local function UpdateAllTimers()
                         shown = shown + 1
                         local row = QueueFrame.rows[shown]
                         row.urgentAt = nil
-                        ApplyQueueRow(row, queue.map, queue.title, math.floor(waited / 1000), math.floor(estimate / 1000))
+                        ApplyQueueRow(row, queue.map, queue.title, waited / 1000, estimate / 1000, now)
                     end
                 end
             end
@@ -1228,13 +1292,14 @@ local function UpdateAllTimers()
 end
 RenderTimers = UpdateAllTimers
 
--- Text changes once a second and the bars animate on their own, so the
--- logic (expiry, sorting, spirit sync, queues, AB projection) runs at 1 Hz.
+-- Bars and clocks run on their own, so the logic (sorting, spirit sync, the
+-- AB projection) runs at 1 Hz, and only in a battleground or the preview.
 SyncUpdateTicker = function()
     local s = AutoBG_Settings
     -- Test mode always shows the AB projection, so it always needs the ticker.
+    -- Queue rows and every row's clock run by themselves; rows that run out
+    -- wake their group (ShowRows), so nothing outside a battleground needs it.
     local needed = s and (preview or
-        (s.QueueTimers and queuedCount > 0) or
         (inPVP and (s.RessTimer or
          (s.StartTimer ~= false and next(timers.Global)) or
          isAB or -- the projection is always on
@@ -1274,7 +1339,7 @@ function AutoBG_Timers_ShadowSight(who, isEnemy)
 end
 
 function AutoBG_Timers_UpdateVisibility()
-    lastQueueSecond = nil
+    queueDirty = true
     UpdateAllTimers()
     SyncUpdateTicker()
 end
