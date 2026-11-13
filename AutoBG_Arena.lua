@@ -156,14 +156,28 @@ local function AgeText(age)
 	return tostring(math.floor(age))
 end
 
+-- Writes only what changed: the pass runs twice a second for the ages.
+local function HideSlot(slot)
+	if slot.isOn then slot.isOn = false; slot:Hide() end
+end
+
 local function ShowSlot(slot, id, age, color)
 	local icon = SpellIcon(id)
-	if not icon then slot:Hide(); return false end
-	slot.Icon:SetTexture(icon)
-	slot.Border:SetTexture(color[1], color[2], color[3], 1)
-	slot.Age:SetText(AgeText(age))
-	slot:Show()
+	if not icon then HideSlot(slot); return false end
+	if slot.id ~= id then slot.id = id; slot.Icon:SetTexture(icon) end
+	if slot.color ~= color then slot.color = color; slot.Border:SetTexture(color[1], color[2], color[3], 1) end
+	local text = AgeText(age)
+	if slot.ageText ~= text then slot.ageText = text; slot.Age:SetText(text) end
+	if not slot.isOn then slot.isOn = true; slot:Show() end
 	return true
+end
+
+local function ShowStrip(strip, on)
+	if strip:IsShown() then
+		if not on then strip:Hide() end
+	elseif on then
+		strip:Show()
+	end
 end
 
 -- Per key ability, gold while it is on the unit (the seconds left once that length has
@@ -186,22 +200,28 @@ local function FillStrip(btn, u, o, now)
 		end
 		if ok then shown = shown + 1 end
 	end
-	for s = shown + 1, SLOTS do strip.slots[s]:Hide() end
-	if shown > 0 then strip:Show() else strip:Hide() end
+	for s = shown + 1, SLOTS do HideSlot(strip.slots[s]) end
+	ShowStrip(strip, shown > 0)
 end
 
-local function UpdatePower(btn, guid, o)
-	if not o.Mana or not UnitExists(guid) then
-		if not o.Mana then btn.PowerBack:Hide(); btn.PowerBar:Hide() end
+local function ShowPower(btn, on, color, width)
+	if not on then
+		if btn.powerOn then btn.powerOn = false; btn.PowerBack:Hide(); btn.PowerBar:Hide() end
 		return
 	end
+	if btn.powerColor ~= color then btn.powerColor = color; btn.PowerBar:SetTexture(color[1], color[2], color[3], 1) end
+	if btn.powerWidth ~= width then btn.powerWidth = width; btn.PowerBar:SetWidth(width) end
+	if not btn.powerOn then btn.powerOn = true; btn.PowerBack:Show(); btn.PowerBar:Show() end
+end
+
+-- An enemy out of sight keeps the last power seen.
+local function UpdatePower(btn, guid, o)
+	if not o.Mana then ShowPower(btn, false); return end
+	if not UnitExists(guid) then return end
 	local cur, max = UnitMana(guid), UnitManaMax(guid)
-	if not max or max <= 0 then btn.PowerBack:Hide(); btn.PowerBar:Hide(); return end
+	if not max or max <= 0 then ShowPower(btn, false); return end
 	local c = POWER_COLORS[UnitPowerType(guid) or 0] or POWER_COLORS[0]
-	btn.PowerBar:SetTexture(c[1], c[2], c[3], 1)
-	btn.PowerBar:SetWidth(math.max(1, (btn:GetWidth() - 2) * math.min(1, (cur or 0) / max)))
-	btn.PowerBack:Show()
-	btn.PowerBar:Show()
+	ShowPower(btn, true, c, math.max(1, math.floor((btn:GetWidth() - 2) * math.min(1, (cur or 0) / max))))
 end
 
 local function Tick()
@@ -214,16 +234,23 @@ local function Tick()
 		if btn and btn.Strip then
 			local name, guid = AutoBG_Targets.GetEnemy(i)
 			if name and guid then
-				UpdatePower(btn, guid, o)
+				-- Power follows NamPower's power events; the pass reads it when the
+				-- row shows someone new or the switch changed.
+				if btn.powerGuid ~= guid or not o.Mana then
+					btn.powerGuid = guid
+					UpdatePower(btn, guid, o)
+				end
 				local u = units[guid]
 				if u and o.Abilities then
 					PlaceStrip(i, btn)
 					FillStrip(btn, u, o, now)
 				else
-					btn.Strip:Hide()
+					ShowStrip(btn.Strip, false)
 				end
 			else
-				btn.PowerBack:Hide(); btn.PowerBar:Hide(); btn.Strip:Hide()
+				btn.powerGuid = nil
+				ShowPower(btn, false)
+				ShowStrip(btn.Strip, false)
 			end
 		end
 	end
@@ -300,6 +327,19 @@ local function OnHealth(guid)
 	end
 end
 
+-- NamPower: mana, rage or energy changed (arg1 GUID). One of the rows?
+local function OnPower(guid)
+	local o = Options()
+	if not o.Mana or not decorated then return end
+	for i = 1, MAX_ROWS do
+		local _, rowGuid = AutoBG_Targets.GetEnemy(i)
+		if rowGuid == guid then
+			UpdatePower(AutoBG_Targets.TargetButton[i], guid, o)
+			return
+		end
+	end
+end
+
 local function OnDied(guid)
 	if not Options().Callouts or deadSent[guid] then return end
 	local name = EnemyName(guid)
@@ -309,7 +349,7 @@ local function OnDied(guid)
 end
 
 local EVENTS = { "UNIT_CASTEVENT", "BUFF_ADDED_OTHER", "BUFF_REMOVED_OTHER", "BUFF_ADDED_SELF",
-	"UNIT_HEALTH_GUID", "UNIT_DIED" }
+	"UNIT_HEALTH_GUID", "UNIT_DIED", "UNIT_MANA_GUID", "UNIT_RAGE_GUID", "UNIT_ENERGY_GUID" }
 local listener = CreateFrame("Frame", "AutoBG_ArenaListener")
 listener:SetScript("OnEvent", function()
 	local ev = event
@@ -318,6 +358,7 @@ listener:SetScript("OnEvent", function()
 	elseif ev == "BUFF_REMOVED_OTHER" then OnBuff(arg1, arg3, arg7, false)
 	elseif ev == "UNIT_HEALTH_GUID" then OnHealth(arg1)
 	elseif ev == "UNIT_DIED" then OnDied(arg1)
+	elseif ev == "UNIT_MANA_GUID" or ev == "UNIT_RAGE_GUID" or ev == "UNIT_ENERGY_GUID" then OnPower(arg1)
 	end
 end)
 
@@ -338,7 +379,7 @@ function Arena.SetActive(on)
 		if decorated then
 			for i = 1, MAX_ROWS do
 				local btn = AutoBG_Targets.TargetButton[i]
-				if btn and btn.Strip then btn.PowerBack:Hide(); btn.PowerBar:Hide(); btn.Strip:Hide() end
+				if btn and btn.Strip then btn.powerGuid = nil; ShowPower(btn, false); ShowStrip(btn.Strip, false) end
 			end
 		end
 	end
@@ -347,6 +388,10 @@ end
 -- A switch changed in the Arena tab.
 function Arena.Refresh()
 	table.wipe(anchorKey); table.wipe(iconSize)
+	for i = 1, MAX_ROWS do
+		local btn = AutoBG_Targets.TargetButton and AutoBG_Targets.TargetButton[i]
+		if btn then btn.powerGuid = nil end
+	end
 	Tick()
 end
 

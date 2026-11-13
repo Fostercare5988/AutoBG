@@ -247,6 +247,9 @@ local groupGUIDs = {}
 
 Spy.isTestMode = false
 local renderTimer, purgeTicker, OnSpyTick
+-- A player's nameplate in view that is not on the list yet (an uncached name,
+-- or someone not attackable yet who may flag): the pass keeps looking.
+local plateWaiting = true
 local pendingObservations, spareObservations, pendingByGUID, pendingCount = {}, {}, {}, 0
 for i = 1, MAX_SPY_ENEMIES do pendingObservations[i], spareObservations[i] = {}, {} end
 local FlushObservations, flushingObservations, QueueObservation
@@ -281,6 +284,8 @@ local telemetryFrame, telemetryOn
 local function SyncTelemetry(on)
 	if telemetryOn == on or not telemetryFrame then return end
 	telemetryOn = on
+	-- Nameplates already in view sent their event while Spy rested: look once.
+	if on then plateWaiting = true end
 	for i = 1, #TELEMETRY_EVENTS do
 		if on then telemetryFrame:RegisterEvent(TELEMETRY_EVENTS[i]) else telemetryFrame:UnregisterEvent(TELEMETRY_EVENTS[i]) end
 	end
@@ -290,11 +295,18 @@ local function SyncTelemetry(on)
 	end
 end
 
+-- The second-by-second pass (expiry, distance, the nameplate scan) runs while
+-- anyone is listed or a player's nameplate waits to be read; with nobody
+-- around, the sighting events wake it.
 local function MaintainTicker()
 	local opt = GetSpySettings()
 	if opt.Enabled and not Spy.isTestMode and not InBattleground() and not Spy:IsRaidDisabled() then
-		if not purgeTicker then purgeTicker = C_Timer.NewTicker(1, OnSpyTick) end
 		SyncTelemetry(true)
+		if activeEnemyCount > 0 or plateWaiting then
+			if not purgeTicker then purgeTicker = C_Timer.NewTicker(1, OnSpyTick) end
+		else
+			StopTicker()
+		end
 	else
 		StopTicker()
 		SyncTelemetry(false)
@@ -1254,13 +1266,18 @@ OnSpyTick = function()
 
 	-- Spy's nameplate scanner: ClassicAPI nameplateN slots find enemies who stand
 	-- still and raise no events. Slots can be vacant, so check all of them.
+	local waiting = false
 	for slot = 1, 40 do
 		local unit = NAMEPLATE_UNITS[slot]
 		if UnitExists(unit) and UnitIsPlayer(unit) then
 			local guid = UnitGUID(unit)
-			if guid and not guidToName[guid] then QueueObservation(unit) end
+			if guid and not guidToName[guid] and not IsGroupMember(nil, guid, unit) then
+				waiting = true
+				QueueObservation(unit)
+			end
 		end
 	end
+	plateWaiting = waiting
 
 	if changed then
 		for k = 1, activeEnemyCount do
@@ -1506,6 +1523,7 @@ local function Spy_OnEvent()
 		Spy:MarkDead(arg1)
 
 	elseif event == "NAME_PLATE_UNIT_ADDED" then
+		if arg1 and UnitIsPlayer(arg1) then plateWaiting = true; MaintainTicker() end
 		QueueObservation(arg1)
 
 	elseif event == "PLAYER_TARGET_CHANGED" or event == "UPDATE_MOUSEOVER_UNIT" or event == "PLAYER_FOCUS_CHANGED" then
