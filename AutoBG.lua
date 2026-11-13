@@ -332,7 +332,7 @@ end
 function AutoBG_HasDeserter()
     -- One ClassicAPI lookup by name, then by spell ID, instead of building every aura.
     -- The ID is the 1.12 one, in no OctoWoW source.
-    -- UNVERIFIED: test in game: /run print(GetSpellInfo(26013)) prints Deserter.
+    -- UNVERIFIED: test in game that it prints Deserter: /run print(GetSpellInfo(26013))
     local aura = C_UnitAuras.GetAuraDataBySpellName("player", "Deserter", "HARMFUL")
         or C_UnitAuras.GetPlayerAuraBySpellID(26013)
     if not aura then return false, 0 end
