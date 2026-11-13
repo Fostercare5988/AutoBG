@@ -120,10 +120,10 @@ local cbQueueAB = Setting("AutoBG_Opt_QueueAB", panelGeneral, "Arathi Basin",
 -- One button per battleground cycles the row it queues: Cross-Faction (mixed
 -- teams), Factioned (your faction only), First Available (the server decides).
 local QUEUE_MODES = { "xf", "fx", "fa" }
-local QUEUE_MODE_TEXT = { xf = "Cross-Faction", fx = "Factioned", fa = "First available" }
+local QUEUE_MODE_TEXT = { xf = "Mixed", fx = "Own faction", fa = "Any" }
 local function QueueModePicker(name, key, y)
 	local button
-	button = UI.Button(name, panelGeneral, "", 372, y, 100, function()
+	button = UI.Button(name, panelGeneral, "", 396, y, 76, function()
 		local s = AutoBG_Settings
 		if not s then return end
 		local nextIndex = 1
@@ -132,12 +132,12 @@ local function QueueModePicker(name, key, y)
 		end
 		s[key] = QUEUE_MODES[nextIndex]
 		button:SetText(QUEUE_MODE_TEXT[s[key]])
-	end, { height = 20 })
-	UI.Tooltip(button, "Click to change the row this battleground queues for.\nCross-Faction: mixed teams.\nFactioned: your own faction only.\nFirst available: the server decides.\nA row the list lacks falls back to First available.")
+	end, { height = 18, font = "GameFontHighlightSmall" })
+	UI.Tooltip(button, "Click to change the row this battleground queues for.\nMixed: Cross-Faction teams.\nOwn faction: Factioned, your faction only.\nAny: First Available, the server decides.\nA row the list lacks falls back to First available.")
 	return function(mode) button:SetText(QUEUE_MODE_TEXT[mode] or QUEUE_MODE_TEXT.xf) end
 end
-local ShowQueueWSG = QueueModePicker("AutoBG_Opt_QueueModeWSG", "QueueMode_WSG", -116)
-local ShowQueueAB = QueueModePicker("AutoBG_Opt_QueueModeAB", "QueueMode_AB", -142)
+local ShowQueueWSG = QueueModePicker("AutoBG_Opt_QueueModeWSG", "QueueMode_WSG", -115)
+local ShowQueueAB = QueueModePicker("AutoBG_Opt_QueueModeAB", "QueueMode_AB", -141)
 local cbQueueAV = Setting("AutoBG_Opt_QueueAV", panelGeneral, "Alterac Valley",
 	"Include Alterac Valley when you queue.", 264, -170, "AutoQueue_AV", nil, 172)
 local cbAutoQueue = Setting("AutoBG_Opt_AutoQueue", panelGeneral, "Queue on login",
