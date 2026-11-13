@@ -70,7 +70,7 @@ local function Seconds(value) return value .. "s" end
 local panel = UI.Window("AutoBG_OptionsPanel", "AutoBG", WIDTH, 446, GetAddOnMetadata("AutoBG", "Version"))
 
 local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", {
-	{ label = "General", height = 546 },
+	{ label = "General", height = 486 },
 	{ label = "Timers", height = 436 },
 	{ label = "Enemy frames", height = 542 },
 	{ label = "Spy", height = 390 },
@@ -114,9 +114,30 @@ _, ShowArenaType = UI.Segmented("AutoBG_Opt_ArenaType", panelGeneral, { "Skirmis
 
 UI.Heading(panelGeneral, "Auto queue", 264, -98)
 local cbQueueWSG = Setting("AutoBG_Opt_QueueWSG", panelGeneral, "Warsong Gulch",
-	"Include Warsong Gulch when you queue.", 264, -118, "AutoQueue_WSG", nil, 172)
+	"Include Warsong Gulch when you queue.", 264, -118, "AutoQueue_WSG", nil, 104)
 local cbQueueAB = Setting("AutoBG_Opt_QueueAB", panelGeneral, "Arathi Basin",
-	"Include Arathi Basin when you queue.", 264, -144, "AutoQueue_AB", nil, 172)
+	"Include Arathi Basin when you queue.", 264, -144, "AutoQueue_AB", nil, 104)
+-- One button per battleground cycles the row it queues: Cross-Faction (mixed
+-- teams), Factioned (your faction only), First Available (the server decides).
+local QUEUE_MODES = { "xf", "fx", "fa" }
+local QUEUE_MODE_TEXT = { xf = "Cross-Faction", fx = "Factioned", fa = "First available" }
+local function QueueModePicker(name, key, y)
+	local button
+	button = UI.Button(name, panelGeneral, "", 372, y, 100, function()
+		local s = AutoBG_Settings
+		if not s then return end
+		local nextIndex = 1
+		for i = 1, #QUEUE_MODES do
+			if QUEUE_MODES[i] == s[key] then nextIndex = i % #QUEUE_MODES + 1 end
+		end
+		s[key] = QUEUE_MODES[nextIndex]
+		button:SetText(QUEUE_MODE_TEXT[s[key]])
+	end, { height = 20 })
+	UI.Tooltip(button, "Click to change the row this battleground queues for.\nCross-Faction: mixed teams.\nFactioned: your own faction only.\nFirst available: the server decides.\nA row the list lacks falls back to First available.")
+	return function(mode) button:SetText(QUEUE_MODE_TEXT[mode] or QUEUE_MODE_TEXT.xf) end
+end
+local ShowQueueWSG = QueueModePicker("AutoBG_Opt_QueueModeWSG", "QueueMode_WSG", -116)
+local ShowQueueAB = QueueModePicker("AutoBG_Opt_QueueModeAB", "QueueMode_AB", -142)
 local cbQueueAV = Setting("AutoBG_Opt_QueueAV", panelGeneral, "Alterac Valley",
 	"Include Alterac Valley when you queue.", 264, -170, "AutoQueue_AV", nil, 172)
 local cbAutoQueue = Setting("AutoBG_Opt_AutoQueue", panelGeneral, "Queue on login",
@@ -130,41 +151,21 @@ local btnCancelAll = UI.Button("AutoBG_BtnCancelAll", panelGeneral, "Leave queue
 end)
 UI.Tooltip(btnCancelAll, "Leave every battleground queue.\n/abg cancel does the same.")
 
-UI.Heading(panelGeneral, "Queue as", 264, -266)
-local QUEUE_MODES = { "xf", "fx", "fa" }
-local function QueueModeIndex(mode)
-	for i = 1, #QUEUE_MODES do if QUEUE_MODES[i] == mode then return i end end
-	return 1
-end
-local function QueueModePicker(name, key, label, y)
-	UI.Label(panelGeneral, label, 264, y, "GameFontNormalSmall")
-	local show, track
-	_, show, track = UI.Segmented(name, panelGeneral, { "Cross-Faction", "Factioned", "First avail." }, 264, y - 18, 208,
-		function(index)
-			if AutoBG_Settings then AutoBG_Settings[key] = QUEUE_MODES[index] end
-			show(index)
-		end, { height = 26 })
-	UI.Tooltip(track, "Cross-Faction: mixed teams.\nFactioned: your own faction only.\nFirst available: the server decides.\nA missing row falls back to First available.")
-	return show
-end
-local ShowQueueWSG = QueueModePicker("AutoBG_Opt_QueueModeWSG", "QueueMode_WSG", "Warsong Gulch", -290)
-local ShowQueueAB = QueueModePicker("AutoBG_Opt_QueueModeAB", "QueueMode_AB", "Arathi Basin", -340)
-
-UI.Heading(panelGeneral, "Notifications", 264, -404)
+UI.Heading(panelGeneral, "Notifications", 264, -266)
 local cbSound = Setting("AutoBG_Opt_Sound", panelGeneral, "Queue sound",
-	"Play a loud ready-check sound when a queue pops or a match ends.", 264, -424, "NotifySound", function(value)
+	"Play a loud ready-check sound when a queue pops or a match ends.", 264, -286, "NotifySound", function(value)
 		if not value and AutoBG_StopNotificationSound then AutoBG_StopNotificationSound() end
 	end, 110)
-local btnTestSound = UI.Button("AutoBG_BtnTestSound", panelGeneral, "Play", 420, -422, 52, function()
+local btnTestSound = UI.Button("AutoBG_BtnTestSound", panelGeneral, "Play", 420, -284, 52, function()
 	AutoBG_PlayNotificationSound()
 end, { height = 20 })
 UI.Tooltip(btnTestSound, "Play the queue sound once.")
 local cbFlash = Setting("AutoBG_Opt_Flash", panelGeneral, "Flash the taskbar",
-	"Flash the game window in the Windows taskbar when a queue pops.", 264, -450, "FlashTaskbar", nil, 172)
+	"Flash the game window in the Windows taskbar when a queue pops.", 264, -312, "FlashTaskbar", nil, 172)
 local cbChatMsg = Setting("AutoBG_Opt_ChatMsg", panelGeneral, "Chat messages",
-	"Print status messages in chat for queues, joins and exits.", 264, -476, "ChatMessages", nil, 172)
+	"Print status messages in chat for queues, joins and exits.", 264, -338, "ChatMessages", nil, 172)
 local cbScoreColor = Setting("AutoBG_Opt_ScoreColor", panelGeneral, "Class colors on scoreboard",
-	"Color player names on the scoreboard by class.", 264, -502, "ScoreColor", nil, 172)
+	"Color player names on the scoreboard by class.", 264, -364, "ScoreColor", nil, 172)
 
 Refresh[1] = function()
 	local s = AutoBG_Settings
@@ -179,8 +180,8 @@ Refresh[1] = function()
 	UI.Sync(cbQueueAB, s.AutoQueue_AB ~= false)
 	UI.Sync(cbQueueAV, s.AutoQueue_AV ~= false)
 	UI.Sync(cbAutoQueue, s.AutoQueueLogin)
-	ShowQueueWSG(QueueModeIndex(s.QueueMode_WSG))
-	ShowQueueAB(QueueModeIndex(s.QueueMode_AB))
+	ShowQueueWSG(s.QueueMode_WSG)
+	ShowQueueAB(s.QueueMode_AB)
 	UI.Sync(cbQueueArena, s.AutoQueue_Arena)
 	ShowArenaType((s.ArenaType or 0) + 1)
 	UI.Sync(cbSound, s.NotifySound)
