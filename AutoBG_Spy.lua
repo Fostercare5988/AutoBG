@@ -941,16 +941,18 @@ function Spy:CreateFrames()
 	title:SetText("Nearby")
 	f.Title = title
 
-	-- Clear Button (X)
+	-- Clear: the settings window's close glyph.
 	local clearBtn = CreateFrame("Button", nil, f)
 	clearBtn:SetWidth(14)
 	clearBtn:SetHeight(14)
-	clearBtn:SetPoint("RIGHT", titleBar, "RIGHT", -3, 0)
-	local clearText = clearBtn:CreateFontString(nil, "ARTWORK")
-	clearText:SetFont(LIST_FONT, 12, "")
-	clearText:SetTextColor(UI.hint[1], UI.hint[2], UI.hint[3])
-	clearText:SetPoint("CENTER", 0, 0)
-	clearText:SetText("x")
+	clearBtn:SetPoint("RIGHT", titleBar, "RIGHT", -2, 0)
+	local glyph = clearBtn:CreateTexture(nil, "ARTWORK")
+	glyph:SetTexture(UI.close)
+	glyph:SetWidth(8); glyph:SetHeight(8)
+	glyph:SetPoint("CENTER", clearBtn, "CENTER", 0, 0)
+	UI.Tint(glyph, UI.hint)
+	UI.Disc(clearBtn, "HIGHLIGHT", 14, UI.halo):SetAllPoints(clearBtn)
+	UI.Tooltip(clearBtn, "Clear the list")
 	clearBtn:SetScript("OnClick", SpyClearBtn_OnClick)
 
 	-- Pre-allocated Rows
@@ -966,6 +968,9 @@ function Spy:CreateFrames()
 		bg:SetAllPoints()
 		bg:SetTexture(0.15, 0.15, 0.15, 1)
 		btn.Bg = bg
+		local hover = btn:CreateTexture(nil, "HIGHLIGHT")
+		hover:SetAllPoints()
+		hover:SetTexture(1, 1, 1, 0.10)
 
 		-- Status Bar (Class Colored)
 		local sb = btn:CreateTexture(nil, "BORDER")

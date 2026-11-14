@@ -553,14 +553,11 @@ local function CreateABProjectionFrame(name)
     frame:RegisterForClicks("LeftButtonUp")
     frame:RegisterForDrag("LeftButton")
 
-    frame:SetBackdrop({
-        bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile     = true, tileSize = 16, edgeSize = 12,
-        insets   = { left = 3, right = 3, top = 3, bottom = 3 }
-    })
-    frame:SetBackdropColor(0, 0, 0, 0.65)
-    frame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
+    frame.edge = frame:CreateTexture(nil, "BACKGROUND")
+    frame.edge:SetAllPoints(frame)
+    frame.surface = frame:CreateTexture(nil, "BORDER")
+    frame.surface:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+    frame.surface:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
 
     frame:SetScript("OnDragStart", function()
         this:StartMoving()
@@ -577,10 +574,9 @@ local function CreateABProjectionFrame(name)
     end)
     frame:SetScript("OnEnter", function()
         GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Arathi Basin Score Projection", 1, 0.82, 0)
-        GameTooltip:AddLine("Live score forecast based on base capture rates and impending flips.", 0.9, 0.9, 0.9, 1)
-        GameTooltip:AddLine("|cFF00FF00CTRL+LeftClick:|r Announce projection to chat", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("|cFF00FF00Left-drag:|r Reposition HUD overlay", 0.7, 0.7, 0.7)
+        GameTooltip:SetText("Arathi Basin estimate", 1, 1, 1)
+        GameTooltip:AddLine("How the game ends if the bases stay as they are and the assaults under way succeed: who wins and when, the final scores, the bases you need.", 0.9, 0.9, 0.9, 1)
+        GameTooltip:AddLine("Ctrl-click: announce in chat", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -631,6 +627,17 @@ end
 
 local ABProjectionFrame = CreateABProjectionFrame("AutoBG_ABProjectionFrame")
 
+-- Beside the score display it is a faint shade; anywhere else a dark panel in
+-- the timer bars' one-pixel black frame.
+local function SetProjectionLook(docked)
+    local frame = ABProjectionFrame
+    if frame.docked == docked then return end
+    frame.docked = docked
+    frame.edge:SetTexture(0, 0, 0, docked and 0 or 0.85)
+    frame.surface:SetTexture(0.06, 0.06, 0.07, docked and 0.35 or 0.80)
+end
+SetProjectionLook(false)
+
 function AutoBG_LoadTimerPositions()
     AutoBG_LoadPosition(QueueFrame,   "AutoBG_QueueFrame",   "TOP", -220, -100)
     AutoBG_LoadPosition(RespawnFrame, "AutoBG_RespawnFrame", "TOP",    0, -100)
@@ -643,18 +650,15 @@ function AutoBG_LoadTimerPositions()
     -- The projection sits beside the score display unless it was moved.
     if AutoBG_Settings.Positions and AutoBG_Settings.Positions["AutoBG_ABProjectionFrame"] then
         AutoBG_LoadPosition(ABProjectionFrame, "AutoBG_ABProjectionFrame", "TOP", -160, -25)
-        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
-        ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
+        SetProjectionLook(false)
     elseif AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
         ABProjectionFrame:ClearAllPoints()
         ABProjectionFrame:SetPoint("TOPRIGHT", AlwaysUpFrame1, "TOPLEFT", -6, 2)
-        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.35)
-        ABProjectionFrame:SetBackdropBorderColor(0, 0, 0, 0)
+        SetProjectionLook(true)
     else
         ABProjectionFrame:ClearAllPoints()
         ABProjectionFrame:SetPoint("TOP", UIParent, "TOP", -160, -25)
-        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
-        ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
+        SetProjectionLook(false)
     end
 end
 
@@ -681,12 +685,10 @@ function AutoBG_ResetTimerPositions()
     ABProjectionFrame:ClearAllPoints()
     if AlwaysUpFrame1 and AlwaysUpFrame1:IsShown() then
         ABProjectionFrame:SetPoint("TOPRIGHT", AlwaysUpFrame1, "TOPLEFT", -6, 2)
-        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.35)
-        ABProjectionFrame:SetBackdropBorderColor(0, 0, 0, 0)
+        SetProjectionLook(true)
     else
         ABProjectionFrame:SetPoint("TOP", UIParent, "TOP", -160, -25)
-        ABProjectionFrame:SetBackdropColor(0, 0, 0, 0.65)
-        ABProjectionFrame:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.75)
+        SetProjectionLook(false)
     end
 end
 

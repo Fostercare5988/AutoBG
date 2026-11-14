@@ -44,18 +44,26 @@ local function BindCarrier(frame, guid)
     if AutoBG_Targets and AutoBG_Targets.BindUnit then AutoBG_Targets.BindUnit(frame, guid) end
 end
 
+-- A card in the look of the timer bars and the enemy rows: a one-pixel black
+-- frame, a dark surface, the flag, the name in its class color, a glossy bar.
+local NAME_FONT = "Fonts\\ARIALN.TTF"
+local BAR_TEXTURE = [[Interface\AddOns\AutoBG\Textures\Gloss]]
 local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     local frame = CreateFrame("Button", name, UIParent)
     frame:SetWidth(220)
-    frame:SetHeight(42)
+    frame:SetHeight(40)
     frame:SetPoint("TOP", UIParent, "TOP", xOffset, yOffset)
-    frame:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 }
-    })
-    frame:SetBackdropColor(0.12, 0.16, 0.22, 0.95)
+    frame:SetClampedToScreen(true)
+    local edge = frame:CreateTexture(nil, "BACKGROUND")
+    edge:SetAllPoints(frame)
+    edge:SetTexture(0, 0, 0, 0.85)
+    local surface = frame:CreateTexture(nil, "BORDER")
+    surface:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+    surface:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
+    surface:SetTexture(0.10, 0.10, 0.11, 0.92)
+    local hover = frame:CreateTexture(nil, "HIGHLIGHT")
+    hover:SetAllPoints(surface)
+    hover:SetTexture(1, 1, 1, 0.08)
     frame:EnableMouse(true)
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
@@ -75,8 +83,7 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     frame:SetScript("OnEnter", function()
         GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
         GameTooltip:SetText(this.carrierName or titleText, 1, 1, 1)
-        GameTooltip:AddLine("|cFF00FF00Left-Click:|r Target Flag Carrier", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("|cFF00FF00Right-Click:|r Focus Flag Carrier", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Click: target  |  Right-click: focus", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     frame:SetScript("OnLeave", function()
@@ -84,44 +91,47 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     end)
 
     local icon = frame:CreateTexture(nil, "ARTWORK")
-    icon:SetWidth(24); icon:SetHeight(24)
-    icon:SetPoint("LEFT", frame, "LEFT", 8, 0)
+    icon:SetWidth(30); icon:SetHeight(30)
+    icon:SetPoint("LEFT", frame, "LEFT", 4, 0)
     icon:SetTexture(flagTexture)
 
-    local distText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    distText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -5)
+    local distText = frame:CreateFontString(nil, "OVERLAY")
+    distText:SetFont(NAME_FONT, 12, "OUTLINE")
+    distText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -4)
     distText:SetWidth(60); distText:SetHeight(14)
     distText:SetJustifyH("RIGHT")
     distText:SetText("|cFF808080? yd|r")
 
-    local nameText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    nameText:SetPoint("TOPLEFT", frame, "TOPLEFT", 36, -5)
-    nameText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -64, -5)
-    nameText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+    local nameText = frame:CreateFontString(nil, "OVERLAY")
+    nameText:SetPoint("TOPLEFT", frame, "TOPLEFT", 38, -4)
+    nameText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -66, -4)
+    nameText:SetFont(NAME_FONT, 13, "OUTLINE")
     nameText:SetHeight(16); nameText:SetJustifyH("LEFT")
     nameText:SetText(titleText)
 
+    -- The bar takes no clicks, so the card's own reach the player.
     local healthBar = CreateFrame("StatusBar", name .. "HealthBar", frame)
-    healthBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 36, 6)
-    healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 6)
-    healthBar:SetHeight(12)
-    healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    healthBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 38, 5)
+    healthBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -5, 5)
+    healthBar:SetHeight(13)
+    healthBar:SetStatusBarTexture(BAR_TEXTURE)
     healthBar:SetMinMaxValues(0, 100); healthBar:SetValue(100)
     healthBar:SetStatusBarColor(0.1, 0.85, 0.1)
-    -- Rule C8: Disable mouse on child statusbar to guarantee click passthrough to parent Button
     healthBar:EnableMouse(false)
 
     local barBg = healthBar:CreateTexture(nil, "BACKGROUND")
     barBg:SetAllPoints(healthBar)
-    barBg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    barBg:SetVertexColor(0.2, 0.2, 0.2, 0.7)
+    barBg:SetTexture(BAR_TEXTURE)
+    barBg:SetVertexColor(0.15, 0.15, 0.15, 0.9)
 
-    local hpText = healthBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local hpText = healthBar:CreateFontString(nil, "OVERLAY")
+    hpText:SetFont(NAME_FONT, 11, "OUTLINE")
     hpText:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
     hpText:SetText("100%")
 
-    local debuffText = healthBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    debuffText:SetPoint("RIGHT", healthBar, "RIGHT", -2, 0)
+    local debuffText = healthBar:CreateFontString(nil, "OVERLAY")
+    debuffText:SetFont(NAME_FONT, 11, "OUTLINE")
+    debuffText:SetPoint("RIGHT", healthBar, "RIGHT", -3, 0)
     debuffText:SetText("")
 
     frame.nameText = nameText
@@ -133,8 +143,8 @@ local function CreateFCFrame(name, titleText, xOffset, yOffset, flagTexture)
     return frame
 end
 
-local AllianceFC = CreateFCFrame("AutoBG_AllianceFC", "Alliance FC", -130, -150, "Interface\\WorldStateFrame\\HordeFlag")
-local HordeFC = CreateFCFrame("AutoBG_HordeFC", "Horde FC", 130, -150, "Interface\\WorldStateFrame\\AllianceFlag")
+local AllianceFC = CreateFCFrame("AutoBG_AllianceFC", "Alliance carrier", -130, -150, "Interface\\WorldStateFrame\\HordeFlag")
+local HordeFC = CreateFCFrame("AutoBG_HordeFC", "Horde carrier", 130, -150, "Interface\\WorldStateFrame\\AllianceFlag")
 
 function AutoBG_LoadFCPositions()
     AutoBG_LoadPosition(AllianceFC, "AutoBG_AllianceFC", "TOP", -130, -150)
@@ -413,8 +423,8 @@ local function ScanFlagCarriers()
 
     if preview then
         if not showingTest then
-            AllianceFC:Show(); AllianceFC.nameText:SetText("|cFFFF7D0AAlliance Druid|r"); AllianceFC.healthBar:SetValue(82); AllianceFC.hpText:SetText("82%"); AllianceFC.distText:SetText("|cFF00FF0024 yd|r")
-            HordeFC:Show(); HordeFC.nameText:SetText("|cFFC79C6EHorde Warrior|r"); HordeFC.healthBar:SetValue(45); HordeFC.hpText:SetText("45%"); HordeFC.distText:SetText("|cFFFFFF0042 yd|r")
+            AllianceFC:Show(); AllianceFC.nameText:SetText("|cFFFF7D0ALeafwhisper|r"); AllianceFC.healthBar:SetValue(82); AllianceFC.hpText:SetText("82%"); AllianceFC.distText:SetText("|cFF00FF0024 yd|r")
+            HordeFC:Show(); HordeFC.nameText:SetText("|cFFC79C6EGrumak|r"); HordeFC.healthBar:SetValue(45); HordeFC.healthBar:SetStatusBarColor(0.95, 0.8, 0.1); HordeFC.hpText:SetText("45%"); HordeFC.distText:SetText("|cFFFFFF0042 yd|r"); HordeFC.debuffText:SetText("|cFFFF2020[3]|r")
             showingTest = true
         end
         return

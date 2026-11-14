@@ -425,9 +425,17 @@ end
 -- Flag Carrier Resolution (Direct Integration with AutoBG_FC Authority)      --
 -- Zero duplicated regex, zero duplicate chat event registrations!            --
 -- -------------------------------------------------------------------------- --
+-- The preview's sample enemies: made-up names, so it reads like a match.
+local PREVIEW_NAMES = {
+	"Kaelyn", "Morgrim", "Sylvara", "Thokk", "Brannoc", "Elowen", "Garzul", "Isolde", "Varek", "Nyssa",
+	"Durgan", "Ilyra", "Korvash", "Merrin", "Zaltha", "Orrin", "Brekka", "Tavish", "Yselle", "Gorvak",
+	"Aldric", "Fenna", "Hrothgar", "Lissan", "Mordak", "Pyria", "Ragna", "Sevran", "Tilda", "Urgoth",
+	"Vesna", "Wulfric", "Xara", "Yorick", "Zenna", "Bryndis", "Caldor", "Delmira", "Eskar", "Faelan",
+}
+
 local function GetEnemyFlagCarrier()
 	if Targets.isConfig then
-		return "Target1"
+		return PREVIEW_NAMES[1]
 	end
 	return AutoBG_GetEnemyCarrier()
 end
@@ -729,7 +737,7 @@ local function UpdateRowTrinketVisual(index, name)
 				local s = seconds % 60
 				btn.Trinket.Text:SetText(string.format("%d:%02d", m, s))
 			else
-				btn.Trinket.Text:SetText(seconds .. "s")
+				btn.Trinket.Text:SetText(tostring(seconds))
 			end
 		end
 		if btn.trinketCooling ~= true then
@@ -1395,7 +1403,11 @@ function Targets:CreateFrames()
 
 		SetBorderColor(btn, 0, 0, 0, 0.80)
 
-		btn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+		-- Hover: a soft light over the row, as on the Spy list and the carrier cards.
+		btn.Hover = btn:CreateTexture(nil, "HIGHLIGHT")
+		btn.Hover:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+		btn.Hover:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+		btn.Hover:SetTexture(1, 1, 1, 0.10)
 		btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 		btn:SetScript("OnClick", TargetButton_OnClick)
 		btn:SetScript("OnEnter", TargetButton_OnEnter)
@@ -1981,7 +1993,7 @@ function Targets:EnableConfigMode(size)
 	local now = GetTime()
 	for i = 1, currentSize do
 		local e = roster[i]
-		e.name = "Target" .. i
+		e.name = PREVIEW_NAMES[i]
 		e.classToken = classes[((i - 1) % #classes) + 1]
 		e.guid = nil
 		healthPct[e.name] = 100 - ((i * 7) % 85)
