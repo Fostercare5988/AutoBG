@@ -84,10 +84,14 @@ Open `/abg targets` or `/bgt`. Pick the battleground size at the top (10v10,
 it. Inside a match the page edits the size you are playing.
 
 The left column is for that size alone: **Show the frames**, **Hide realm
-names**, the **PvP trinket cooldown** and which side it sits on. A used trinket
-darkens with a sweep that drains as it comes back, like your own trinkets in
-GearRack, and counts "2:25", then "38"; it counts 3 minutes from a use AutoBG
-saw, so one used out of your sight still looks ready. Its **size** has three presets, Compact, Standard and
+names**, **Trinket and racial** and which side they sit on. Beside the PvP
+trinket sits the enemy's racial, once their race is known (the scoreboard, a
+sighting or a use tells it): Perception, Stoneform, Shadowmeld, Escape Artist,
+Blood Fury, Will of the Forsaken, War Stomp or Berserking, with this server's
+cooldowns (Shadowmeld 60 s, War Stomp and Will of the Forsaken 150 s). A used
+one darkens with a sweep that drains as it comes back, like your own trinkets
+in GearRack, and counts "2:25", then "38". Both count from a use AutoBG saw, so
+one used out of your sight still looks ready. Its **size** has three presets, Compact, Standard and
 Large, and sliders for text size, scale, width, height and opacity in between.
 
 The right column, **Every size**:

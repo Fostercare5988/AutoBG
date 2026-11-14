@@ -143,7 +143,7 @@ local function PlaceStrip(i, btn)
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	local castRight = o and o.CastPos == "RIGHT"
 	local trinketRight = o and o.TrinketPos == "RIGHT" and o.ShowTrinket and o.ShowTrinket[5]
-	local anchor = (castRight and o.ShowCastBars ~= false and btn.Cast) or (trinketRight and btn.Trinket) or btn
+	local anchor = (castRight and o.ShowCastBars ~= false and btn.Cast) or (trinketRight and btn.Racial) or btn
 	SizeStrip(i, btn)
 	if anchorKey[i] == anchor then return end
 	anchorKey[i] = anchor

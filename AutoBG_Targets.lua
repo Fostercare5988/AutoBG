@@ -54,6 +54,33 @@ local TRINKET_SPELL_NAMES = {
 	["Immune Fear/Polymorph/Snare"] = true,
 }
 
+-- The racial each race uses in a fight, with OctoWoW's cooldown: octowow.st/db,
+-- Racial Traits (?spells=-4), read 2026-11-14. Shadowmeld (60 s), War Stomp
+-- and Will of the Forsaken (150 s) differ from vanilla. Troll Berserking has
+-- one ID per power type. Cannibalize, Spiritwalk and the passives are left out.
+local RACIALS = {
+	[20600] = { race = "Human", cooldown = 180 },     -- Perception
+	[20594] = { race = "Dwarf", cooldown = 180 },     -- Stoneform
+	[20580] = { race = "Night Elf", cooldown = 60 },  -- Shadowmeld
+	[20589] = { race = "Gnome", cooldown = 90 },      -- Escape Artist
+	[20572] = { race = "Orc", cooldown = 120 },       -- Blood Fury
+	[7744]  = { race = "Undead", cooldown = 150 },    -- Will of the Forsaken
+	[20549] = { race = "Tauren", cooldown = 150 },    -- War Stomp
+	[20554] = { race = "Troll", cooldown = 180 },     -- Berserking (mana)
+	[26296] = { race = "Troll", cooldown = 180 },     -- Berserking (rage)
+	[26297] = { race = "Troll", cooldown = 180 },     -- Berserking (energy)
+}
+local RACE_RACIAL = {
+	Human = 20600, Dwarf = 20594, ["Night Elf"] = 20580, Gnome = 20589,
+	Orc = 20572, Undead = 7744, Tauren = 20549, Troll = 20554,
+}
+-- The scoreboard and UnitRace name races in English; the client's tokens too.
+local RACE_NAMES = { Scourge = "Undead", NightElf = "Night Elf" }
+local function RaceName(race)
+	if not race or race == "" then return nil end
+	return RACE_NAMES[race] or race
+end
+
 local function GetEnemyTrinketTexture()
 	local f = UnitFactionGroup("player")
 	return (f == "Horde") and ALLIANCE_TRINKET_TEXTURE or HORDE_TRINKET_TEXTURE
@@ -132,6 +159,8 @@ local healthPct = {}
 local deadState = {}
 local stealthedState = {}
 local trinketCooldown = {}
+local racialCooldown = {} -- enemy name -> when their racial is back
+local enemyRace = {}      -- enemy name -> race, from the scoreboard, a sighting or a racial used
 local openingNode = {} -- enemy name -> flag the flag watch sees them opening
 
 local wipe = table.wipe
@@ -433,6 +462,12 @@ local PREVIEW_NAMES = {
 	"Vesna", "Wulfric", "Xara", "Yorick", "Zenna", "Bryndis", "Caldor", "Delmira", "Eskar", "Faelan",
 }
 
+-- A race each sample class can be.
+local PREVIEW_RACES = {
+	WARRIOR = "Orc", PRIEST = "Undead", MAGE = "Gnome", DRUID = "Tauren", HUNTER = "Night Elf",
+	ROGUE = "Human", SHAMAN = "Troll", PALADIN = "Dwarf", WARLOCK = "Undead",
+}
+
 local function GetEnemyFlagCarrier()
 	if Targets.isConfig then
 		return PREVIEW_NAMES[1]
@@ -706,7 +741,7 @@ local function ClearAllStealth()
 	end
 end
 
--- The trinket's clock reads like the timer bars: "2:25", then "38".
+-- A cooldown's clock reads like the timer bars: "2:25", then "38".
 local trinketClock
 local function TrinketClock()
 	if not trinketClock then
@@ -722,50 +757,124 @@ local function TrinketClock()
 	return trinketClock
 end
 
+-- Shows a use that ends at exp and lasts length, or none. Written only when a
+-- use starts or ends: the engine drains the sweep and writes the clock
+-- (ClassicAPI Cooldown and duration text binding).
+local function ShowCooldown(icon, exp, length)
+	if icon.exp == exp then return end
+	icon.exp = exp
+	if exp then
+		icon.Cooldown:SetCooldown(exp - length, length)
+		icon.Span:SetTimeSpan(exp - length, exp)
+		icon.Clock:SetDuration(icon.Span)
+		icon.Clock:SetTextFormat("{}", TrinketClock())
+		icon.Clock:SetEnabled(true)
+	else
+		icon.Cooldown:Clear()
+		icon.Clock:SetEnabled(false)
+		icon.Text:SetText("")
+	end
+end
+
+local function ShowIcon(icon, on)
+	if icon.isOn == on then return end
+	icon.isOn = on
+	if on then icon:Show() else icon:Hide() end
+end
+
+-- The client names every racial's icon; asked once per spell.
+local racialTextures = {}
+local function RacialTexture(spellId)
+	local texture = racialTextures[spellId]
+	if texture == nil then
+		local _, _, icon = GetSpellInfo(spellId)
+		texture = icon or false
+		racialTextures[spellId] = texture
+	end
+	return texture
+end
+
+-- When a cooldown in list is back; one whose end has passed goes.
+local function BackAt(list, name)
+	local exp = list[name]
+	if exp and exp <= GetTime() then list[name] = nil; return nil end
+	return exp
+end
+
+-- The trinket, and beside it the racial of the enemy's race once it is known.
 local function UpdateRowTrinketVisual(index, name)
 	local btn = Targets.TargetButton and Targets.TargetButton[index]
 	if not btn or not btn.Trinket then return end
-
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	local size = currentSize
-	local exp = name and trinketCooldown[name]
-	if exp and exp <= GetTime() then trinketCooldown[name] = nil; exp = nil end
-	if (o and o.ShowTrinket and o.ShowTrinket[size] == false) or not name then
-		if btn.trinketShown ~= false then btn.Trinket:Hide(); btn.trinketShown = false end
+	if not name or (o and o.ShowTrinket and o.ShowTrinket[currentSize] == false) then
+		ShowIcon(btn.Trinket, false)
+		ShowIcon(btn.Racial, false)
 		return
 	end
-
-	if btn.trinketShown ~= true then btn.Trinket:Show(); btn.trinketShown = true end
+	ShowIcon(btn.Trinket, true)
 	local texture = GetEnemyTrinketTexture()
 	if btn.trinketTexture ~= texture then
 		btn.trinketTexture = texture
 		btn.Trinket.Icon:SetTexture(texture)
 	end
+	ShowCooldown(btn.Trinket, BackAt(trinketCooldown, name), TRINKET_COOLDOWN)
 
-	-- Written only when a use starts or ends: the engine drains the sweep and
-	-- writes the clock (ClassicAPI Cooldown and duration text binding).
-	if btn.trinketExp == exp then return end
-	btn.trinketExp = exp
-	local trinket = btn.Trinket
-	if exp then
-		trinket.Cooldown:SetCooldown(exp - TRINKET_COOLDOWN, TRINKET_COOLDOWN)
-		trinket.Span:SetTimeSpan(exp - TRINKET_COOLDOWN, exp)
-		trinket.Clock:SetDuration(trinket.Span)
-		trinket.Clock:SetTextFormat("{}", TrinketClock())
-		trinket.Clock:SetEnabled(true)
-	else
-		trinket.Cooldown:Clear()
-		trinket.Clock:SetEnabled(false)
-		trinket.Text:SetText("")
-	end
+	local spell = RACE_RACIAL[enemyRace[name] or ""]
+	local icon = spell and RacialTexture(spell)
+	local racial = btn.Racial
+	ShowIcon(racial, icon and true or false)
+	if not icon then ShowCooldown(racial, nil); return end
+	if racial.spell ~= spell then racial.spell = spell; racial.Icon:SetTexture(icon) end
+	ShowCooldown(racial, BackAt(racialCooldown, name), RACIALS[spell].cooldown)
 end
 
--- The sweep ended: the trinket is ready again.
-local function Trinket_OnCooldownDone(self)
-	local btn = (self or this).owner
+-- A sweep ended: that trinket or racial is ready again.
+local function Cooldown_OnDone(self)
+	local cd = self or this
+	local btn = cd.owner
 	local name = btn.targetName
-	if name and trinketCooldown[name] == btn.trinketExp then trinketCooldown[name] = nil end
+	if name and cd.list[name] == cd.icon.exp then cd.list[name] = nil end
 	UpdateRowTrinketVisual(btn.buttonNum, name)
+end
+
+-- An icon beside the row whose use darkens it: the native cooldown sweep in the
+-- icon's rounded shape, as GearRack's and the action bars' do. The game's own
+-- numbers stay hidden (they follow a CVar of the player's); the clock is a
+-- duration text binding. Nothing runs in Lua while it counts. list holds the
+-- ends it shows (the trinkets' or the racials').
+local function CreateCooldownIcon(btn, name, list)
+	local f = CreateFrame("Frame", name, btn)
+	f:SetFrameLevel(btn:GetFrameLevel() + 3)
+	f:SetWidth(20)
+	f:SetHeight(20)
+	f:Hide()
+	-- ClassicAPI's mask clips the icon to a softly rounded square.
+	f.Icon = f:CreateTexture(nil, "ARTWORK")
+	f.Icon:SetAllPoints(f)
+	f.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+	f.Icon:SetMask(ROUNDED_MASK)
+	local cd = CreateFrame("Cooldown", name .. "CD", f)
+	cd:SetAllPoints(f.Icon)
+	cd:SetDrawEdge(false)
+	cd:SetDrawBling(false)
+	cd:SetSwipeTexture(ROUNDED_MASK)
+	cd:SetSwipeColor(0, 0, 0, 0.75)
+	cd:SetHideCountdownNumbers(true)
+	cd.owner, cd.icon, cd.list = btn, f, list
+	cd:SetScript("OnCooldownDone", Cooldown_OnDone)
+	f.Cooldown = cd
+	-- UNVERIFIED: test in game that a used enemy trinket or racial darkens with a rounded sweep and counts "2:25", "38"
+	local top = CreateFrame("Frame", nil, f)
+	top:SetAllPoints(f)
+	top:SetFrameLevel(cd:GetFrameLevel() + 1)
+	f.Text = top:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	f.Text:SetPoint("CENTER", f, "CENTER", 0, 0)
+	f.Text:SetFont(FONT, 9, "OUTLINE")
+	f.Text:SetTextColor(1, 0.92, 0.35, 1)
+	f.Span = C_DurationUtil.CreateDuration()
+	f.Clock = C_DurationUtil.CreateDurationTextBinding()
+	f.Clock:SetFontString(f.Text)
+	return f
 end
 
 -- -------------------------------------------------------------------------- --
@@ -1068,16 +1177,28 @@ local function TriggerTrinketCooldown(name)
 	end
 end
 
+-- A racial used: the enemy's race is known from now on, and its cooldown runs.
+local function TriggerRacial(name, spellId)
+	local racial = RACIALS[spellId]
+	if not (name and racial) then return end
+	enemyRace[name] = racial.race
+	local now = GetTime()
+	-- CAST and BUFF_ADDED_OTHER observations describe the same use.
+	if racialCooldown[name] and racialCooldown[name] > now then return end
+	racialCooldown[name] = now + racial.cooldown
+	local row = nameToRow[name]
+	if row and Targets.MainFrame:IsShown() then UpdateRowTrinketVisual(row, name) end
+end
+
 local function ClearAllTrinkets()
 	wipe(trinketCooldown)
+	wipe(racialCooldown)
 	if Targets.TargetButton then
 		for i = 1, MAX_ENEMIES do
 			local btn = Targets.TargetButton[i]
 			if btn and btn.Trinket then
-				btn.Trinket.Cooldown:Clear()
-				btn.Trinket.Clock:SetEnabled(false)
-				btn.Trinket.Text:SetText("")
-				btn.trinketExp = nil
+				ShowCooldown(btn.Trinket, nil)
+				ShowCooldown(btn.Racial, nil)
 			end
 		end
 	end
@@ -1349,47 +1470,10 @@ function Targets:CreateFrames()
 		cast:SetScript("OnEnter", Cast_OnEnter)
 		cast:SetScript("OnLeave", TargetButton_OnLeave)
 
-		-- PvP Trinket Frame
-		local trinket = CreateFrame("Frame", "AutoBG_TargetTrinket" .. i, btn)
-		btn.Trinket = trinket
-		trinket:SetFrameLevel(btn:GetFrameLevel() + 3)
-		trinket:SetWidth(20)
-		trinket:SetHeight(20)
-		trinket:Hide()
-
-		-- ClassicAPI's mask clips the icon to a softly rounded square.
-		trinket.Icon = trinket:CreateTexture(nil, "ARTWORK")
-		trinket.Icon:SetAllPoints(trinket)
-		trinket.Icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-		trinket.Icon:SetTexture(GetEnemyTrinketTexture())
-		trinket.Icon:SetMask(ROUNDED_MASK)
-
-		-- A used trinket: the native cooldown sweep darkens what is left, in
-		-- the icon's rounded shape, as GearRack's and the action bars' do. The
-		-- game's own numbers stay hidden (they follow a CVar of the player's);
-		-- the clock above is a duration text binding. Nothing runs in Lua
-		-- while it counts.
-		local cd = CreateFrame("Cooldown", "AutoBG_TargetTrinketCD" .. i, trinket)
-		cd:SetAllPoints(trinket.Icon)
-		cd:SetDrawEdge(false)
-		cd:SetDrawBling(false)
-		cd:SetSwipeTexture(ROUNDED_MASK)
-		cd:SetSwipeColor(0, 0, 0, 0.75)
-		cd:SetHideCountdownNumbers(true)
-		cd.owner = btn
-		cd:SetScript("OnCooldownDone", Trinket_OnCooldownDone)
-		trinket.Cooldown = cd
-		-- UNVERIFIED: test in game that a used enemy trinket darkens with a rounded sweep and counts "2:25", "38"
-		local top = CreateFrame("Frame", nil, trinket)
-		top:SetAllPoints(trinket)
-		top:SetFrameLevel(cd:GetFrameLevel() + 1)
-		trinket.Text = top:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-		trinket.Text:SetPoint("CENTER", trinket, "CENTER", 0, 0)
-		trinket.Text:SetFont(FONT, 9, "OUTLINE")
-		trinket.Text:SetTextColor(1, 0.92, 0.35, 1)
-		trinket.Span = C_DurationUtil.CreateDuration()
-		trinket.Clock = C_DurationUtil.CreateDurationTextBinding()
-		trinket.Clock:SetFontString(trinket.Text)
+		-- The PvP trinket, and the racial beside it.
+		btn.Trinket = CreateCooldownIcon(btn, "AutoBG_TargetTrinket" .. i, trinketCooldown)
+		btn.Trinket.Icon:SetTexture(GetEnemyTrinketTexture())
+		btn.Racial = CreateCooldownIcon(btn, "AutoBG_TargetRacial" .. i, racialCooldown)
 
 		btn.Name = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		btn.Name:SetPoint("LEFT", btn, "LEFT", 4, 0)
@@ -1500,17 +1584,26 @@ function Targets:SetupButtonLayout(size)
 		local tFontSize = math.max(9, math.floor(height * 0.6))
 		btn.Trinket.Text:SetFont(FONT, tFontSize, "THICKOUTLINE")
 		btn.Trinket.Icon:SetTexture(GetEnemyTrinketTexture())
+		btn.Racial:ClearAllPoints()
+		if tPos == "LEFT" then
+			btn.Racial:SetPoint("RIGHT", btn.Trinket, "LEFT", -2, 0)
+		else
+			btn.Racial:SetPoint("LEFT", btn.Trinket, "RIGHT", 2, 0)
+		end
+		btn.Racial:SetWidth(height)
+		btn.Racial:SetHeight(height)
+		btn.Racial.Text:SetFont(FONT, tFontSize, "THICKOUTLINE")
 		btn.RaidIcon:SetWidth(height - 6)
 		btn.RaidIcon:SetHeight(height - 6)
 		btn.nameInset, btn.raidInset = nil, nil
 		btn.TargetCount:SetFont(FONT, fontSize, "OUTLINE")
 		local cast = btn.Cast
 		cast:ClearAllPoints()
-		-- On the trinket's side, the cast bar sits just outside the trinket.
+		-- On the trinket's side, the cast bar sits just outside the trinket and racial.
 		local castSide = (o and o.CastPos) or "LEFT"
 		local anchor = btn
 		if castSide == ((o and o.TrinketPos) or "RIGHT") and o and o.ShowTrinket and o.ShowTrinket[size] then
-			anchor = btn.Trinket
+			anchor = btn.Racial
 		end
 		if castSide == "RIGHT" then
 			cast:SetPoint("LEFT", anchor, "RIGHT", 3, 0)
@@ -1664,6 +1757,7 @@ local function RenderRoster()
 	for name in pairs(healthPct) do if not nameToRow[name] then healthPct[name] = nil end end
 	for name in pairs(deadState) do if not nameToRow[name] then deadState[name] = nil end end
 	for name in pairs(trinketCooldown) do if not nameToRow[name] then trinketCooldown[name] = nil end end
+	for name in pairs(racialCooldown) do if not nameToRow[name] then racialCooldown[name] = nil end end
 	for name, entry in pairs(stealthedState) do
 		if not nameToRow[name] then stealthedState[name] = nil; ReleaseStealthEntry(entry) end
 	end
@@ -1702,8 +1796,8 @@ local function RenderRoster()
 			btn.StealthIcon:Hide()
 			btn.StealthIconBg:Hide()
 			btn.FlagIcon:Hide()
-			btn.Trinket:Hide()
-			btn.trinketShown = false
+			ShowIcon(btn.Trinket, false)
+			ShowIcon(btn.Racial, false)
 			btn.castOwner = nil
 			StopCast(btn)
 			btn:Hide()
@@ -1746,6 +1840,7 @@ function Targets:BattlefieldScoreUpdate(force)
 		wipe(shortNameToFull)
 		wipe(healthPct)
 		wipe(deadState)
+		wipe(enemyRace)
 		StopRespawns()
 		Targets.MainFrame:Hide()
 		return
@@ -1782,7 +1877,7 @@ function Targets:BattlefieldScoreUpdate(force)
 	enemyCount = 0
 	RefreshGroupNames()
 	for i = 1, numScores do
-		local name, _, _, _, _, faction, _, _, class, classToken = GetBattlefieldScore(i)
+		local name, _, _, _, _, faction, _, race, class, classToken = GetBattlefieldScore(i)
 		if name and StripRealm(name) ~= playerName and enemyCount < MAX_ENEMIES
 			and not arena and faction == enemyFaction and not notEnemy[name]
 			and not groupNames[StripRealm(name)] then
@@ -1792,6 +1887,7 @@ function Targets:BattlefieldScoreUpdate(force)
 			local rawClass = (type(classToken) == "string" and classToken) or (type(class) == "string" and class)
 			e.classToken = ResolveClassToken(rawClass)
 			e.guid = nameToGUID[name]
+			enemyRace[name] = RaceName(race) or enemyRace[name]
 		end
 	end
 	local cap = Targets.activeArena and ARENA_BRACKET or MAX_ENEMIES
@@ -1943,6 +2039,12 @@ local function ObserveUnit(unit, scanAuras)
 	local guid = UnitGUID(unit)
 	local name = EnemyName(rawName, unit, guid)
 	if not name then return end
+	-- An enemy never on the scoreboard (an arena) shows its race when seen.
+	if not enemyRace[name] then
+		enemyRace[name] = RaceName(UnitRace(unit))
+		local row = enemyRace[name] and nameToRow[name]
+		if row and Targets.MainFrame:IsShown() then UpdateRowTrinketVisual(row, name) end
+	end
 
 	if guid then
 		nameToGUID[name] = guid
@@ -2034,6 +2136,8 @@ function Targets:EnableConfigMode(size)
 		elseif i == 4 then
 			trinketCooldown[e.name] = now + 88  -- 1:28 preview
 		end
+		enemyRace[e.name] = PREVIEW_RACES[e.classToken]
+		if i == 3 then racialCooldown[e.name] = now + 52 elseif i == 6 then racialCooldown[e.name] = now + 131 end
 		-- Samples go through the same lookup as a real match: Stealth, Vanish,
 		-- Prowl, Invisibility Potion, Gnomish Cloaking Device.
 		local sample = (e.classToken == "ROGUE" and (i % 2 == 1 and 1787 or 1857))
@@ -2085,6 +2189,7 @@ end
 
 function Targets:DisableConfigMode()
 	Targets.isConfig = false
+	wipe(enemyRace)
 	prevEnemyCount = -1
 	ClearAllStealth()
 	ClearAllTrinkets()
@@ -2222,7 +2327,10 @@ local function Targets_OnEvent()
 		local name = RosterNameForGUID(a1)
 		if not name then return end
 		-- PvP trinkets apply their immunity aura on use ("X gains Immune ..." in the combat log).
-		if ev == "BUFF_ADDED_OTHER" and IsTrinketSpell(a3) then TriggerTrinketCooldown(name) end
+		if ev == "BUFF_ADDED_OTHER" then
+			if IsTrinketSpell(a3) then TriggerTrinketCooldown(name) end
+			TriggerRacial(name, a3)
+		end
 		local isStealth, sName, sTex, sDur = CheckIsStealthSpell(a3)
 		if isStealth then
 			if ev == "BUFF_ADDED_OTHER" then
@@ -2245,6 +2353,7 @@ local function Targets_OnEvent()
 			if IsTrinketSpell(spellId) then
 				TriggerTrinketCooldown(name)
 			end
+			TriggerRacial(name, spellId)
 
 			local isStealth, sName, sTex, sDur = CheckIsStealthSpell(spellId)
 			if isStealth then

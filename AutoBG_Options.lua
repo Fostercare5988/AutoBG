@@ -364,9 +364,9 @@ layout:Section(frames)
 local sizeHeading = layout:Heading(frames, L, "10v10 frames")
 SizeSetting("AutoBG_Tgt_Enable", "Show the frames", "Show enemy frames in battlegrounds of this size.", "EnableBracket", false)
 SizeSetting("AutoBG_Tgt_HideRealm", "Hide realm names", "Leave the realm off enemy names, as cross-realm battlegrounds show them.", "ButtonHideRealm", true)
-SizeSetting("AutoBG_Tgt_Trinket", "PvP trinket cooldown", "Each enemy's 3-minute PvP trinket cooldown, seen when they use it.", "ShowTrinket", true)
+SizeSetting("AutoBG_Tgt_Trinket", "Trinket and racial", "Each enemy's PvP trinket (3 minutes) and racial (Will of the Forsaken, Stoneform, War Stomp and the others, with this server's cooldowns), darkened while they come back. Counted from a use you saw.", "ShowTrinket", true)
 local function Trinket() return TargetOptions().ShowTrinket[selectedBracket] and true or false end
-Switch(3, frames, L, "AutoBG_Tgt_TrinketLeft", "Trinket on the left", "Put the trinket on the left of the row instead of the right. Every size.",
+Switch(3, frames, L, "AutoBG_Tgt_TrinketLeft", "Trinket on the left", "Put the trinket and racial on the left of the row instead of the right. Every size.",
 	function() return TargetOptions().TrinketPos == "LEFT" end,
 	function(value) TargetOptions().TrinketPos = value and "LEFT" or "RIGHT"; Relayout(); Rerender() end,
 	{ indent = 16 }, Trinket)

@@ -11,8 +11,8 @@ enemy alerts for World of Warcraft 1.12.1, build 5875.
   completed matches and request the same queue again.
 - Show objective, gate, flag-respawn, queue and spirit-healer countdowns.
 - Track Warsong flag carriers with health, distance, target and focus controls.
-- Show battleground enemy rows, class colors, observed trinket cooldowns and
-  when a dead enemy comes back.
+- Show battleground enemy rows, class colors, observed trinket and racial
+  cooldowns (OctoWoW's numbers) and when a dead enemy comes back.
 - Track recent open-world enemies in a compact Spy list, with optional nearby
   stealth warnings and sound suppression.
 - Configure everything on five settings pages, in the `/abg` window or in Game
