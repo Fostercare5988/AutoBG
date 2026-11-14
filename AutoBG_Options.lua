@@ -87,8 +87,6 @@ local panelGeneral, panelTimers, panelTargets, panelSpy, panelArena = pages[1], 
 UI.Heading(panelGeneral, "Queue pop", 28, -98)
 local cbAutoAccept = Setting("AutoBG_Opt_AutoAccept", panelGeneral, "Accept queue pops",
 	"Automatically accept battleground queue pops.", 28, -118, "AutoAccept")
-local cbSkipAFK = Setting("AutoBG_Opt_SkipAFK", panelGeneral, "Pause while AFK",
-	"Do not accept, queue or rejoin automatically while you are flagged AFK.", 28, -144, "SkipIfAFK")
 local sliderAcceptDelay = UI.Slider("AutoBG_Opt_AcceptDelay", panelGeneral, "Enter delay", 28, -176, 200, 0, AutoBG_MAX_ENTER_DELAY, 1,
 	function(value)
 		if AutoBG_Settings then AutoBG_Settings.AutoAcceptDelay = value end
@@ -164,14 +162,11 @@ local cbFlash = Setting("AutoBG_Opt_Flash", panelGeneral, "Flash the taskbar",
 	"Flash the game window in the Windows taskbar when a queue pops.", 264, -312, "FlashTaskbar", nil, 172)
 local cbChatMsg = Setting("AutoBG_Opt_ChatMsg", panelGeneral, "Chat messages",
 	"Print status messages in chat for queues, joins and exits.", 264, -338, "ChatMessages", nil, 172)
-local cbScoreColor = Setting("AutoBG_Opt_ScoreColor", panelGeneral, "Class colors on scoreboard",
-	"Color player names on the scoreboard by class.", 264, -364, "ScoreColor", nil, 172)
 
 Refresh[1] = function()
 	local s = AutoBG_Settings
 	if not s then return end
 	UI.Sync(cbAutoAccept, s.AutoAccept)
-	UI.Sync(cbSkipAFK, s.SkipIfAFK ~= false)
 	UI.SetSlider(sliderAcceptDelay, s.AutoAcceptDelay or 0)
 	UI.Sync(cbAutoLeave, s.AutoLeave)
 	UI.Sync(cbAutoRejoin, s.AutoRejoin)
@@ -187,7 +182,6 @@ Refresh[1] = function()
 	UI.Sync(cbSound, s.NotifySound)
 	UI.Sync(cbFlash, s.FlashTaskbar)
 	UI.Sync(cbChatMsg, s.ChatMessages)
-	UI.Sync(cbScoreColor, s.ScoreColor)
 end
 
 -- -------------------------------------------------------------------------- --
@@ -297,10 +291,6 @@ local cbTgtEnable = BracketSetting("AutoBG_Tgt_Enable", "Show frames in 10v10",
 	"Show enemy frames for this battleground size.", 28, -154, "EnableBracket", true)
 local cbTgtHideRealm = BracketSetting("AutoBG_Tgt_HideRealm", "Hide realm names",
 	"Strip the realm suffix from enemy names.", 28, -180, "ButtonHideRealm", false, true)
-local cbTgtHealthText = BracketSetting("AutoBG_Tgt_HealthText", "Health percent",
-	"Show each enemy's health percentage on the row.", 28, -206, "ButtonShowHealthText", false, true)
-local cbTgtDim = BracketSetting("AutoBG_Tgt_DimStealth", "Dim stealthed enemies",
-	"Fade the rows of enemies in stealth.", 28, -232, "DimStealthed", false, true)
 local cbTgtTrinket = BracketSetting("AutoBG_Tgt_Trinket", "PvP trinket cooldown",
 	"Track each enemy's 3-minute PvP trinket cooldown.", 28, -258, "ShowTrinket", true, true)
 local cbTgtTrinketLeft = UI.Switch("AutoBG_Tgt_TrinketLeft", panelTargets, "Trinket on the left",
@@ -360,8 +350,6 @@ local cbTgtCastLeft = UI.Switch("AutoBG_Tgt_CastLeft", panelTargets, "Cast bars 
 	end, 156)
 local cbTgtRange = RowFeature("AutoBG_Tgt_FadeRange", "Mark enemies in range",
 	"A thin green stripe on the left of each enemy within 80 yards, so the ones you can reach stand out. Nothing else changes; enemies you have not been near yet get no stripe.", -258, "FadeOutOfRange")
-local cbTgtRaidIcons = RowFeature("AutoBG_Tgt_RaidIcons", "Raid icons",
-	"Show the skull, cross and other raid icons your group puts on enemies.", -284, "ShowRaidIcons")
 local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
 	"Show how many of your group, you included, target each enemy, in orange beside the health.", -310, "ShowTargetCount")
 local cbTgtFlagWatch = RowFeature("AutoBG_Tgt_FlagWatch", "Flag warnings",
@@ -419,15 +407,12 @@ UpdateTargetsWidgets = function(sz)
 	sizeHint:SetText("The switches above and the frame size apply to " .. label .. " only.")
 	UI.Sync(cbTgtEnable, o.EnableBracket and o.EnableBracket[sz])
 	UI.Sync(cbTgtHideRealm, o.ButtonHideRealm and o.ButtonHideRealm[sz])
-	UI.Sync(cbTgtHealthText, o.ButtonShowHealthText and o.ButtonShowHealthText[sz])
-	UI.Sync(cbTgtDim, o.DimStealthed and o.DimStealthed[sz])
 	local trinket = o.ShowTrinket and o.ShowTrinket[sz]
 	UI.Sync(cbTgtTrinket, trinket)
 	UI.Sync(cbTgtTrinketLeft, o.TrinketPos == "LEFT", trinket and true or false)
 	UI.Sync(cbTgtCastBars, o.ShowCastBars ~= false)
 	UI.Sync(cbTgtCastLeft, o.CastPos ~= "RIGHT", o.ShowCastBars ~= false)
 	UI.Sync(cbTgtRange, o.FadeOutOfRange ~= false)
-	UI.Sync(cbTgtRaidIcons, o.ShowRaidIcons ~= false)
 	UI.Sync(cbTgtTargetCount, o.ShowTargetCount ~= false)
 	UI.Sync(cbTgtFlagWatch, o.FlagWatch ~= false)
 	-- Flag warnings are an Arathi Basin feature (the 15v15 size): not offered
@@ -483,8 +468,6 @@ local cbSpySound = SpySetting("AutoBG_Spy_SoundAlert", "Alert sounds",
 	"Play a sound for new enemies and stealth warnings outside BGs. At most one alert per 8 seconds; repeated contacts stay quiet. Off by default. BG sounds have their own setting.", 28, -226, "SoundAlert")
 local cbSpyStealth = SpySetting("AutoBG_Spy_StealthAlert", "Stealth warnings",
 	"Show a brief stealth warning outside BGs. Its sound follows Alert sounds. Repeated warnings for the same enemy stay quiet for 60 seconds. BG alerts have their own setting.", 28, -252, "StealthAlert", function() Refresh[4]() end)
-local cbSpyProximity = SpySetting("AutoBG_Spy_StealthProximityOnly", "Only enemies I can see",
-	"On (default): warn only for a stealthed enemy you can actually see, at any distance your detection reaches. Off: Spy-style warning on a received stealth cast, even if you cannot see the enemy. BG warnings always need you to see them.", 44, -278, "StealthProximityOnly")
 local cbSpyBGStealth = UI.Switch("AutoBG_Spy_BGStealthAlert", panelSpy, "Stealth warnings in BGs",
 	"In battlegrounds, warn with a sound when you can see a stealthed enemy, at any distance your detection reaches. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Enemy frames still show who is hidden.", 28, -304, function(value)
 		Targets:EnsureOptions()
@@ -519,7 +502,6 @@ Refresh[4] = function()
 	UI.Sync(cbSpyDisableInRaids, opt.DisableInRaids ~= false)
 	UI.Sync(cbSpySound, opt.SoundAlert)
 	UI.Sync(cbSpyStealth, opt.StealthAlert)
-	UI.Sync(cbSpyProximity, opt.StealthProximityOnly ~= false, opt.StealthAlert and true or false)
 	if Targets and Targets.EnsureOptions then Targets:EnsureOptions() end
 	UI.Sync(cbSpyBGStealth, AutoBG_Settings.Targets and AutoBG_Settings.Targets.StealthAlert)
 	UI.SetSlider(sliderSpyTimeout, opt.Timeout or 30)

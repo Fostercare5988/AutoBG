@@ -174,12 +174,12 @@ end
 local defaultSettings = {
     NotifySound = true, FlashTaskbar = true, ChatMessages = true,
     AutoAccept = false, AutoAcceptDelay = 0, AutoLeave = true,
-    AutoRejoin = false, AutoQueueLogin = false, ScoreColor = true,
+    AutoRejoin = false, AutoQueueLogin = false,
     AutoRelease = true, ABTimers = true,
     AVTimers = true, RessTimer = true, QueueTimers = true,
     FCFrame = true, WSGTimers = true,
     LastPlayedBG = nil,
-    Positions = {}, SkipIfAFK = true,
+    Positions = {},
     AutoQueue_WSG = true, AutoQueue_AB = true, AutoQueue_AV = true,
     -- Which row Warsong and Arathi join: "xf" Cross-Faction, "fx" Factioned,
     -- "fa" First Available. Alterac Valley has no mixed teams (2026-11-04).
@@ -247,7 +247,8 @@ function AutoBG_CancelAllQueues()
     end
 end
 
--- ClassicAPI UnitIsAFK reads the player's AFK flag directly; no chat parsing needed.
+-- Nothing is accepted, queued or rejoined while you are AFK (ClassicAPI
+-- UnitIsAFK reads the flag).
 function AutoBG_IsPlayerAFK()
     return UnitIsAFK("player") and true or false
 end
@@ -472,7 +473,7 @@ function AutoBG_QueueAllBGs()
         AutoBG_Print("Cannot queue: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(remaining) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
         return
     end
-    if (AutoBG_Settings and AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+    if AutoBG_IsPlayerAFK() then
         AutoBG_Print("Auto-Queue skipped: You are tagged as |cFFFF5555AFK|r.")
         return
     end
@@ -527,7 +528,7 @@ function AutoBG_QueueAllBGs()
             AutoBG_Print("Auto-Queue halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
             return
         end
-        if (AutoBG_Settings and AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+        if AutoBG_IsPlayerAFK() then
             isAutoQueueing = false
             AutoBG_Print("Auto-Queue paused: You are tagged as |cFFFF5555AFK|r.")
             return
@@ -559,14 +560,6 @@ function AutoBG_QueueAllBGs()
     end
     StepQueue()
 end
-
--- Macro Target Button
-local quickQueueBtn = CreateFrame("Button", "AutoBG_QuickQueueButton", UIParent)
-quickQueueBtn:SetScript("OnClick", function()
-    local bg = (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG or "Warsong Gulch"
-    AutoBG_Print("Quick-queue triggered for |cFFFFFF00" .. bg .. "|r...")
-    AutoBG_TriggerBattlegroundFinder(bg)
-end)
 
 FinishRejoin = function()
     if finderTimer then finderTimer:Cancel(); finderTimer = nil end
@@ -692,7 +685,7 @@ TryAutoRejoin = function()
         AutoBG_Print("Auto-Rejoin halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(remaining) .. ".", true)
         return
     end
-    if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+    if AutoBG_IsPlayerAFK() then
         AutoBG_Print("Auto-Rejoin paused: You are tagged as |cFFFF5555AFK|r.")
         FinishRejoin()
         return
@@ -795,7 +788,7 @@ local function ProcessBattlefieldQueue(id)
             notifiedQueues[id] = true
             inviteStart[id] = GetTime()
             if AutoBG_Settings.AutoAccept then
-                if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                if AutoBG_IsPlayerAFK() then
                     AutoBG_Print("Queue popped for |cFFFFFF00" .. (mapName or "Battleground") .. "|r, but Auto-Enter is paused because you are |cFFFF5555AFK|r!")
                     if AutoBG_Settings.NotifySound then AutoBG_PlayNotificationSound(true) end
                     FlashTaskbar()
@@ -817,7 +810,7 @@ local function ProcessBattlefieldQueue(id)
                         if inviteGeneration[qId] ~= generation or notifiedQueues[qId] ~= true or not AutoBG_Settings.AutoAccept then return end
                         local currentStatus, currentMap = GetBattlefieldStatus(qId)
                         if currentStatus ~= "confirm" or currentMap ~= mapName then return end
-                        if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                        if AutoBG_IsPlayerAFK() then
                             AutoBG_Print("Auto-Enter cancelled: Player became |cFFFF5555AFK|r!")
                             return
                         end
@@ -943,7 +936,7 @@ frame:SetScript("OnEvent", function()
                     return
                 end
                 if AutoBG_Settings and AutoBG_Settings.AutoQueueLogin and not hasQueuedOnLogin then
-                    if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                    if AutoBG_IsPlayerAFK() then
                         AutoBG_Print("Auto-Queue on login skipped: You are tagged as |cFFFF5555AFK|r.")
                     elseif IsPlayerDeadOrGhost() then
                         needsQueueAfterResurrect = true
@@ -957,7 +950,7 @@ frame:SetScript("OnEvent", function()
                                 AutoBG_Print("Auto-Queue on login halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(currRem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
                                 return
                             end
-                            if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+                            if AutoBG_IsPlayerAFK() then
                                 AutoBG_Print("Auto-Queue on login skipped: You are tagged as |cFFFF5555AFK|r.")
                                 return
                             end
@@ -987,7 +980,7 @@ frame:SetScript("OnEvent", function()
         -- List replies can arrive after a later manual or batch request.
         if pendingAutoRejoin and ShownBattlefield() ~= pendingAutoRejoin then return end
         if pendingAutoRejoin or isAutoQueueing then
-            if (AutoBG_Settings.SkipIfAFK ~= false) and AutoBG_IsPlayerAFK() then
+            if AutoBG_IsPlayerAFK() then
                 AutoBG_Print("Auto-Queue / Auto-Rejoin skipped: You are tagged as |cFFFF5555AFK|r.")
                 FinishRejoin()
                 isAutoQueueing = false
@@ -1082,12 +1075,12 @@ frame:SetScript("OnEvent", function()
     end
 end)
 
--- Scoreboard Hook (Rule B10)
+-- The scoreboard: a finished match ends here too, and names wear their class
+-- color, the realm left off.
 hooksecurefunc("WorldStateScoreFrame_Update", function()
     if currentZonePVP and GetBattlefieldWinner() then
         HandleMatchEnd()
     end
-    if not AutoBG_Settings or not AutoBG_Settings.ScoreColor then return end
 
     local offset = FauxScrollFrame_GetOffset(WorldStateScoreScrollFrame)
     for i = 1, MAX_WORLDSTATE_SCORE_BUTTONS do
@@ -1129,8 +1122,6 @@ local toggleCommands = {
     autorejoin = { key = "AutoRejoin", label = "Auto-Rejoin BG on Exit" },
     l = { key = "AutoLeave", label = "Auto-Leave BG on End" },
     leave = { key = "AutoLeave", label = "Auto-Leave BG on End" },
-    c = { key = "ScoreColor", label = "Scoreboard Class Colors" },
-    color = { key = "ScoreColor", label = "Scoreboard Class Colors" },
     r = { key = "AutoRelease", label = "Auto-Release Spirit" },
     release = { key = "AutoRelease", label = "Auto-Release Spirit" },
     start = { key = "StartTimer", label = "Game Start Timer" },
@@ -1227,7 +1218,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "reset" then
         AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|arena|all], /abg cancel, /abg targets, /abg arena, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg c, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
+        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|arena|all], /abg cancel, /abg targets, /abg arena, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
     else
         AutoBG_OpenOptions("general")
     end

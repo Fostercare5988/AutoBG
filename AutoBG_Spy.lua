@@ -48,7 +48,7 @@ function Spy:PlayStealthDetectedSound()
 end
 
 local SPY_DEFAULTS = {
-	Enabled = true, SoundAlert = false, StealthAlert = true, StealthProximityOnly = true,
+	Enabled = true, SoundAlert = false, StealthAlert = true,
 	AutoHide = false, Timeout = 30, MaxRows = 5, Scale = 1.0, DisableInRaids = true,
 }
 -- The lists Spy keeps besides its settings; any other key is cleared (KP-64).
@@ -188,7 +188,9 @@ end
 
 -- The server only shows you a stealthed enemy your detection reaches, so a
 -- loaded, visible, stealthed hostile is the warning at any distance: more
--- detection (talents, gear, potions) simply finds them farther away.
+-- detection (talents, gear, potions) simply finds them farther away. A stealth
+-- cast heard from someone you cannot see warns nobody (every character had
+-- "Only enemies I can see" on, 2026-11-14).
 function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground, observedUnit)
 	if not name or name == "" then return false end
 	local opt = GetSpySettings()
@@ -196,9 +198,6 @@ function Spy:NotifyStealth(name, spell, classToken, guid, inBattleground, observ
 		if AutoBG_Settings.Targets and AutoBG_Settings.Targets.StealthAlert == false then return end
 	elseif not opt.Enabled or not opt.StealthAlert then
 		return false
-	elseif not opt.StealthProximityOnly then
-		-- Spy-style mode reports a received stealth event without requiring a loaded unit.
-		return ShowStealth(name, spell, classToken, guid, opt, false)
 	end
 	if not guid then return false end
 	if not observedUnit or UnitGUID(observedUnit) ~= guid then

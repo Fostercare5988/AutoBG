@@ -353,12 +353,14 @@ function Targets:InvalidateRosterCache()
 end
 
 -- What AutoBG_Settings.Targets holds: per-size tables, shared switches, the
--- flag watch switch and the readability migration's marker.
+-- flag watch switch and the readability migration's marker. Stealthed rows
+-- always dim, the health text and raid icons always show (2026-11-14: every
+-- character had them on).
 local TARGET_KEYS = {
 	EnableBracket = true, ButtonFontSize = true, ButtonScale = true, ButtonOpacity = true,
-	ButtonWidth = true, ButtonHeight = true, ButtonShowHealthText = true, ButtonHideRealm = true,
-	DimStealthed = true, ShowTrinket = true, StealthAlert = true, CastPos = true, TrinketPos = true,
-	ShowCastBars = true, FadeOutOfRange = true, ShowRaidIcons = true, ShowTargetCount = true,
+	ButtonWidth = true, ButtonHeight = true, ButtonHideRealm = true,
+	ShowTrinket = true, StealthAlert = true, CastPos = true, TrinketPos = true,
+	ShowCastBars = true, FadeOutOfRange = true, ShowTargetCount = true,
 	FlagWatch = true, ReadabilityVersion = true,
 }
 
@@ -381,9 +383,7 @@ function Targets:EnsureOptions()
 	o.ButtonOpacity = o.ButtonOpacity or {}
 	o.ButtonWidth = o.ButtonWidth or {}
 	o.ButtonHeight = o.ButtonHeight or {}
-	o.ButtonShowHealthText = o.ButtonShowHealthText or {}
 	o.ButtonHideRealm = o.ButtonHideRealm or {}
-	o.DimStealthed = o.DimStealthed or {}
 	o.ShowTrinket = o.ShowTrinket or {}
 	if o.StealthAlert == nil then o.StealthAlert = true end
 	-- New installs put the trinket and the cast bars on the left. Older saves
@@ -394,7 +394,6 @@ function Targets:EnsureOptions()
 	if o.TrinketPos == nil then o.TrinketPos = "LEFT" end
 	if o.ShowCastBars == nil then o.ShowCastBars = true end
 	if o.FadeOutOfRange == nil then o.FadeOutOfRange = true end
-	if o.ShowRaidIcons == nil then o.ShowRaidIcons = true end
 	if o.ShowTargetCount == nil then o.ShowTargetCount = true end
 
 	-- Migrate old default dimensions once; preserve custom layouts and positions.
@@ -417,9 +416,7 @@ function Targets:EnsureOptions()
 		if o.ButtonScale[size] == nil then o.ButtonScale[size] = (size == 40 and 0.90) or 1.00 end
 		if o.ButtonWidth[size] == nil then o.ButtonWidth[size] = (size == 40 and 210) or 195 end
 		if o.ButtonHeight[size] == nil then o.ButtonHeight[size] = (size == 40 and 20) or 25 end
-		if o.ButtonShowHealthText[size] == nil then o.ButtonShowHealthText[size] = true end
 		if o.ButtonHideRealm[size] == nil then o.ButtonHideRealm[size] = true end
-		if o.DimStealthed[size] == nil then o.DimStealthed[size] = true end
 		if o.ShowTrinket[size] == nil then o.ShowTrinket[size] = true end
 	end
 end
@@ -577,7 +574,7 @@ local function UpdateRowStealthVisual(index, name)
 	local alpha
 	if dead then
 		alpha = 0.55
-	elseif stealth and o and o.DimStealthed and o.DimStealthed[size] then
+	elseif stealth then
 		alpha = 0.75
 	else
 		alpha = 1.0
@@ -599,13 +596,9 @@ local function UpdateRowStealthVisual(index, name)
 		showText = true
 	else
 		local pct = healthPct[name] or 100
-		if not o or o.ButtonShowHealthText[size] then
-			if dead and RespawnShown() then respawnAt, synced = AutoBG_NextSpiritWave() end
-			text = dead and "|cffff4040DEAD|r" or (pct .. "%")
-			showText = true
-		else
-			showText = false
-		end
+		if dead and RespawnShown() then respawnAt, synced = AutoBG_NextSpiritWave() end
+		text = dead and "|cffff4040DEAD|r" or (pct .. "%")
+		showText = true
 	end
 	SetRespawnClock(btn, respawnAt, synced)
 	if respawnAt then
@@ -884,7 +877,6 @@ local function UpdateRowStatus()
 	if not Targets.TargetButton or not Targets.MainFrame:IsShown() then return end
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	local fade = not o or o.FadeOutOfRange ~= false
-	local icons = not o or o.ShowRaidIcons ~= false
 	local counts = not o or o.ShowTargetCount ~= false
 	if counts and not Targets.isConfig then CountGroupTargets() end
 	local rangeChanged = false
@@ -912,7 +904,6 @@ local function UpdateRowStatus()
 				-- An enemy not seen near you yet is unknown: no mark.
 			end
 			near = (fade and near) and true or nil
-			raidIndex = icons and raidIndex or nil
 			count = counts and count or nil
 			local changed = false
 			if btn.raidIndex ~= raidIndex then
@@ -2093,20 +2084,6 @@ function Targets:ResetPosition(bracket)
 		end
 	end
 	Targets:Frame_SetupPosition()
-end
-
-function Targets:CopySettings(sourceSize, destinationSize)
-	local o = AutoBG_Settings and AutoBG_Settings.Targets
-	if not o then return end
-	o.ButtonFontSize[destinationSize] = o.ButtonFontSize[sourceSize]
-	o.ButtonScale[destinationSize] = o.ButtonScale[sourceSize]
-	o.ButtonOpacity[destinationSize] = o.ButtonOpacity[sourceSize]
-	o.ButtonWidth[destinationSize] = o.ButtonWidth[sourceSize]
-	o.ButtonHeight[destinationSize] = o.ButtonHeight[sourceSize]
-	o.ButtonShowHealthText[destinationSize] = o.ButtonShowHealthText[sourceSize]
-	o.ButtonHideRealm[destinationSize] = o.ButtonHideRealm[sourceSize]
-	o.DimStealthed[destinationSize] = o.DimStealthed[sourceSize]
-	o.ShowTrinket[destinationSize] = o.ShowTrinket[sourceSize]
 end
 
 -- The flag watch (AutoBG_FlagWatch.lua) reads the roster and marks rows.
