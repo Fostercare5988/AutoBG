@@ -3,13 +3,14 @@
 ## Title: |cffff9e38AutoBG|r |cffffd6a8[Fostercare5988]|r
 ## Notes: BG timers, enemy frames and open-world Spy for WoW 1.12.1. Requires ClassicAPI, SuperWoW and NamPower.
 ## Author: Fostercare5988
-## Version: 1.0.0
+## Version: 1.1.0
 ## SavedVariables: AutoBG_Settings
 
 ## X-Category: Battlegrounds & PvP
 ## X-Website: https://github.com/Fostercare5988
 
 ForgeUI.lua
+ForgeLayout.lua
 AutoBG.lua
 AutoBG_Timers.lua
 AutoBG_FC.lua

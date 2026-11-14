@@ -1,5 +1,8 @@
 -- -------------------------------------------------------------------------- --
--- AutoBG: Options window (VanillaForge ForgeUI layout, Ember palette)         --
+-- AutoBG: settings (VanillaForge ForgeUI, Ember palette)                     --
+-- Five pages, shown in the /abg window in two columns and, one at a time,    --
+-- in Game Menu > AddOn Options > AutoBG in one column (ForgeLayout.lua).     --
+-- Each page follows a match: queue, the pop, the match, what it shows.       --
 -- -------------------------------------------------------------------------- --
 
 -- Needs ClassicAPI and SuperWoW loaded; AutoBG.lua says what is missing.
@@ -10,23 +13,26 @@ end
 
 local _, ns = ...
 local UI = ns.UI
+local L, R = UI.L, UI.R
 local Targets = AutoBG_Targets
 local Spy = AutoBG_Spy
 local FlagAlert = AutoBG_FlagAlert
 -- 5 is the arena bracket (2v2 to 5v5), as in AutoBG_Targets.lua.
 local BRACKETS = { 10, 15, 40, 5 }
-local WIDTH = 500
 local selectedTab = 1
 local selectedBracket = 10
 local timersPreview = false
-local startPreview
-local previewButton
-local Refresh = {}
+local book         -- the pages in AddOn Options
 
-local function RefreshTimers(includeCarriers)
-	if AutoBG_Timers_UpdateVisibility then AutoBG_Timers_UpdateVisibility() end
-	if includeCarriers and AutoBG_FC_UpdateVisibility then AutoBG_FC_UpdateVisibility() end
-end
+local layout = UI.NewLayout()
+local syncs = { {}, {}, {}, {}, {} } -- per page: functions that show the saved values
+local previewButtons = {}
+
+local function S() return AutoBG_Settings end
+local function TargetOptions() return AutoBG_Settings.Targets end
+local function SpyOptions() return Spy:EnsureOptions() end
+local function Percent(value) return value .. "%" end
+local function Seconds(value) return value .. "s" end
 
 local function PreviewActive()
 	return (Targets and Targets.isConfig) or (Spy and Spy.isTestMode)
@@ -35,277 +41,355 @@ local function PreviewActive()
 end
 AutoBG_IsPreviewActive = PreviewActive
 
--- The preview button fills while any frame preview is showing.
-local function RefreshTestCaption()
-	if not previewButton then return end
+-- The preview buttons fill while any frame preview is showing.
+local function RefreshPreviewButtons()
 	local active = PreviewActive() and true or false
-	UI.Select(previewButton, active)
-	previewButton:SetText(active and "Hide preview" or "Preview frames")
+	for _, button in ipairs(previewButtons) do
+		UI.Select(button, active)
+		button:SetText(active and "Hide preview" or "Preview frames")
+	end
 end
 
--- A switch bound to a top-level AutoBG_Settings key.
-local function Setting(name, parent, text, tip, x, y, key, after, hitWidth)
-	return UI.Switch(name, parent, text, tip, x, y, function(value)
-		if AutoBG_Settings then AutoBG_Settings[key] = value end
-		if after then after(value) end
-	end, hitWidth)
+-- Shows the saved values of the page on screen, then lays it out for the
+-- width it has (two columns in the window, one in AddOn Options).
+local function Refresh()
+	if not AutoBG_Settings then return end
+	for _, sync in ipairs(syncs[selectedTab]) do sync() end
+	RefreshPreviewButtons()
+	book:Place(selectedTab)
+end
+AutoBG_Options_Refresh = Refresh
+
+-- Dims a slider the way UI.Sync dims a switch.
+local function Dim(slider, on)
+	local alpha = on and 1 or 0.4
+	slider:EnableMouse(on and true or false); slider:SetAlpha(alpha)
+	slider.label:SetAlpha(alpha); slider.valueText:SetAlpha(alpha)
 end
 
-local function SpySettings()
-	return Spy:EnsureOptions()
+-- Dims a segmented choice.
+local function DimChoice(buttons, track, on)
+	for _, button in ipairs(buttons) do UI.SetEnabled(button, on) end
+	track:SetAlpha(on and 1 or 0.4)
 end
-
-local function Hint(parent, text, x, y, width)
-	local hint = UI.Label(parent, text, x, y, "GameFontDisableSmall")
-	if width then hint:SetWidth(width) end
-	return hint
-end
-
-local function Percent(value) return value .. "%" end
-local function Seconds(value) return value .. "s" end
 
 -- -------------------------------------------------------------------------- --
--- Window and tabs                                                            --
+-- Items: every control made at (0, 0) and handed to the layout               --
 -- -------------------------------------------------------------------------- --
-local panel = UI.Window("AutoBG_OptionsPanel", "AutoBG", WIDTH, 446, GetAddOnMetadata("AutoBG", "Version"))
+-- A switch: get() is its value, set(value) saves it, needs() dims it.
+-- options.ownLine: a block places it (it shares its line with a button).
+local function Switch(index, page, column, name, text, tip, get, set, options, needs)
+	local widget = UI.Switch(name, page, text, tip, 0, 0, function(value)
+		set(value)
+		Refresh()
+	end, (options and options.indent) and 156 or (column == L and 190 or 172))
+	table.insert(syncs[index], function()
+		local enabled
+		if needs then enabled = needs() and true or false end
+		UI.Sync(widget, get(), enabled)
+	end)
+	if not (options and options.ownLine) then layout:Switch(page, column, widget, options) end
+	return widget
+end
 
-local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", {
-	{ label = "General", height = 486 },
-	{ label = "Timers", height = 436 },
-	{ label = "Enemy frames", height = 542 },
-	{ label = "Spy", height = 390 },
+-- A switch for one top-level AutoBG_Settings key.
+local function Setting(index, page, column, name, text, tip, key, after, options, needs)
+	return Switch(index, page, column, name, text, tip,
+		function() return S()[key] end,
+		function(value) S()[key] = value; if after then after(value) end end, options, needs)
+end
+
+-- A slider: get() is its value, set(value) saves it, needs() dims it.
+local function Slider(index, page, column, name, text, tip, low, high, step, get, set, format, options, needs)
+	local slider = UI.Slider(name, page, text, 0, 0, 208, low, high, step, function(value)
+		set(value)
+		if needs then Refresh() end
+	end, format)
+	if tip then UI.Tooltip(slider, tip) end
+	table.insert(syncs[index], function()
+		UI.SetSlider(slider, get())
+		if needs then Dim(slider, needs()) end
+	end)
+	layout:Slider(page, column, slider, options)
+	return slider
+end
+
+local function Hint(page, column, text, options) return layout:Hint(page, column, text, options) end
+
+-- A segmented choice as a block; the track sits 4 left of the column, like the tabs.
+local function Choice(page, column, prefix, labels, width, onClick, options)
+	local buttons, show, track = UI.Segmented(prefix, page, labels, 0, 0, width, onClick, { height = 26 })
+	options = options or {}
+	options.height, options.regions = 32, { { track, "TOPLEFT", "TOPLEFT", -4, 0 } }
+	layout:Add(page, column, options)
+	return buttons, show, track
+end
+
+-- A switch with a small button at the end of its line (a battleground's queue
+-- row, the sound's Play); buttonWidth is the button's.
+local function SwitchWithButton(page, column, switch, button, buttonWidth)
+	layout:Add(page, column, { place = function(x, y, width)
+		switch:ClearAllPoints(); switch:SetPoint("TOPLEFT", page, "TOPLEFT", x, y - 2)
+		button:ClearAllPoints(); button:SetPoint("TOPLEFT", page, "TOPLEFT", x + width - buttonWidth, y)
+		return 26
+	end })
+end
+
+-- One footer per page: one preview for every frame, one reset for every place.
+local function Footers(index, page)
+	local preview = UI.Button("AutoBG_BtnPreview" .. index, page, "Preview frames", 0, 0, 150, function()
+		AutoBG_SetPreview(not PreviewActive())
+	end)
+	UI.Tooltip(preview, "Show every frame with samples so you can drag it into place: timers, flag carriers, the enemy frames of the size picked on the Enemy frames page, the Spy list, the stealth and flag warnings. Click again or close the settings to hide them.")
+	table.insert(previewButtons, preview)
+	layout:Footer(page, preview, 28)
+	local reset = UI.Button("AutoBG_BtnReset" .. index, page, "Reset positions", 0, 0, 150, function()
+		AutoBG_Settings.Positions = {}
+		AutoBG_ResetTimerPositions()
+		AutoBG_ResetFCPositions()
+		Targets:ResetPosition()
+		Spy:ResetPosition()
+		if FlagAlert then FlagAlert:ResetPosition() end
+		AutoBG_Print("Every frame is back in its place.", true)
+	end)
+	UI.Tooltip(reset, "Move every frame back to its first place: timers, flag carriers, enemy frames, the Spy list, the stealth and flag warnings.")
+	layout:Footer(page, reset, 186)
+end
+
+-- -------------------------------------------------------------------------- --
+-- Window and pages                                                           --
+-- -------------------------------------------------------------------------- --
+local panel = UI.Window("AutoBG_OptionsPanel", "AutoBG", 500, 446, GetAddOnMetadata("AutoBG", "Version"))
+local TABS = {
+	{ label = "General", height = 470 },
+	{ label = "Timers", height = 440 },
+	{ label = "Enemy frames", height = 560 },
+	{ label = "Spy", height = 400 },
 	{ label = "Arena", height = 330 },
-}, function(index)
+}
+local PAGE_KEYS = {
+	general = 1, gen = 1,
+	timers = 2, timer = 2, fc = 2,
+	targets = 3, enemy = 3, bgt = 3, frames = 3,
+	spy = 4,
+	arena = 5,
+}
+
+-- Opening the Enemy frames page edits the frames being played in a match and
+-- otherwise previews them.
+local function OnPageOpen(index)
 	selectedTab = index
-	Refresh[index]()
+	if index ~= 3 then return end
+	if Targets.activeBG and Targets.currentSize then selectedBracket = Targets.currentSize end
+	if not Targets.activeBG then Targets:EnableConfigMode(selectedBracket) end
+end
+
+local pages, ShowTab = UI.Tabs(panel, "AutoBG_Options", TABS, function(index)
+	OnPageOpen(index)
+	Refresh()
 end)
-local panelGeneral, panelTimers, panelTargets, panelSpy, panelArena = pages[1], pages[2], pages[3], pages[4], pages[5]
 
 -- -------------------------------------------------------------------------- --
--- General: queue pops, after the match, auto queue, notifications            --
+-- General: queue, the pop, after the match, chat                             --
 -- -------------------------------------------------------------------------- --
-UI.Heading(panelGeneral, "Queue pop", 28, -98)
-local cbAutoAccept = Setting("AutoBG_Opt_AutoAccept", panelGeneral, "Accept queue pops",
-	"Automatically accept battleground queue pops.", 28, -118, "AutoAccept")
-local sliderAcceptDelay = UI.Slider("AutoBG_Opt_AcceptDelay", panelGeneral, "Enter delay", 28, -176, 200, 0, AutoBG_MAX_ENTER_DELAY, 1,
-	function(value)
-		if AutoBG_Settings then AutoBG_Settings.AutoAcceptDelay = value end
-	end, function(value) return value == 0 and "Instant" or (value .. "s") end)
+local general = pages[1]
+layout:Section(general)
+layout:Heading(general, L, "Queue")
 
-UI.Heading(panelGeneral, "After the match", 28, -228)
-local cbAutoLeave = Setting("AutoBG_Opt_AutoLeave", panelGeneral, "Leave when it ends",
-	"Automatically leave battlegrounds when the match concludes.", 28, -248, "AutoLeave")
-local cbAutoRejoin = Setting("AutoBG_Opt_AutoRejoin", panelGeneral, "Queue again after leaving",
-	"Request the same battleground queue after leaving a completed match.", 28, -274, "AutoRejoin")
-local cbAutoRelease = Setting("AutoBG_Opt_AutoRelease", panelGeneral, "Release spirit",
-	"Automatically release your spirit when you die in a battleground (skipped while a Soulstone or Ankh is ready).", 28, -300, "AutoRelease")
-
-UI.Heading(panelGeneral, "Arena", 28, -340)
-local cbQueueArena = Setting("AutoBG_Opt_QueueArena", panelGeneral, "Queue an arena",
-	"Queue the arena picked below together with the checked battlegrounds. Rated arenas need an arena team.", 28, -360, "AutoQueue_Arena")
-local ShowArenaType
-_, ShowArenaType = UI.Segmented("AutoBG_Opt_ArenaType", panelGeneral, { "Skirmish", "2v2", "3v3", "5v5" }, 24, -390, 212,
-	function(index)
-		if AutoBG_Settings then AutoBG_Settings.ArenaType = index - 1 end
-		ShowArenaType(index)
-	end, { height = 26 })
-
-UI.Heading(panelGeneral, "Auto queue", 264, -98)
-local cbQueueWSG = Setting("AutoBG_Opt_QueueWSG", panelGeneral, "Warsong Gulch",
-	"Include Warsong Gulch when you queue.", 264, -118, "AutoQueue_WSG", nil, 104)
-local cbQueueAB = Setting("AutoBG_Opt_QueueAB", panelGeneral, "Arathi Basin",
-	"Include Arathi Basin when you queue.", 264, -144, "AutoQueue_AB", nil, 104)
--- One button per battleground cycles the row it queues: Cross-Faction (mixed
--- teams), Factioned (your faction only), First Available (the server decides).
+-- Warsong and Arathi each pick the row they join: Cross-Faction (mixed teams),
+-- Factioned (your faction only) or First Available (the server decides).
 local QUEUE_MODES = { "xf", "fx", "fa" }
 local QUEUE_MODE_TEXT = { xf = "Mixed", fx = "Own faction", fa = "Any" }
-local function QueueModePicker(name, key, y)
+local function QueueRow(name, text, key, modeKey)
+	local switch = Setting(1, general, L, "AutoBG_Opt_Queue" .. name, text,
+		"Queue for " .. text .. ". The button beside it picks the teams.", key, nil, { ownLine = true })
 	local button
-	button = UI.Button(name, panelGeneral, "", 396, y, 76, function()
-		local s = AutoBG_Settings
-		if not s then return end
+	button = UI.Button("AutoBG_Opt_QueueMode" .. name, general, "", 0, 0, 76, function()
+		local s = S()
 		local nextIndex = 1
 		for i = 1, #QUEUE_MODES do
-			if QUEUE_MODES[i] == s[key] then nextIndex = i % #QUEUE_MODES + 1 end
+			if QUEUE_MODES[i] == s[modeKey] then nextIndex = i % #QUEUE_MODES + 1 end
 		end
-		s[key] = QUEUE_MODES[nextIndex]
-		button:SetText(QUEUE_MODE_TEXT[s[key]])
+		s[modeKey] = QUEUE_MODES[nextIndex]
+		Refresh()
 	end, { height = 18, font = "GameFontHighlightSmall" })
-	UI.Tooltip(button, "Click to change the row this battleground queues for.\nMixed: Cross-Faction teams.\nOwn faction: Factioned, your faction only.\nAny: First Available, the server decides.\nA row the list lacks falls back to First available.")
-	return function(mode) button:SetText(QUEUE_MODE_TEXT[mode] or QUEUE_MODE_TEXT.xf) end
-end
-local ShowQueueWSG = QueueModePicker("AutoBG_Opt_QueueModeWSG", "QueueMode_WSG", -119)
-local ShowQueueAB = QueueModePicker("AutoBG_Opt_QueueModeAB", "QueueMode_AB", -145)
-local cbQueueAV = Setting("AutoBG_Opt_QueueAV", panelGeneral, "Alterac Valley",
-	"Include Alterac Valley when you queue.", 264, -170, "AutoQueue_AV", nil, 172)
-local cbAutoQueue = Setting("AutoBG_Opt_AutoQueue", panelGeneral, "Queue on login",
-	"Queue for the checked battlegrounds when you log in or reload.", 264, -196, "AutoQueueLogin", nil, 172)
-local btnQueueAll = UI.Button("AutoBG_BtnQueueAll", panelGeneral, "Queue now", 264, -226, 100, function()
-	if AutoBG_QueueAllBGs then AutoBG_QueueAllBGs() end
-end)
-UI.Tooltip(btnQueueAll, "Queue for the checked battlegrounds now.\n/abg aq now does the same.")
-local btnCancelAll = UI.Button("AutoBG_BtnCancelAll", panelGeneral, "Leave queues", 372, -226, 100, function()
-	if AutoBG_CancelAllQueues then AutoBG_CancelAllQueues() end
-end)
-UI.Tooltip(btnCancelAll, "Leave every battleground queue.\n/abg cancel does the same.")
-
-UI.Heading(panelGeneral, "Notifications", 264, -266)
-local cbSound = Setting("AutoBG_Opt_Sound", panelGeneral, "Queue sound",
-	"Play a loud ready-check sound when a queue pops or a match ends.", 264, -286, "NotifySound", function(value)
-		if not value and AutoBG_StopNotificationSound then AutoBG_StopNotificationSound() end
-	end, 110)
-local btnTestSound = UI.Button("AutoBG_BtnTestSound", panelGeneral, "Play", 420, -284, 52, function()
-	AutoBG_PlayNotificationSound()
-end, { height = 20 })
-UI.Tooltip(btnTestSound, "Play the queue sound once.")
-local cbFlash = Setting("AutoBG_Opt_Flash", panelGeneral, "Flash the taskbar",
-	"Flash the game window in the Windows taskbar when a queue pops.", 264, -312, "FlashTaskbar", nil, 172)
-local cbChatMsg = Setting("AutoBG_Opt_ChatMsg", panelGeneral, "Chat messages",
-	"Print status messages in chat for queues, joins and exits.", 264, -338, "ChatMessages", nil, 172)
-
-Refresh[1] = function()
-	local s = AutoBG_Settings
-	if not s then return end
-	UI.Sync(cbAutoAccept, s.AutoAccept)
-	UI.SetSlider(sliderAcceptDelay, s.AutoAcceptDelay or 0)
-	UI.Sync(cbAutoLeave, s.AutoLeave)
-	UI.Sync(cbAutoRejoin, s.AutoRejoin)
-	UI.Sync(cbAutoRelease, s.AutoRelease)
-	UI.Sync(cbQueueWSG, s.AutoQueue_WSG ~= false)
-	UI.Sync(cbQueueAB, s.AutoQueue_AB ~= false)
-	UI.Sync(cbQueueAV, s.AutoQueue_AV ~= false)
-	UI.Sync(cbAutoQueue, s.AutoQueueLogin)
-	ShowQueueWSG(s.QueueMode_WSG)
-	ShowQueueAB(s.QueueMode_AB)
-	UI.Sync(cbQueueArena, s.AutoQueue_Arena)
-	ShowArenaType((s.ArenaType or 0) + 1)
-	UI.Sync(cbSound, s.NotifySound)
-	UI.Sync(cbFlash, s.FlashTaskbar)
-	UI.Sync(cbChatMsg, s.ChatMessages)
-end
-
--- -------------------------------------------------------------------------- --
--- Timers: objective countdowns, flag carriers, countdown appearance          --
--- -------------------------------------------------------------------------- --
-local function TimerSetting(name, text, tip, y, key)
-	return Setting(name, panelTimers, text, tip, 28, y, key, function() RefreshTimers() end)
-end
-
-UI.Heading(panelTimers, "Countdowns", 28, -98)
-local cbABTimers = TimerSetting("AutoBG_Opt_ABTimers", "Arathi Basin bases",
-	"Show 60-second capture countdowns for Arathi Basin bases.", -118, "ABTimers")
-local cbAVTimers = TimerSetting("AutoBG_Opt_AVTimers", "Alterac Valley nodes",
-	"Show 5-minute countdowns for Alterac Valley towers, bunkers, graveyards and mines.", -144, "AVTimers")
-local cbWSGTimers = TimerSetting("AutoBG_Opt_WSGTimers", "Warsong flag respawn",
-	"Show the 23-second flag respawn countdown in Warsong Gulch.", -170, "WSGTimers")
-local cbStartTimer = TimerSetting("AutoBG_Opt_StartTimer", "Game start",
-	"Count down until the game starts.", -196, "StartTimer")
-local cbRessTimer = TimerSetting("AutoBG_Opt_RessTimer", "Spirit healer waves",
-	"Show the synced 30-second Spirit Healer resurrection wave.", -222, "RessTimer")
-local cbQueueTimers = TimerSetting("AutoBG_Opt_QueueTimers", "Queue wait time",
-	"Show how long you have waited in each battleground queue.", -248, "QueueTimers")
-
-UI.Heading(panelTimers, "Flag carriers", 264, -98)
-local cbFCFrame = Setting("AutoBG_Opt_FCFrame", panelTimers, "Flag carrier frames",
-	"Show frames for both Warsong Gulch flag carriers with live health.", 264, -118, "FCFrame", function()
-		if AutoBG_FC_UpdateVisibility then AutoBG_FC_UpdateVisibility() end
-	end, 172)
-Hint(panelTimers, "Left-click a carrier to target it, right-click to focus it. Drag to move.", 264, -146, 208)
-
-local function TimerSlider(name, text, y, minValue, maxValue, step, store, format)
-	return UI.Slider(name, panelTimers, text, 264, y, 208, minValue, maxValue, step, function(value)
-		if AutoBG_Settings then store(value) end
-		RefreshTimers()
-	end, format)
-end
-
-UI.Heading(panelTimers, "Countdown look", 264, -190)
-local sliderObjectiveWidth = TimerSlider("AutoBG_Opt_ObjectiveWidth", "Bar width", -210, 180, 420, 5,
-	function(value) AutoBG_Settings.ObjectiveWidth = value end)
-local sliderObjectiveHeight = TimerSlider("AutoBG_Opt_ObjectiveHeight", "Bar height", -252, 18, 32, 1,
-	function(value) AutoBG_Settings.ObjectiveHeight = value end)
-local sliderObjectiveScale = TimerSlider("AutoBG_Opt_ObjectiveScale", "Scale", -294, 60, 150, 5,
-	function(value) AutoBG_Settings.ObjectiveScale = value / 100 end, Percent)
-local sliderObjectiveOpacity = TimerSlider("AutoBG_Opt_ObjectiveOpacity", "Opacity", -336, 20, 100, 5,
-	function(value) AutoBG_Settings.ObjectiveOpacity = value / 100 end, Percent)
-
-Refresh[2] = function()
-	local s = AutoBG_Settings
-	if not s then return end
-	UI.Sync(cbABTimers, s.ABTimers)
-	UI.Sync(cbAVTimers, s.AVTimers)
-	UI.Sync(cbWSGTimers, s.WSGTimers)
-	UI.Sync(cbStartTimer, s.StartTimer ~= false)
-	UI.Sync(cbRessTimer, s.RessTimer)
-	UI.Sync(cbQueueTimers, s.QueueTimers)
-	UI.Sync(cbFCFrame, s.FCFrame)
-	UI.SetSlider(sliderObjectiveWidth, s.ObjectiveWidth or 225)
-	UI.SetSlider(sliderObjectiveHeight, s.ObjectiveHeight or 25)
-	UI.SetSlider(sliderObjectiveScale, math.floor((s.ObjectiveScale or 1) * 100 + 0.5))
-	UI.SetSlider(sliderObjectiveOpacity, math.floor((s.ObjectiveOpacity or 0.9) * 100 + 0.5))
-end
-
--- -------------------------------------------------------------------------- --
--- Enemy frames: per-size settings for the battleground enemy list            --
--- -------------------------------------------------------------------------- --
-local UpdateTargetsWidgets -- forward declaration
-
-local function TargetOptions()
-	return AutoBG_Settings and AutoBG_Settings.Targets
-end
-
-local function Relayout()
-	if Targets and Targets.SetupButtonLayout then Targets:SetupButtonLayout(selectedBracket) end
-end
-
-local function Rerender()
-	if Targets and Targets.isConfig and Targets.RenderRoster then Targets:RenderRoster() end
-end
-
--- A switch bound to one size's entry in a per-size Targets table.
-local function BracketSetting(name, text, tip, x, y, key, relayout, rerender)
-	return UI.Switch(name, panelTargets, text, tip, x, y, function(value)
-		local o = TargetOptions()
-		if not (o and o[key]) then return end
-		o[key][selectedBracket] = value
-		if relayout then Relayout() end
-		if rerender then Rerender() end
-		if key == "ShowTrinket" then UpdateTargetsWidgets(selectedBracket) end
+	UI.Tooltip(button, "Click to change the teams " .. text .. " queues for.\nMixed: Cross-Faction, both factions on each side.\nOwn faction: Factioned, your faction only.\nAny: First Available, the server decides.\nA row the list lacks falls back to Any.")
+	SwitchWithButton(general, L, switch, button, 76)
+	table.insert(syncs[1], function()
+		local s = S()
+		button:SetText(QUEUE_MODE_TEXT[s[modeKey]] or QUEUE_MODE_TEXT.xf)
+		UI.SetEnabled(button, s[key] and true or false)
 	end)
 end
+QueueRow("WSG", "Warsong Gulch", "AutoQueue_WSG", "QueueMode_WSG")
+QueueRow("AB", "Arathi Basin", "AutoQueue_AB", "QueueMode_AB")
+Setting(1, general, L, "AutoBG_Opt_QueueAV", "Alterac Valley", "Queue for Alterac Valley.", "AutoQueue_AV")
+Setting(1, general, L, "AutoBG_Opt_QueueArena", "Arena",
+	"Queue for the arena picked below together with the battlegrounds. A rated arena needs an arena team.", "AutoQueue_Arena")
+local arenaTypeButtons, ShowArenaType, arenaTypeTrack
+arenaTypeButtons, ShowArenaType, arenaTypeTrack = Choice(general, L, "AutoBG_Opt_ArenaType",
+	{ "Skirmish", "2v2", "3v3", "5v5" }, 192, function(index)
+		S().ArenaType = index - 1
+		Refresh()
+	end, { indent = 16 })
+table.insert(syncs[1], function()
+	ShowArenaType((S().ArenaType or 0) + 1)
+	DimChoice(arenaTypeButtons, arenaTypeTrack, S().AutoQueue_Arena and true or false)
+end)
+Setting(1, general, L, "AutoBG_Opt_AutoQueue", "Queue on login",
+	"Queue for everything picked above when you log in or reload.", "AutoQueueLogin")
+local queueNow = UI.Button("AutoBG_BtnQueueAll", general, "Queue now", 0, 0, 100, function() AutoBG_QueueAllBGs() end)
+UI.Tooltip(queueNow, "Queue for everything picked above now. /abg q does the same.")
+local leaveQueues = UI.Button("AutoBG_BtnCancelAll", general, "Leave queues", 0, 0, 100, function() AutoBG_CancelAllQueues() end)
+UI.Tooltip(leaveQueues, "Leave every battleground and arena queue. /abg cancel does the same.")
+layout:Add(general, L, { before = 6, place = function(x, y)
+	queueNow:ClearAllPoints(); queueNow:SetPoint("TOPLEFT", general, "TOPLEFT", x, y)
+	leaveQueues:ClearAllPoints(); leaveQueues:SetPoint("TOPLEFT", general, "TOPLEFT", x + 108, y)
+	return 24
+end })
 
-local function SelectBracket(size, start)
-	selectedBracket = size
-	-- Inside a battleground the live enemy list stays; the preview button still works on request.
-	if start ~= false and Targets and Targets.EnableConfigMode and not Targets.activeBG then
-		Targets:EnableConfigMode(size)
+local function AutoAccept() return S().AutoAccept and true or false end
+layout:Heading(general, R, "When it pops")
+Setting(1, general, R, "AutoBG_Opt_AutoAccept", "Enter automatically",
+	"Enter the battleground or arena when its queue pops. Never while you are AFK.", "AutoAccept")
+Slider(1, general, R, "AutoBG_Opt_AcceptDelay", "Enter after",
+	"Wait this long before entering, to finish what you are doing. AutoBG always enters a second before the invite runs out.",
+	0, AutoBG_MAX_ENTER_DELAY, 1, function() return S().AutoAcceptDelay or 0 end,
+	function(value) S().AutoAcceptDelay = value end,
+	function(value) return value == 0 and "Instant" or (value .. "s") end, { indent = 16 }, AutoAccept)
+local sound = Setting(1, general, R, "AutoBG_Opt_Sound", "Queue sound",
+	"A loud ready-check sound when a queue pops or a match ends.", "NotifySound", function(value)
+		if not value then AutoBG_StopNotificationSound() end
+	end, { ownLine = true })
+local play = UI.Button("AutoBG_BtnTestSound", general, "Play", 0, 0, 52, function() AutoBG_PlayNotificationSound() end,
+	{ height = 20, ghost = true })
+UI.Tooltip(play, "Play the queue sound once.")
+SwitchWithButton(general, R, sound, play, 52)
+Setting(1, general, R, "AutoBG_Opt_Flash", "Flash the taskbar",
+	"Flash the game in the Windows taskbar when a queue pops or a match ends.", "FlashTaskbar")
+
+layout:Heading(general, R, "After the match")
+Setting(1, general, R, "AutoBG_Opt_AutoLeave", "Leave when it ends",
+	"Leave the battleground as soon as the match is over.", "AutoLeave")
+Setting(1, general, R, "AutoBG_Opt_AutoRejoin", "Queue again after leaving",
+	"Queue for the same battleground or arena after a finished match.", "AutoRejoin")
+Setting(1, general, R, "AutoBG_Opt_AutoRelease", "Release spirit",
+	"Release your spirit when you die in a battleground, unless a Soulstone or Ankh is ready. Never in an arena.", "AutoRelease")
+layout:Heading(general, L, "Chat")
+Setting(1, general, L, "AutoBG_Opt_ChatMsg", "Chat messages",
+	"Queues, entering and leaving, told in chat.", "ChatMessages")
+Hint(general, L, "What stopped a queue (Deserter, all queues taken) always shows.")
+Footers(1, general)
+
+-- -------------------------------------------------------------------------- --
+-- Timers: countdowns, flag carriers, their look                              --
+-- -------------------------------------------------------------------------- --
+local timers = pages[2]
+local function RefreshTimers() AutoBG_Timers_UpdateVisibility() end
+layout:Section(timers)
+layout:Heading(timers, L, "Countdowns")
+local function TimerSetting(name, text, tip, key)
+	return Setting(2, timers, L, name, text, tip, key, RefreshTimers)
+end
+TimerSetting("AutoBG_Opt_ABTimers", "Arathi Basin bases", "A 60-second capture countdown for each Arathi Basin base.", "ABTimers")
+TimerSetting("AutoBG_Opt_AVTimers", "Alterac Valley nodes", "5-minute countdowns for Alterac Valley towers, bunkers, graveyards and mines.", "AVTimers")
+TimerSetting("AutoBG_Opt_WSGTimers", "Warsong flag return", "The 23 seconds until a captured Warsong Gulch flag is back.", "WSGTimers")
+TimerSetting("AutoBG_Opt_StartTimer", "Game start", "Count down until the gates open.", "StartTimer")
+TimerSetting("AutoBG_Opt_RessTimer", "Spirit healer waves", "The 30-second spirit healer wave, synced from your group.", "RessTimer")
+TimerSetting("AutoBG_Opt_QueueTimers", "Queues", "How long you have waited in each queue, and how long an invite has left.", "QueueTimers")
+
+layout:Heading(timers, R, "Flag carriers")
+Setting(2, timers, R, "AutoBG_Opt_FCFrame", "Flag carrier frames",
+	"Both Warsong Gulch flag carriers, with health, distance and the assault stacks.", "FCFrame",
+	function() AutoBG_FC_UpdateVisibility() end)
+Hint(timers, R, "Click a carrier to target it, right-click to focus.")
+layout:Heading(timers, R, "Look")
+local function TimerSlider(name, text, low, high, step, key, factor, format)
+	factor = factor or 1
+	return Slider(2, timers, R, name, text, nil, low, high, step,
+		function() return math.floor((S()[key] or 1) * factor + 0.5) end,
+		function(value) S()[key] = value / factor; RefreshTimers() end, format)
+end
+TimerSlider("AutoBG_Opt_ObjectiveWidth", "Bar width", 180, 420, 5, "ObjectiveWidth")
+TimerSlider("AutoBG_Opt_ObjectiveHeight", "Bar height", 18, 32, 1, "ObjectiveHeight")
+TimerSlider("AutoBG_Opt_ObjectiveScale", "Scale", 60, 150, 5, "ObjectiveScale", 100, Percent)
+TimerSlider("AutoBG_Opt_ObjectiveOpacity", "Opacity", 20, 100, 5, "ObjectiveOpacity", 100, Percent)
+Footers(2, timers)
+
+-- -------------------------------------------------------------------------- --
+-- Enemy frames: one battleground size at a time, then what every size shows  --
+-- -------------------------------------------------------------------------- --
+local frames = pages[3]
+local function Relayout() Targets:SetupButtonLayout(selectedBracket) end
+local function Rerender() if Targets.isConfig then Targets:RenderRoster() end end
+local function SizeName(size) return size == 5 and "Arena" or (size .. "v" .. size) end
+
+layout:Section(frames, true)
+layout:Heading(frames, L, "Battleground size")
+local _, ShowBracket = Choice(frames, L, "AutoBG_Targets_BracketBtn", { "10v10", "15v15", "40v40", "Arena" }, 212,
+	function(index)
+		selectedBracket = BRACKETS[index]
+		-- Inside a battleground the live enemy list stays; Preview frames still works.
+		if not Targets.activeBG then Targets:EnableConfigMode(selectedBracket) end
+		Refresh()
+	end)
+table.insert(syncs[3], function()
+	for i = 1, #BRACKETS do
+		if BRACKETS[i] == selectedBracket then ShowBracket(i) end
 	end
-	UpdateTargetsWidgets(size)
+end)
+
+-- A switch for one size's entry in a per-size table.
+local function SizeSetting(name, text, tip, key, rerender)
+	return Switch(3, frames, L, name, text, tip,
+		function() return TargetOptions()[key][selectedBracket] end,
+		function(value)
+			TargetOptions()[key][selectedBracket] = value
+			Relayout()
+			if rerender then Rerender() end
+		end)
 end
-
-UI.Heading(panelTargets, "Battleground size or arena", 28, -98)
-local _, ShowBracket = UI.Segmented("AutoBG_Targets_BracketBtn", panelTargets, { "10v10", "15v15", "40v40", "Arena" }, 24, -114, 208,
-	function(index) SelectBracket(BRACKETS[index]) end, { height = 26 })
-
-local cbTgtEnable = BracketSetting("AutoBG_Tgt_Enable", "Show frames in 10v10",
-	"Show enemy frames for this battleground size.", 28, -154, "EnableBracket", true)
-local cbTgtHideRealm = BracketSetting("AutoBG_Tgt_HideRealm", "Hide realm names",
-	"Strip the realm suffix from enemy names.", 28, -180, "ButtonHideRealm", false, true)
-local cbTgtTrinket = BracketSetting("AutoBG_Tgt_Trinket", "PvP trinket cooldown",
-	"Track each enemy's 3-minute PvP trinket cooldown.", 28, -258, "ShowTrinket", true, true)
-local cbTgtTrinketLeft = UI.Switch("AutoBG_Tgt_TrinketLeft", panelTargets, "Trinket on the left",
-	"Put the trinket icon on the left of the row instead of the right.", 44, -284, function(value)
-		local o = TargetOptions()
-		if not o then return end
-		o.TrinketPos = value and "LEFT" or "RIGHT"
+-- A switch shared by every size.
+local function RowFeature(name, text, tip, get, set, options, needs)
+	return Switch(3, frames, R, name, text, tip, get, function(value)
+		set(TargetOptions(), value)
 		Relayout()
-		Rerender()
-	end)
+		Targets:ApplyRowFeatures()
+	end, options, needs)
+end
+local function Flag(key) return function(o, value) o[key] = value end end
+local function Side(key) return function(o, value) o[key] = value and "LEFT" or "RIGHT" end end
 
-local sizeHint = Hint(panelTargets, "", 28, -316, 208)
+layout:Section(frames)
+local sizeHeading = layout:Heading(frames, L, "10v10 frames")
+SizeSetting("AutoBG_Tgt_Enable", "Show the frames", "Show enemy frames in battlegrounds of this size.", "EnableBracket", false)
+SizeSetting("AutoBG_Tgt_HideRealm", "Hide realm names", "Leave the realm off enemy names, as cross-realm battlegrounds show them.", "ButtonHideRealm", true)
+SizeSetting("AutoBG_Tgt_Trinket", "PvP trinket cooldown", "Each enemy's 3-minute PvP trinket cooldown, seen when they use it.", "ShowTrinket", true)
+local function Trinket() return TargetOptions().ShowTrinket[selectedBracket] and true or false end
+Switch(3, frames, L, "AutoBG_Tgt_TrinketLeft", "Trinket on the left", "Put the trinket on the left of the row instead of the right. Every size.",
+	function() return TargetOptions().TrinketPos == "LEFT" end,
+	function(value) TargetOptions().TrinketPos = value and "LEFT" or "RIGHT"; Relayout(); Rerender() end,
+	{ indent = 16 }, Trinket)
+table.insert(syncs[3], function() sizeHeading:SetText(string.upper(SizeName(selectedBracket) .. " frames")) end)
 
--- Frame size: three presets per battleground size, and sliders below for
--- anything in between.
+local function CastBars() return TargetOptions().ShowCastBars ~= false end
+layout:Heading(frames, R, "Every size")
+RowFeature("AutoBG_Tgt_CastBars", "Cast bars",
+	"Each enemy's cast or channel beside the row, with the spell name. Grey: it cannot be interrupted. Click a cast bar to target the caster.",
+	CastBars, Flag("ShowCastBars"))
+RowFeature("AutoBG_Tgt_CastLeft", "Cast bars on the left", "Put cast bars on the left of the row instead of the right.",
+	function() return TargetOptions().CastPos ~= "RIGHT" end, Side("CastPos"), { indent = 16 }, CastBars)
+RowFeature("AutoBG_Tgt_FadeRange", "Mark enemies in range",
+	"A thin green stripe on enemies within 80 yards, so the ones you can reach stand out. Enemies you have not been near yet get none.",
+	function() return TargetOptions().FadeOutOfRange ~= false end, Flag("FadeOutOfRange"))
+RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
+	"How many of your group, you included, target each enemy, in orange beside the health.",
+	function() return TargetOptions().ShowTargetCount ~= false end, Flag("ShowTargetCount"))
+RowFeature("AutoBG_Tgt_FlagWatch", "Flag warnings",
+	"Arathi Basin: a warning when an enemy starts opening a flag, or comes out of stealth at one. Flag spots are learned as flags are assaulted. Ctrl-click the warning to announce it.",
+	function() return TargetOptions().FlagWatch ~= false end, Flag("FlagWatch"))
+
+-- Size: three presets per battleground size, and sliders for anything between.
 -- Each preset is { width, height, text size }.
 local SIZE_PRESETS = {
 	[10] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
@@ -313,338 +397,187 @@ local SIZE_PRESETS = {
 	[40] = { { 160, 16, 10 }, { 210, 20, 11 }, { 240, 24, 12 } },
 	[5] = { { 170, 20, 10 }, { 210, 26, 12 }, { 250, 32, 14 } },
 }
-UI.Heading(panelTargets, "Frame size", 264, -98)
-local _, ShowPreset = UI.Segmented("AutoBG_Tgt_Preset", panelTargets, { "Compact", "Standard", "Large" }, 260, -114, 212,
-	function(index)
-		local o = TargetOptions()
-		if not (o and o.ButtonWidth and o.ButtonHeight and o.ButtonFontSize) then return end
-		local preset = SIZE_PRESETS[selectedBracket][index]
-		o.ButtonWidth[selectedBracket] = preset[1]
-		o.ButtonHeight[selectedBracket] = preset[2]
-		o.ButtonFontSize[selectedBracket] = preset[3]
-		Relayout()
-		Rerender()
-		UpdateTargetsWidgets(selectedBracket)
-	end, { height = 26 })
-
--- Row features shared by every battleground size.
-local function RowFeature(name, text, tip, y, key)
-	return UI.Switch(name, panelTargets, text, tip, 264, y, function(value)
-		Targets:EnsureOptions()
-		AutoBG_Settings.Targets[key] = value
-		if Targets.ApplyRowFeatures then Targets:ApplyRowFeatures() end
-		UpdateTargetsWidgets(selectedBracket)
-	end, 172)
-end
-
-UI.Heading(panelTargets, "On each enemy", 264, -186)
-local cbTgtCastBars = RowFeature("AutoBG_Tgt_CastBars", "Cast bars",
-	"Show each enemy's cast or channel beside the row, with the spell name. Grey means it cannot be interrupted. Click a cast bar to target the caster.", -206, "ShowCastBars")
-local cbTgtCastLeft = UI.Switch("AutoBG_Tgt_CastLeft", panelTargets, "Cast bars on the left",
-	"Put cast bars on the left of the row instead of the right.", 280, -232, function(value)
-		local o = TargetOptions()
-		if not o then return end
-		o.CastPos = value and "LEFT" or "RIGHT"
-		Relayout()
-		Rerender()
-	end, 156)
-local cbTgtRange = RowFeature("AutoBG_Tgt_FadeRange", "Mark enemies in range",
-	"A thin green stripe on the left of each enemy within 80 yards, so the ones you can reach stand out. Nothing else changes; enemies you have not been near yet get no stripe.", -258, "FadeOutOfRange")
-local cbTgtTargetCount = RowFeature("AutoBG_Tgt_TargetCount", "Who's on them",
-	"Show how many of your group, you included, target each enemy, in orange beside the health.", -310, "ShowTargetCount")
-local cbTgtFlagWatch = RowFeature("AutoBG_Tgt_FlagWatch", "Flag warnings",
-	"In Arathi Basin, warn when an enemy starts opening a flag, or comes out of stealth at one. Flag spots are learned as flags are assaulted. Ctrl-click the warning to announce it.", -336, "FlagWatch")
-
-local function TargetSlider(name, text, x, y, width, minValue, maxValue, step, store, rerender, format)
-	return UI.Slider(name, panelTargets, text, x, y, width, minValue, maxValue, step, function(value)
-		local o = TargetOptions()
-		if not o then return end
-		if not store(o, value) then return end
-		Relayout()
-		if rerender then Rerender() end
-		UpdateTargetsWidgets(selectedBracket)
-	end, format)
-end
-
-UI.Heading(panelTargets, "Custom size", 28, -340)
--- Text size 0-20 on the slider is font size 10-30: smaller is unreadable.
-local TEXT_SIZE_BASE = 10
-local sliderTgtFontSize = TargetSlider("AutoBG_Tgt_FontSize", "Text size", 28, -360, 200, 0, 20, 1, function(o, value)
-	if not o.ButtonFontSize then return end
-	o.ButtonFontSize[selectedBracket] = value + TEXT_SIZE_BASE
-	return true
-end, true)
-local sliderTgtScale = TargetSlider("AutoBG_Tgt_Scale", "Scale", 264, -360, 208, 50, 200, 5, function(o, value)
-	if not o.ButtonScale then return end
-	o.ButtonScale[selectedBracket] = value / 100
-	return true
-end, false, Percent)
-local sliderTgtWidth = TargetSlider("AutoBG_Tgt_Width", "Width", 28, -402, 200, 60, 300, 5, function(o, value)
-	if not o.ButtonWidth then return end
-	o.ButtonWidth[selectedBracket] = value
-	return true
-end, true)
-local sliderTgtHeight = TargetSlider("AutoBG_Tgt_Height", "Height", 264, -402, 208, 10, 40, 1, function(o, value)
-	if not o.ButtonHeight then return end
-	o.ButtonHeight[selectedBracket] = value
-	return true
-end, true)
-local sliderTgtOpacity = TargetSlider("AutoBG_Tgt_Opacity", "Opacity", 28, -444, 200, 20, 100, 5, function(o, value)
-	o.ButtonOpacity = o.ButtonOpacity or {}
-	o.ButtonOpacity[selectedBracket] = value / 100
-	return true
-end, false, Percent)
-
-UpdateTargetsWidgets = function(sz)
-	if Targets and Targets.EnsureOptions then Targets:EnsureOptions() end
-	local o = TargetOptions()
-	if not o then return end
-	for i = 1, #BRACKETS do
-		if BRACKETS[i] == sz then ShowBracket(i) end
-	end
-	local label = sz == 5 and "arenas" or (sz .. "v" .. sz)
-	cbTgtEnable.label:SetText("Show frames in " .. label)
-	sizeHint:SetText("The switches above and the frame size apply to " .. label .. " only.")
-	UI.Sync(cbTgtEnable, o.EnableBracket and o.EnableBracket[sz])
-	UI.Sync(cbTgtHideRealm, o.ButtonHideRealm and o.ButtonHideRealm[sz])
-	local trinket = o.ShowTrinket and o.ShowTrinket[sz]
-	UI.Sync(cbTgtTrinket, trinket)
-	UI.Sync(cbTgtTrinketLeft, o.TrinketPos == "LEFT", trinket and true or false)
-	UI.Sync(cbTgtCastBars, o.ShowCastBars ~= false)
-	UI.Sync(cbTgtCastLeft, o.CastPos ~= "RIGHT", o.ShowCastBars ~= false)
-	UI.Sync(cbTgtRange, o.FadeOutOfRange ~= false)
-	UI.Sync(cbTgtTargetCount, o.ShowTargetCount ~= false)
-	UI.Sync(cbTgtFlagWatch, o.FlagWatch ~= false)
-	-- Flag warnings are an Arathi Basin feature (the 15v15 size): not offered
-	-- for Warsong Gulch (10v10), Alterac Valley or the arenas.
-	if sz == 15 then cbTgtFlagWatch:Show() else cbTgtFlagWatch:Hide() end
-	local width = (o.ButtonWidth and o.ButtonWidth[sz]) or 150
-	local height = (o.ButtonHeight and o.ButtonHeight[sz]) or 20
-	local fontSize = (o.ButtonFontSize and o.ButtonFontSize[sz]) or 10
+local function Size(key) return TargetOptions()[key][selectedBracket] end
+layout:Section(frames, true)
+local presetHeading = layout:Heading(frames, L, "10v10 size")
+local _, ShowPreset = Choice(frames, L, "AutoBG_Tgt_Preset", { "Compact", "Standard", "Large" }, 212, function(index)
+	local o, preset = TargetOptions(), SIZE_PRESETS[selectedBracket][index]
+	o.ButtonWidth[selectedBracket] = preset[1]
+	o.ButtonHeight[selectedBracket] = preset[2]
+	o.ButtonFontSize[selectedBracket] = preset[3]
+	Relayout(); Rerender(); Refresh()
+end)
+table.insert(syncs[3], function()
+	presetHeading:SetText(string.upper(SizeName(selectedBracket) .. " size"))
 	-- A preset lights up only while the size matches it exactly.
 	local match = 0
-	for i, preset in ipairs(SIZE_PRESETS[sz] or {}) do
-		if preset[1] == width and preset[2] == height and preset[3] == fontSize then match = i end
+	for i, preset in ipairs(SIZE_PRESETS[selectedBracket]) do
+		if preset[1] == Size("ButtonWidth") and preset[2] == Size("ButtonHeight") and preset[3] == Size("ButtonFontSize") then match = i end
 	end
 	ShowPreset(match)
-	UI.SetSlider(sliderTgtFontSize, fontSize - TEXT_SIZE_BASE)
-	UI.SetSlider(sliderTgtScale, math.floor(((o.ButtonScale and o.ButtonScale[sz]) or 1.0) * 100 + 0.5))
-	UI.SetSlider(sliderTgtWidth, width)
-	UI.SetSlider(sliderTgtHeight, height)
-	UI.SetSlider(sliderTgtOpacity, math.floor(((o.ButtonOpacity and o.ButtonOpacity[sz]) or 1) * 100 + 0.5))
-	RefreshTestCaption()
-end
+end)
 
-Refresh[3] = function()
-	-- In a match, edit and preview the frame you are actually looking at.
-	if Targets and Targets.activeBG and Targets.currentSize then selectedBracket = Targets.currentSize end
-	SelectBracket(selectedBracket, startPreview)
+-- A slider for one size's entry; factor turns a saved fraction into percent.
+local function SizeSlider(column, name, text, low, high, step, key, factor, format, rerender, options)
+	factor = factor or 1
+	return Slider(3, frames, column, name, text, nil, low, high, step,
+		function() return math.floor((Size(key) or 1) * factor + 0.5) end,
+		function(value)
+			TargetOptions()[key][selectedBracket] = value / factor
+			Relayout()
+			if rerender then Rerender() end
+			Refresh()
+		end, format, options)
 end
+layout:Section(frames)
+-- Text size 0-20 on the slider is font size 10-30: smaller is unreadable.
+local TEXT_SIZE_BASE = 10
+Slider(3, frames, L, "AutoBG_Tgt_FontSize", "Text size", nil, 0, 20, 1,
+	function() return Size("ButtonFontSize") - TEXT_SIZE_BASE end,
+	function(value)
+		TargetOptions().ButtonFontSize[selectedBracket] = value + TEXT_SIZE_BASE
+		Relayout(); Rerender(); Refresh()
+	end, nil, { before = 4 })
+SizeSlider(L, "AutoBG_Tgt_Width", "Width", 60, 300, 5, "ButtonWidth", nil, nil, true)
+SizeSlider(L, "AutoBG_Tgt_Opacity", "Opacity", 20, 100, 5, "ButtonOpacity", 100, Percent)
+SizeSlider(R, "AutoBG_Tgt_Scale", "Scale", 50, 200, 5, "ButtonScale", 100, Percent, false, { before = { 4, 0 } })
+SizeSlider(R, "AutoBG_Tgt_Height", "Height", 10, 40, 1, "ButtonHeight", nil, nil, true)
+Footers(3, frames)
 
 -- -------------------------------------------------------------------------- --
 -- Spy: open-world enemy list and alerts                                      --
 -- -------------------------------------------------------------------------- --
-local function SpySetting(name, text, tip, x, y, key, after, hitWidth)
-	return UI.Switch(name, panelSpy, text, tip, x, y, function(value)
-		SpySettings()[key] = value
-		if after then after(value) end
-	end, hitWidth)
+local spy = pages[4]
+local function RenderSpy() Spy:RenderRows() end
+local function SpySetting(column, name, text, tip, key, after, options, needs)
+	return Switch(4, spy, column, name, text, tip,
+		function() return SpyOptions()[key] end,
+		function(value) SpyOptions()[key] = value; if after then after(value) end end, options, needs)
 end
+local function SpyOn() return SpyOptions().Enabled and true or false end
 
-local function RenderSpy()
-	if Spy and Spy.RenderRows then Spy:RenderRows() end
-end
+layout:Section(spy)
+layout:Heading(spy, L, "Nearby enemies")
+SpySetting(L, "AutoBG_Spy_Enable", "Show the Spy list", "List the enemy players around you in the open world.", "Enabled", RenderSpy)
+SpySetting(L, "AutoBG_Spy_AutoHide", "Hide when empty", "Hide the list while nobody is on it.", "AutoHide", RenderSpy, { indent = 16 }, SpyOn)
+SpySetting(L, "AutoBG_Spy_DisableInRaids", "Off in raids", "No Spy list or warnings inside raids.", "DisableInRaids", RenderSpy)
+layout:Heading(spy, L, "Warnings")
+SpySetting(L, "AutoBG_Spy_StealthAlert", "Stealth warnings",
+	"A short warning when you can see an enemy in stealth, outside battlegrounds. The same enemy stays quiet for 60 seconds.", "StealthAlert")
+SpySetting(L, "AutoBG_Spy_SoundAlert", "Warning sounds",
+	"A sound for a new enemy and for a stealth warning, outside battlegrounds. At most one every 8 seconds; an enemy met again stays quiet.", "SoundAlert")
+Switch(4, spy, L, "AutoBG_Spy_BGStealthAlert", "Stealth warnings in battlegrounds",
+	"In battlegrounds, a warning with a sound when you can see an enemy in stealth. At most one every 8 seconds; the same enemy stays quiet for 60 seconds.",
+	function() return TargetOptions().StealthAlert end,
+	function(value) TargetOptions().StealthAlert = value end)
 
-UI.Heading(panelSpy, "Nearby enemies", 28, -98)
-local cbSpyEnable = SpySetting("AutoBG_Spy_Enable", "Show the Spy list",
-	"List nearby hostile players in the open world.", 28, -118, "Enabled", RenderSpy)
-local cbSpyAutoHide = SpySetting("AutoBG_Spy_AutoHide", "Hide when empty",
-	"Hide the Spy list completely while no enemies are tracked.", 28, -144, "AutoHide", RenderSpy)
-local cbSpyDisableInRaids = SpySetting("AutoBG_Spy_DisableInRaids", "Disable in raids",
-	"No Spy list or alerts inside raids.", 28, -170, "DisableInRaids", RenderSpy)
-
-UI.Heading(panelSpy, "Alerts", 28, -206)
-local cbSpySound = SpySetting("AutoBG_Spy_SoundAlert", "Alert sounds",
-	"Play a sound for new enemies and stealth warnings outside BGs. At most one alert per 8 seconds; repeated contacts stay quiet. Off by default. BG sounds have their own setting.", 28, -226, "SoundAlert")
-local cbSpyStealth = SpySetting("AutoBG_Spy_StealthAlert", "Stealth warnings",
-	"Show a brief stealth warning outside BGs. Its sound follows Alert sounds. Repeated warnings for the same enemy stay quiet for 60 seconds. BG alerts have their own setting.", 28, -252, "StealthAlert", function() Refresh[4]() end)
-local cbSpyBGStealth = UI.Switch("AutoBG_Spy_BGStealthAlert", panelSpy, "Stealth warnings in BGs",
-	"In battlegrounds, warn with a sound when you can see a stealthed enemy, at any distance your detection reaches. At most one warning per 8 seconds; the same enemy stays quiet for 60 seconds. Enemy frames still show who is hidden.", 28, -304, function(value)
-		Targets:EnsureOptions()
-		AutoBG_Settings.Targets.StealthAlert = value
-	end)
-
-UI.Heading(panelSpy, "List", 264, -98)
-local sliderSpyTimeout = UI.Slider("AutoBG_Spy_Timeout", panelSpy, "Forget after", 264, -118, 208, 10, 120, 5,
-	function(value) SpySettings().Timeout = value end, Seconds)
-local sliderSpyMaxRows = UI.Slider("AutoBG_Spy_MaxRows", panelSpy, "Enemies shown", 264, -160, 208, 3, 20, 1,
-	function(value)
-		SpySettings().MaxRows = value
-		RenderSpy()
-	end)
-local sliderSpyScale = UI.Slider("AutoBG_Spy_Scale", panelSpy, "Scale", 264, -202, 208, 50, 150, 5,
-	function(value)
-		SpySettings().Scale = value / 100
-		if Spy and Spy.ApplyScale then Spy:ApplyScale() end
-	end, Percent)
-local btnSpyClear = UI.Button("AutoBG_BtnSpyClear", panelSpy, "Clear list", 264, -246, 100, function()
-	if Spy and Spy.ClearHistory then Spy:ClearHistory() end
-	RefreshTestCaption()
+layout:Heading(spy, R, "List")
+Slider(4, spy, R, "AutoBG_Spy_Timeout", "Forget after", "An enemy not seen for this long leaves the list.", 10, 120, 5,
+	function() return SpyOptions().Timeout or 30 end, function(value) SpyOptions().Timeout = value end, Seconds)
+Slider(4, spy, R, "AutoBG_Spy_MaxRows", "Enemies shown", nil, 3, 20, 1,
+	function() return SpyOptions().MaxRows or 5 end, function(value) SpyOptions().MaxRows = value; RenderSpy() end)
+Slider(4, spy, R, "AutoBG_Spy_Scale", "Scale", nil, 50, 150, 5,
+	function() return math.floor((SpyOptions().Scale or 1) * 100 + 0.5) end,
+	function(value) SpyOptions().Scale = value / 100; Spy:ApplyScale() end, Percent)
+local clear = UI.Button("AutoBG_BtnSpyClear", spy, "Clear list", 0, 0, 100, function()
+	Spy:ClearHistory()
+	Refresh()
 end)
-UI.Tooltip(btnSpyClear, "Remove everyone from the Spy list and forget recent contacts.")
-Hint(panelSpy, "Shift-click a name: kill on sight. Ctrl-click: ignore. /abg spy stats shows who you meet most.", 264, -278, 208)
-
-Refresh[4] = function()
-	local opt = AutoBG_Settings and AutoBG_Settings.Spy
-	if not opt then return end
-	UI.Sync(cbSpyEnable, opt.Enabled)
-	UI.Sync(cbSpyAutoHide, opt.AutoHide)
-	UI.Sync(cbSpyDisableInRaids, opt.DisableInRaids ~= false)
-	UI.Sync(cbSpySound, opt.SoundAlert)
-	UI.Sync(cbSpyStealth, opt.StealthAlert)
-	if Targets and Targets.EnsureOptions then Targets:EnsureOptions() end
-	UI.Sync(cbSpyBGStealth, AutoBG_Settings.Targets and AutoBG_Settings.Targets.StealthAlert)
-	UI.SetSlider(sliderSpyTimeout, opt.Timeout or 30)
-	UI.SetSlider(sliderSpyMaxRows, opt.MaxRows or 5)
-	UI.SetSlider(sliderSpyScale, math.floor((opt.Scale or 1.0) * 100 + 0.5))
-end
+UI.Tooltip(clear, "Take everyone off the Spy list and forget who was met just now.")
+layout:Button(spy, R, clear, { before = 4 })
+Hint(spy, R, "Click a name to target, right-click to focus. Shift-click: kill on sight. Ctrl-click: ignore. /abg spy stats: who you meet most.")
+Footers(4, spy)
 
 -- -------------------------------------------------------------------------- --
 -- Arena: what AutoBG adds to the enemy frames in an arena                    --
 -- -------------------------------------------------------------------------- --
-local arenaSwitches = {}
-local function ArenaSwitch(name, text, tip, x, y, key)
-	arenaSwitches[key] = UI.Switch(name, panelArena, text, tip, x, y, function(value)
-		local o = AutoBG_ArenaOptions()
-		if not o then return end
-		o[key] = value
-		if AutoBG_Arena then AutoBG_Arena.Refresh() end
-		if AutoBG_ArenaPets then AutoBG_ArenaPets.Refresh() end
-		if AutoBG_Timers_UpdateVisibility then AutoBG_Timers_UpdateVisibility() end
-	end, 200)
+local arena = pages[5]
+local function ArenaSwitch(column, name, text, tip, key)
+	return Switch(5, arena, column, name, text, tip,
+		function()
+			local o = AutoBG_ArenaOptions()
+			if key == "Callouts" then return o[key] end
+			return o[key] ~= false
+		end,
+		function(value)
+			AutoBG_ArenaOptions()[key] = value
+			AutoBG_Arena.Refresh()
+			AutoBG_ArenaPets.Refresh()
+			AutoBG_Timers_UpdateVisibility()
+		end)
 end
-
-UI.Heading(panelArena, "On each enemy", 28, -98)
-ArenaSwitch("AutoBG_Arena_Mana", "Mana and energy bars",
-	"A thin bar under each enemy: mana, rage or energy. See at a glance when the healer runs low.", 28, -118, "Mana")
-ArenaSwitch("AutoBG_Arena_Abilities", "Key abilities",
-	"Icons for the few abilities that matter: Divine Shield, Blessing of Protection, Blessing of Freedom and Hammer of Justice. Gold = on now, grey = used, with the seconds since. A blessing shows on whoever received it.", 28, -144, "Abilities")
-ArenaSwitch("AutoBG_Arena_Pets", "Enemy pets",
-	"List the enemy pets and minions you have seen under the enemy frames, with their owner and health. Click one to target it. Totems are left out.", 28, -170, "Pets")
-
-UI.Heading(panelArena, "Alerts and finding enemies", 264, -98)
-ArenaSwitch("AutoBG_Arena_Drinking", "Drinking alert",
-	"A message and a sound when an enemy starts drinking.", 264, -118, "Drinking")
-ArenaSwitch("AutoBG_Arena_Callouts", "Callouts to your team",
-	"Say in your team's chat when an enemy drops to 25% health, and when one dies. Once per enemy.", 264, -144, "Callouts")
-ArenaSwitch("AutoBG_Arena_Scan", "Find enemies fast",
-	"Look for enemies once a second by stepping through the nearby ones (UnitXP). Only when you have no target, and your target is cleared again. What your teammates target always counts.", 264, -170, "Scan")
-
-UI.Heading(panelArena, "Shadow Sight", 264, -216)
-ArenaSwitch("AutoBG_Arena_ShadowSight", "Shadow Sight timers",
-	"The orbs appear 90 seconds into every round. A pickup shows 15 seconds of sight for whoever took it, and that orb is back 3 minutes later. The timers sit by the other timer bars; move them with Preview frames.", 264, -236, "ShadowSight")
-
-Refresh[5] = function()
-	local o = AutoBG_ArenaOptions()
-	if not o then return end
-	for key, widget in pairs(arenaSwitches) do UI.Sync(widget, o[key] ~= false and (key ~= "Callouts" or o[key])) end
-end
+layout:Section(arena)
+layout:Heading(arena, L, "On each enemy")
+ArenaSwitch(L, "AutoBG_Arena_Mana", "Mana and energy bars",
+	"A thin bar under each enemy: mana, rage or energy. See at a glance when the healer runs low.", "Mana")
+ArenaSwitch(L, "AutoBG_Arena_Abilities", "Key abilities",
+	"Icons for the few abilities that matter: Divine Shield, Blessing of Protection, Blessing of Freedom and Hammer of Justice. Gold: on now. Grey: used, with the seconds since. A blessing shows on whoever received it.", "Abilities")
+ArenaSwitch(L, "AutoBG_Arena_Pets", "Enemy pets",
+	"The enemy pets and minions you have seen, under the enemy frames, with their owner and health. Click one to target it. Totems are left out.", "Pets")
+layout:Heading(arena, L, "Shadow Sight")
+ArenaSwitch(L, "AutoBG_Arena_ShadowSight", "Shadow Sight timers",
+	"The orbs appear 90 seconds into every round. A pickup shows 15 seconds of sight for whoever took it, and that orb is back 3 minutes later. The timers sit with the other timer bars.", "ShadowSight")
+layout:Heading(arena, R, "Alerts and finding enemies")
+ArenaSwitch(R, "AutoBG_Arena_Drinking", "Drinking alert", "A message and a sound when an enemy starts drinking.", "Drinking")
+ArenaSwitch(R, "AutoBG_Arena_Callouts", "Callouts to your team",
+	"Say in your team's chat when an enemy drops to 25% health, and when one dies. Once per enemy.", "Callouts")
+ArenaSwitch(R, "AutoBG_Arena_Scan", "Find enemies fast",
+	"Step through the nearby enemies once a second (UnitXP) until the whole other team is listed. Only while you have no target, and it is cleared again. What your teammates target always counts.", "Scan")
+Footers(5, arena)
 
 -- -------------------------------------------------------------------------- --
--- Footer: one preview for every frame, one reset for every position          --
+-- The preview: one switch for every frame                                    --
 -- -------------------------------------------------------------------------- --
--- One switch for every frame preview, shared by this button, closing the
--- window and /abg test.
+-- Shared by the Preview buttons, closing the settings and /abg test.
 function AutoBG_SetPreview(on)
 	if on then
-		if Targets and Targets.EnableConfigMode then Targets:EnableConfigMode(selectedBracket) end
-		if Spy and Spy.EnableTestMode then Spy:EnableTestMode() end
+		Targets:EnableConfigMode(selectedBracket)
+		Spy:EnableTestMode()
 		if FlagAlert and selectedBracket == 15 then FlagAlert:SetPreview(true) end
 	else
-		if Targets and Targets.isConfig then Targets:DisableConfigMode() end
-		if Spy and Spy.isTestMode then Spy:DisableTestMode() end
+		if Targets.isConfig then Targets:DisableConfigMode() end
+		if Spy.isTestMode then Spy:DisableTestMode() end
 		if FlagAlert then FlagAlert:SetPreview(false) end
 	end
 	timersPreview = on and true or false
 	AutoBG_Timers_SetPreview(timersPreview)
 	AutoBG_FC_SetPreview(timersPreview)
-	if AutoBG_LoadTimerPositions then AutoBG_LoadTimerPositions() end
-	RefreshTimers(true)
-	AutoBG_Options_Refresh()
+	AutoBG_LoadTimerPositions()
+	AutoBG_Timers_UpdateVisibility()
+	AutoBG_FC_UpdateVisibility()
+	Refresh()
 end
 
-previewButton = UI.Button("AutoBG_BtnTestAll", panel, "Preview frames", 0, 0, 150, function()
-	AutoBG_SetPreview(not PreviewActive())
-end)
-previewButton:ClearAllPoints()
-previewButton:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 28, 18)
-UI.Tooltip(previewButton, "Show every frame with samples so you can drag it into place: timers, flag carriers, enemy frames for this size, the Spy list, the stealth and flag warnings. Click again or close this window to hide them.")
-
-local btnResetAll = UI.Button("AutoBG_BtnResetAll", panel, "Reset positions", 0, 0, 150, function()
-	if AutoBG_Settings then
-		AutoBG_Settings.Positions = {}
-	end
-	if AutoBG_ResetTimerPositions then AutoBG_ResetTimerPositions() end
-	if AutoBG_ResetFCPositions then AutoBG_ResetFCPositions() end
-	if Targets and Targets.ResetPosition then Targets:ResetPosition() end
-	if Spy and Spy.ResetPosition then Spy:ResetPosition() end
-	if FlagAlert then FlagAlert:ResetPosition() end
-	AutoBG_Print("Every frame is back in its place.", true)
-end)
-btnResetAll:ClearAllPoints()
-btnResetAll:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 186, 18)
-UI.Tooltip(btnResetAll, "Move every frame back to its default place: timers, flag carriers, enemy frames, the Spy list, the stealth and flag warnings.")
-
--- -------------------------------------------------------------------------- --
--- Tab selection & universal refresh                                          --
--- -------------------------------------------------------------------------- --
--- start = false refreshes the enemy-frames page without starting its preview.
-local function SelectTab(tabId, start)
-	startPreview = start
-	ShowTab(tabId)
-	startPreview = nil
-end
-
-function AutoBG_Options_Refresh()
-	SelectTab(selectedTab, false)
-	RefreshTestCaption()
-end
-
+-- A page back from AddOn Options is hidden even when its tab is the active one.
 panel:SetScript("OnShow", function()
-	SelectTab(selectedTab)
-	RefreshTestCaption()
+	ShowTab(selectedTab)
+	pages[selectedTab]:Show()
 end)
-
 panel:SetScript("OnHide", function()
 	if PreviewActive() then AutoBG_SetPreview(false) end
 end)
 
+-- Game Menu > AddOn Options > AutoBG (ClassicAPI): the same five pages, one
+-- category each, in one column.
+book = UI.Book({
+	name = "AutoBG", text = "Open a page under AutoBG, or type /abg for the settings window.",
+	open = function() AutoBG_OpenOptions() end,
+	panel = panel, pages = pages, tabs = TABS, layout = layout, refresh = Refresh,
+	select = OnPageOpen,
+	hide = function() if PreviewActive() then AutoBG_SetPreview(false) end end,
+})
+
 -- -------------------------------------------------------------------------- --
 -- Opening the window on a page (/abg, /bgt)                                  --
 -- -------------------------------------------------------------------------- --
-function AutoBG_OpenOptions(tabKey)
-	local requestedTab
-	if tabKey then
-		local k = string.lower(tabKey)
-		if k == "general" or k == "gen" then
-			requestedTab = 1
-		elseif k == "timers" or k == "timer" or k == "fc" then
-			requestedTab = 2
-		elseif k == "targets" or k == "enemy" or k == "bgt" or k == "frames" then
-			requestedTab = 3
-		elseif k == "spy" then
-			requestedTab = 4
-		elseif k == "arena" then
-			requestedTab = 5
-		end
-	end
-	-- Choose the requested page before OnShow refreshes it. Opening Spy must not
-	-- briefly start the previously selected enemy-frame preview.
-	if requestedTab then selectedTab = requestedTab end
+function AutoBG_OpenOptions(pageKey)
+	local index = pageKey and PAGE_KEYS[string.lower(pageKey)]
+	if index then selectedTab = index end
+	if InterfaceOptionsFrame:IsShown() then InterfaceOptionsFrame:Hide() end
 	if not panel:IsShown() then
 		panel:Show()
-	elseif requestedTab then
-		SelectTab(selectedTab)
-		RefreshTestCaption()
+	elseif index then
+		ShowTab(selectedTab)
+		pages[selectedTab]:Show()
 	end
 end

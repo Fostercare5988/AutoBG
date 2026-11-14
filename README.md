@@ -15,8 +15,9 @@ enemy alerts for World of Warcraft 1.12.1, build 5875.
   when a dead enemy comes back.
 - Track recent open-world enemies in a compact Spy list, with optional nearby
   stealth warnings and sound suppression.
-- Configure everything through four readable settings pages. Drag frame headers
-  to move displays; each battleground bracket keeps its own position.
+- Configure everything on five settings pages, in the `/abg` window or in Game
+  Menu > AddOn Options > AutoBG. Drag frame headers to move displays; each
+  battleground size keeps its own position.
 
 ## Requirements
 
@@ -33,7 +34,7 @@ a DLL requires a full game restart.
 
 ## Install
 
-Download [AutoBG v1.0.0](https://github.com/Fostercare5988/AutoBG/releases/tag/v1.0.0)
+Download the [latest release](https://github.com/Fostercare5988/AutoBG/releases/latest)
 and extract its `AutoBG` folder into `Interface/AddOns`.
 The resulting path must be `Interface/AddOns/AutoBG/AutoBG.toc`.
 Enable AutoBG in the character-selection addon list.
@@ -42,7 +43,7 @@ Enable AutoBG in the character-selection addon list.
 
 | Control | Action |
 | --- | --- |
-| `/abg` | Open settings |
+| `/abg` | Open settings (also Game Menu > AddOn Options > AutoBG) |
 | `/abg timers` | Open timer and carrier settings |
 | `/abg targets` or `/bgt` | Open enemy-frame settings |
 | `/abg spy` | Open Spy settings |
@@ -60,17 +61,15 @@ The list records recent observations received by your client. It is not a count
 of everyone within a fixed distance. Five rows display by default; tracking is
 capped at 20. Hover a row for further details.
 
-Open-world sounds default to off. **Alert sounds** enables them. Alerts
+Open-world sounds default to off. **Warning sounds** enables them. Warnings
 share an eight-second limit; recently seen enemies and repeated stealth episodes
 stay quiet. Suppressed alerts are discarded rather than played later.
 Battleground stealth warnings have their own setting and the same burst limit.
 Discovery uses the game's minimap ping; stealth uses its raid-warning sound.
 
-**Only enemies I can see** requires a visible, attackable player with a
-confirmed stealth aura, at any distance your detection reaches. Turning it off
-allows open-world warnings from received stealth events. Battleground warnings
-always need you to see the enemy. Spy is off inside raids unless you turn
-**Disable in raids** off.
+A stealth warning needs a visible, attackable player with a confirmed stealth
+aura, at any distance your detection reaches. Spy is off inside raids unless you
+turn **Off in raids** off.
 
 Spy rests inside battlegrounds, where the enemy frames list every enemy and
 give the stealth warning. It works in the arenas (2v2, 3v3, 5v5), where the enemy frames also have
