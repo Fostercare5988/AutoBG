@@ -241,9 +241,9 @@ function AutoBG_CancelAllQueues()
         end
     end
     if cancelled > 0 then
-        AutoBG_Print("Cancelled " .. cancelled .. " active battleground queue(s).", true)
+        AutoBG_Print("Left " .. cancelled .. (cancelled == 1 and " queue." or " queues."), true)
     else
-        AutoBG_Print("No active queues found to cancel.", true)
+        AutoBG_Print("You are in no queue.", true)
     end
 end
 
@@ -253,11 +253,15 @@ function AutoBG_IsPlayerAFK()
     return UnitIsAFK("player") and true or false
 end
 
+-- One voice in chat: "AutoBG" in the addon's orange, then a short sentence
+-- with names in gold. force: shown with Chat messages off too (answers to a
+-- command, and what stopped an automatic queue).
 function AutoBG_Print(msg, force)
-    if (force or (AutoBG_Settings and AutoBG_Settings.ChatMessages)) and DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00AutoBG:|r " .. msg)
+    if force or (AutoBG_Settings and AutoBG_Settings.ChatMessages) then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff9e38AutoBG|r " .. msg)
     end
 end
+local function Gold(text) return "|cffffd100" .. text .. "|r" end
 
 -- ClassicAPI 1.17.7: flashes until the game window has focus; nothing while it has.
 local function FlashTaskbar()
@@ -319,15 +323,13 @@ end
 -- Deserter Debuff Engine & Lifecycle Tracking
 local hadDeserterDebuff = false
 
-local function FormatDeserterRemaining(sec)
-    if not sec or sec <= 0 then return "" end
+-- "Deserter (4m 12s left)"
+local function Deserter(sec)
+    local text = "|cffff5555Deserter|r"
+    if not sec or sec <= 0 then return text end
     local m = math.floor(sec / 60)
-    local s = sec % 60
-    if m > 0 then
-        return string.format(" (%dm %02ds remaining)", m, s)
-    else
-        return string.format(" (%ds remaining)", s)
-    end
+    if m > 0 then return text .. string.format(" (%dm %02ds left)", m, sec % 60) end
+    return text .. " (" .. sec .. "s left)"
 end
 
 function AutoBG_HasDeserter()
@@ -414,7 +416,7 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
     if hasDeserter then
         pendingAutoRejoin = nil
         isAutoQueueing = false
-        AutoBG_Print("Cannot queue for |cFFFFFF00" .. (bgName or "battleground") .. "|r: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(remaining) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
+        AutoBG_Print("Not queueing for " .. Gold(bgName or "a battleground") .. ": " .. Deserter(remaining) .. ".", true)
         return
     end
 
@@ -422,7 +424,7 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
     local bg = BATTLEGROUNDS[cleanName]
     if not bg then
         pendingAutoRejoin = nil
-        AutoBG_Print("No queue for |cFFFFFF00" .. cleanName .. "|r.", true)
+        AutoBG_Print(Gold(cleanName) .. " has no queue.", true)
         return
     end
     if finderTimer then finderTimer:Cancel(); finderTimer = nil end
@@ -441,7 +443,7 @@ function AutoBG_TriggerBattlegroundFinder(bgName, isRejoin, isBatchRequest)
     if bg.arena then
         -- Skirmish asks the server like a battleground does; a rated queue starts at once.
         -- Skirmish answers with BATTLEFIELDS_SHOW (window titled with the arena zone).
-        AutoBG_Print("Queueing |cFFFFFF00" .. ARENA_TYPES[AutoBG_Settings.ArenaType] .. "|r arena...")
+        AutoBG_Print("Queueing for the " .. Gold(ARENA_TYPES[AutoBG_Settings.ArenaType]) .. " arena.")
         JoinArenaQueue(AutoBG_Settings.ArenaType)
         return
     end
@@ -470,16 +472,16 @@ function AutoBG_QueueAllBGs()
     if isAutoQueueing or currentZonePVP then return end
     local hasDeserter, remaining = AutoBG_HasDeserter()
     if hasDeserter then
-        AutoBG_Print("Cannot queue: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(remaining) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
+        AutoBG_Print("Not queueing: " .. Deserter(remaining) .. ".", true)
         return
     end
     if AutoBG_IsPlayerAFK() then
-        AutoBG_Print("Auto-Queue skipped: You are tagged as |cFFFF5555AFK|r.")
+        AutoBG_Print("Not queueing while you are AFK.")
         return
     end
     if IsPlayerDeadOrGhost() then
         needsQueueAfterResurrect = true
-        AutoBG_Print("Cannot queue for battlegrounds while dead. Will auto-queue once resurrected.")
+        AutoBG_Print("You are dead: queueing once you are alive again.")
         return
     end
 
@@ -487,7 +489,7 @@ function AutoBG_QueueAllBGs()
     local total = 0
     local bgsToQueue = AutoBG_GetSelectedBGs()
     if #bgsToQueue == 0 then
-        AutoBG_Print("Select at least one battleground in Auto-Queue options.", true)
+        AutoBG_Print("Nothing to queue: pick a battleground or the arena on the General page (/abg).", true)
         return
     end
 
@@ -508,7 +510,7 @@ function AutoBG_QueueAllBGs()
     end
 
     if total == 0 then
-        AutoBG_Print("Already queued for all selected Battlegrounds.")
+        AutoBG_Print("Already in every queue you picked.")
         return
     end
 
@@ -525,21 +527,21 @@ function AutoBG_QueueAllBGs()
         local hasDes, rem = AutoBG_HasDeserter()
         if hasDes then
             isAutoQueueing = false
-            AutoBG_Print("Auto-Queue halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
+            AutoBG_Print("Queueing stopped: " .. Deserter(rem) .. ".", true)
             return
         end
         if AutoBG_IsPlayerAFK() then
             isAutoQueueing = false
-            AutoBG_Print("Auto-Queue paused: You are tagged as |cFFFF5555AFK|r.")
+            AutoBG_Print("Queueing stopped while you are AFK.")
             return
         end
         if IsPlayerDeadOrGhost() then
             isAutoQueueing = false; needsQueueAfterResurrect = true
-            AutoBG_Print("Auto-Queue paused (player dead/ghost). Will resume upon resurrection.")
+            AutoBG_Print("You died: queueing once you are alive again.")
             return
         end
         if idx > total then
-            isAutoQueueing = false; AutoBG_Print("Queue requests finished. Check the battleground queue status.")
+            isAutoQueueing = false
             return
         end
         -- The client holds three queues; the server refuses a fourth.
@@ -549,12 +551,11 @@ function AutoBG_QueueAllBGs()
         end
         if used >= MAX_BATTLEFIELD_QUEUES then
             isAutoQueueing = false
-            AutoBG_Print("All " .. MAX_BATTLEFIELD_QUEUES .. " queues are in use: |cFFFFFF00" .. queueQueueBuffer[idx] .. "|r and later choices were not queued.", true)
+            AutoBG_Print("All " .. MAX_BATTLEFIELD_QUEUES .. " queues are taken: " .. Gold(queueQueueBuffer[idx]) .. (idx < total and " and the rest were" or " was") .. " not queued.", true)
             return
         end
         local currentBG = queueQueueBuffer[idx]
         idx = idx + 1
-        AutoBG_Print("Auto-queuing for |cFFFFFF00" .. currentBG .. "|r (" .. (idx - 1) .. "/" .. total .. ")...")
         AutoBG_TriggerBattlegroundFinder(currentBG, false, true)
         C_Timer.After(2.2, StepQueue)
     end
@@ -598,7 +599,7 @@ end
 local function WaitForRejoinReady(request)
     if GetTime() >= request.readyDeadline then
         FinishRejoin()
-        AutoBG_Print("Auto-Rejoin stopped: the player or battleground status is not ready. Use /abg q to retry.", true)
+        AutoBG_Print("Could not queue again: the game was not ready. /abg q tries again.", true)
     else
         ScheduleRejoin(request, 0.05)
     end
@@ -638,7 +639,7 @@ local function HandleMatchEnd()
             -- A cast may have been queued again during the exit delay.
             PrepareBattlefieldExit()
             LeaveBattlefield()
-            AutoBG_Print("Auto-left |cFFFFFF00" .. (lastPlayedBG or "battleground") .. "|r.")
+            AutoBG_Print("Left " .. Gold(lastPlayedBG or "the battleground") .. ".")
         end)
     end
 end
@@ -672,7 +673,7 @@ TryAutoRejoin = function()
     end
     if request.attempts >= 3 then
         FinishRejoin()
-        AutoBG_Print("Auto-Rejoin could not confirm the queue after three attempts. Use /abg q to retry.", true)
+        AutoBG_Print("Could not queue again after three tries. /abg q tries again.", true)
         return
     end
     for i = 1, MAX_BATTLEFIELD_QUEUES do
@@ -682,11 +683,11 @@ TryAutoRejoin = function()
     local hasDeserter, remaining = AutoBG_HasDeserter()
     if hasDeserter then
         FinishRejoin()
-        AutoBG_Print("Auto-Rejoin halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(remaining) .. ".", true)
+        AutoBG_Print("Not queueing again: " .. Deserter(remaining) .. ".", true)
         return
     end
     if AutoBG_IsPlayerAFK() then
-        AutoBG_Print("Auto-Rejoin paused: You are tagged as |cFFFF5555AFK|r.")
+        AutoBG_Print("Not queueing again while you are AFK.")
         FinishRejoin()
         return
     end
@@ -770,8 +771,8 @@ local function ReportMissedEnter(id)
     local started, delay = inviteStart[id], enterDelay[id] or 0
     if not (started and notifiedQueues[id] == true and AutoBG_Settings.AutoAccept and delay > 0) then return end
     local lasted = math.floor(GetTime() - started)
-    AutoBG_Print("The invite for |cFFFFFF00" .. (invitedMaps[id] or "Battleground") .. "|r ended after |cFFFFFF00"
-        .. lasted .. "s|r, before Auto-Enter at |cFFFFFF00" .. delay .. "s|r. Lower the enter delay if it ran out.", true)
+    AutoBG_Print("The invite for " .. Gold(invitedMaps[id] or "the battleground") .. " ended after " .. Gold(lasted .. "s")
+        .. ", before the " .. Gold(delay .. "s") .. " enter delay. A shorter delay catches it.", true)
 end
 
 local function ProcessBattlefieldQueue(id)
@@ -789,7 +790,7 @@ local function ProcessBattlefieldQueue(id)
             inviteStart[id] = GetTime()
             if AutoBG_Settings.AutoAccept then
                 if AutoBG_IsPlayerAFK() then
-                    AutoBG_Print("Queue popped for |cFFFFFF00" .. (mapName or "Battleground") .. "|r, but Auto-Enter is paused because you are |cFFFF5555AFK|r!")
+                    AutoBG_Print(Gold(mapName or "The battleground") .. " is ready. Not entering while you are AFK.")
                     if AutoBG_Settings.NotifySound then AutoBG_PlayNotificationSound(true) end
                     FlashTaskbar()
                     return
@@ -803,22 +804,22 @@ local function ProcessBattlefieldQueue(id)
                     notifiedQueues[qId] = "accepted"
                     AcceptBattlefieldPort(qId, 1)
                     DismissBattlefieldPopups()
-                    AutoBG_Print("Instant Auto-Accepted |cFFFFFF00" .. bg .. "|r!")
+                    AutoBG_Print("Entering " .. Gold(bg) .. ".")
                 else
-                    AutoBG_Print("Queue popped for |cFFFFFF00" .. bg .. "|r! Entering in |cFFFFFF00" .. delay .. "s|r...")
+                    AutoBG_Print(Gold(bg) .. " is ready: entering in " .. Gold(delay .. "s") .. ".")
                     C_Timer.After(delay, function()
                         if inviteGeneration[qId] ~= generation or notifiedQueues[qId] ~= true or not AutoBG_Settings.AutoAccept then return end
                         local currentStatus, currentMap = GetBattlefieldStatus(qId)
                         if currentStatus ~= "confirm" or currentMap ~= mapName then return end
                         if AutoBG_IsPlayerAFK() then
-                            AutoBG_Print("Auto-Enter cancelled: Player became |cFFFF5555AFK|r!")
+                            AutoBG_Print("Not entering " .. Gold(bg) .. ": you are AFK.")
                             return
                         end
                         if GetBattlefieldStatus(qId) == "confirm" then
                             notifiedQueues[qId] = "accepted"
                             AcceptBattlefieldPort(qId, 1)
                             DismissBattlefieldPopups()
-                            AutoBG_Print("Auto-Entered |cFFFFFF00" .. bg .. "|r after |cFFFFFF00" .. delay .. "s|r delay!")
+                            AutoBG_Print("Entering " .. Gold(bg) .. ".")
                         end
                     end)
                 end
@@ -826,7 +827,7 @@ local function ProcessBattlefieldQueue(id)
             if AutoBG_Settings.NotifySound then AutoBG_PlayNotificationSound(true) end
             FlashTaskbar()
             if not AutoBG_Settings.AutoAccept then
-                AutoBG_Print("Queue is ready for |cFFFFFF00" .. (mapName or "Battleground") .. "|r! (Queue #" .. id .. ")")
+                AutoBG_Print(Gold(mapName or "The battleground") .. " is ready.")
             end
         end
     else
@@ -891,7 +892,6 @@ frame:SetScript("OnEvent", function()
 
         UpdateZoneCache()
         SyncMatchChat()
-        AutoBG_Print("v1.0.0 loaded. Type |cFFFFFF00/abg|r or |cFFFFFF00/bgt|r for options.", true)
 
     elseif ev == "PLAYER_LEAVING_WORLD" then
         rejoinWorldReady = false
@@ -931,13 +931,13 @@ frame:SetScript("OnEvent", function()
                     FinishRejoin()
                     if not hadDeserterDebuff then
                         hadDeserterDebuff = true
-                        AutoBG_Print("Auto-Rejoin / Auto-Queue halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
+                        AutoBG_Print("Not queueing: " .. Deserter(rem) .. ".", true)
                     end
                     return
                 end
                 if AutoBG_Settings and AutoBG_Settings.AutoQueueLogin and not hasQueuedOnLogin then
                     if AutoBG_IsPlayerAFK() then
-                        AutoBG_Print("Auto-Queue on login skipped: You are tagged as |cFFFF5555AFK|r.")
+                        AutoBG_Print("Not queueing at login while you are AFK.")
                     elseif IsPlayerDeadOrGhost() then
                         needsQueueAfterResurrect = true
                     else
@@ -947,11 +947,11 @@ frame:SetScript("OnEvent", function()
                             if generation ~= queueGeneration or not (AutoBG_Settings and AutoBG_Settings.AutoQueueLogin) then return end
                             local currDes, currRem = AutoBG_HasDeserter()
                             if currDes then
-                                AutoBG_Print("Auto-Queue on login halted: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(currRem) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
+                                AutoBG_Print("Not queueing at login: " .. Deserter(currRem) .. ".", true)
                                 return
                             end
                             if AutoBG_IsPlayerAFK() then
-                                AutoBG_Print("Auto-Queue on login skipped: You are tagged as |cFFFF5555AFK|r.")
+                                AutoBG_Print("Not queueing at login while you are AFK.")
                                 return
                             end
                             if not IsPlayerDeadOrGhost() then AutoBG_QueueAllBGs()
@@ -981,7 +981,7 @@ frame:SetScript("OnEvent", function()
         if pendingAutoRejoin and ShownBattlefield() ~= pendingAutoRejoin then return end
         if pendingAutoRejoin or isAutoQueueing then
             if AutoBG_IsPlayerAFK() then
-                AutoBG_Print("Auto-Queue / Auto-Rejoin skipped: You are tagged as |cFFFF5555AFK|r.")
+                AutoBG_Print("Not queueing while you are AFK.")
                 FinishRejoin()
                 isAutoQueueing = false
                 return
@@ -1001,7 +1001,7 @@ frame:SetScript("OnEvent", function()
             suppressedBattlefieldBG = bgTitle
             AutoBG_HideBattlefieldWindow()
 
-            AutoBG_Print("Queue requested for |cFFFFFF00" .. bgTitle .. "|r (" .. (row > 0 and QUEUE_MODE_LABEL[QueueMode(bgTitle)] or "First Available") .. ").")
+            AutoBG_Print("Queued for " .. Gold(bgTitle) .. " (" .. (row > 0 and QUEUE_MODE_LABEL[QueueMode(bgTitle)] or "First Available") .. ").")
             pendingAutoRejoin = nil
             if not rejoinRequest then hasHandledEnd = false end
         elseif GetTime() < suppressBattlefieldFrameUntil and ShownBattlefield() == suppressedBattlefieldBG then
@@ -1023,7 +1023,7 @@ frame:SetScript("OnEvent", function()
                 RepopMe()
                 StaticPopup_Hide("DEATH")
             else
-                AutoBG_Print("Self-resurrection available. Preserving spirit.")
+                AutoBG_Print("Not releasing: you can resurrect yourself.")
             end
         end
 
@@ -1034,7 +1034,7 @@ frame:SetScript("OnEvent", function()
             C_Timer.After(2.0, function()
                 if generation ~= queueGeneration then return end
                 if not IsPlayerDeadOrGhost() then
-                    AutoBG_Print("Resurrection detected! Initiating Battleground Auto-Queue...")
+                    AutoBG_Print("Alive again: queueing.")
                     AutoBG_QueueAllBGs()
                 end
             end)
@@ -1048,9 +1048,9 @@ frame:SetScript("OnEvent", function()
                 FinishRejoin()
                 needsQueueAfterResurrect = IsPlayerDeadOrGhost() and true or false
                 if needsQueueAfterResurrect then
-                    AutoBG_Print("Auto-Queue paused (cannot queue while dead). Will auto-queue once resurrected.")
+                    AutoBG_Print("You are dead: queueing once you are alive again.")
                 else
-                    AutoBG_Print("Auto-Queue stopped: " .. a1)
+                    AutoBG_Print("Queueing stopped: " .. a1)
                 end
             end
         end
@@ -1062,11 +1062,11 @@ frame:SetScript("OnEvent", function()
         if hasDes then
             if not hadDeserterDebuff then
                 hadDeserterDebuff = true
-                AutoBG_Print("You have received the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(rem) .. ". Auto-Queue is paused. Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
+                AutoBG_Print(Deserter(rem) .. ": no queueing until it ends.", true)
             end
         elseif hadDeserterDebuff then
             hadDeserterDebuff = false
-            AutoBG_Print("Your |cFF00FF00Deserter|r debuff has expired! You can now queue for battlegrounds by typing |cFFFFFF00/abg q all|r.", true)
+            AutoBG_Print("Deserter is gone: you can queue again (/abg q).", true)
             if AutoBG_Settings and AutoBG_Settings.NotifySound then
                 PlaySound("ReadyCheck")
             end
@@ -1103,31 +1103,41 @@ hooksecurefunc("WorldStateScoreFrame_Update", function()
 end)
 
 
--- Data-Driven Slash Command Dispatcher (Replaces 150 lines of repetitive if/elseif chains)
+-- Slash commands
 local function RefreshBattlegroundDisplays()
     if AutoBG_Timers_UpdateVisibility then AutoBG_Timers_UpdateVisibility() end
     if AutoBG_FC_UpdateVisibility then AutoBG_FC_UpdateVisibility() end
 end
 
+-- Switches from chat, named as in the settings window.
 local toggleCommands = {
-    s = { key = "NotifySound", label = "Loud Sound Notification" },
-    sound = { key = "NotifySound", label = "Loud Sound Notification" },
-    f = { key = "FlashTaskbar", label = "Taskbar Flashing" },
-    flash = { key = "FlashTaskbar", label = "Taskbar Flashing" },
-    msg = { key = "ChatMessages", label = "Chat Notifications" },
-    chat = { key = "ChatMessages", label = "Chat Notifications" },
-    a = { key = "AutoAccept", label = "Auto-Accept Queue Pop" },
-    accept = { key = "AutoAccept", label = "Auto-Accept Queue Pop" },
-    j = { key = "AutoRejoin", label = "Auto-Rejoin BG on Exit" },
-    autorejoin = { key = "AutoRejoin", label = "Auto-Rejoin BG on Exit" },
-    l = { key = "AutoLeave", label = "Auto-Leave BG on End" },
-    leave = { key = "AutoLeave", label = "Auto-Leave BG on End" },
-    r = { key = "AutoRelease", label = "Auto-Release Spirit" },
-    release = { key = "AutoRelease", label = "Auto-Release Spirit" },
-    start = { key = "StartTimer", label = "Game Start Timer" },
-    starttimer = { key = "StartTimer", label = "Game Start Timer" },
+    s = { key = "NotifySound", label = "Queue sound" },
+    sound = { key = "NotifySound", label = "Queue sound" },
+    f = { key = "FlashTaskbar", label = "Flash the taskbar" },
+    flash = { key = "FlashTaskbar", label = "Flash the taskbar" },
+    msg = { key = "ChatMessages", label = "Chat messages" },
+    chat = { key = "ChatMessages", label = "Chat messages" },
+    a = { key = "AutoAccept", label = "Enter automatically" },
+    accept = { key = "AutoAccept", label = "Enter automatically" },
+    j = { key = "AutoRejoin", label = "Queue again after leaving" },
+    autorejoin = { key = "AutoRejoin", label = "Queue again after leaving" },
+    l = { key = "AutoLeave", label = "Leave when it ends" },
+    leave = { key = "AutoLeave", label = "Leave when it ends" },
+    r = { key = "AutoRelease", label = "Release spirit" },
+    release = { key = "AutoRelease", label = "Release spirit" },
+    start = { key = "StartTimer", label = "Game start timer" },
+    starttimer = { key = "StartTimer", label = "Game start timer" },
 }
+local function OnOff(on) return on and "|cff59ff72on|r" or "|cff999999off|r" end
 
+local HELP = {
+    "/abg: settings  |  /abg timers, targets, spy, arena: that page",
+    "/abg q [wsg|ab|av|arena]: queue (no name: everything you picked)  |  /abg cancel: leave every queue",
+    "/abg efc, /abg ffc: target the enemy or your flag carrier  |  /abg focus: focus the enemy carrier",
+    "/abg test: preview every frame  |  /abg delay <seconds>: the enter delay",
+    "/abg spy kos|ignore <name>, /abg spy stats  |  /abg a, l, j, r, s: switch a setting",
+    "/abg reset: every setting back to its default",
+}
 SLASH_AUTOBG1 = "/abg"
 SLASH_AUTOBG2 = "/autobg"
 SlashCmdList["AUTOBG"] = function(msg)
@@ -1164,7 +1174,7 @@ SlashCmdList["AUTOBG"] = function(msg)
         if AutoBG_SetPreview then
             local on = not AutoBG_IsPreviewActive()
             AutoBG_SetPreview(on)
-            AutoBG_Print("Test mode is now " .. (on and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
+            AutoBG_Print("Preview: " .. OnOff(on), true)
         end
         return
     end
@@ -1176,7 +1186,7 @@ SlashCmdList["AUTOBG"] = function(msg)
         if entry.key == "StartTimer" then
             RefreshBattlegroundDisplays()
         end
-        AutoBG_Print(entry.label .. " is now " .. (AutoBG_Settings[entry.key] and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
+        AutoBG_Print(entry.label .. ": " .. OnOff(AutoBG_Settings[entry.key]), true)
         if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
         return
     end
@@ -1184,7 +1194,7 @@ SlashCmdList["AUTOBG"] = function(msg)
     if cmd == "q" or cmd == "queue" or cmd == "join" or cmd == "rejoin" then
         local hasDeserter, remaining = AutoBG_HasDeserter()
         if hasDeserter then
-            AutoBG_Print("Cannot queue: You have the |cFFFF5555Deserter|r debuff" .. FormatDeserterRemaining(remaining) .. ". Type |cFFFFFF00/abg q all|r once Deserter expires.", true)
+            AutoBG_Print("Not queueing: " .. Deserter(remaining) .. ".", true)
             return
         end
         if arg == "all" or arg == "3" or arg == "bg" or arg == "bgs" or arg == "" then AutoBG_QueueAllBGs(); return end
@@ -1192,21 +1202,20 @@ SlashCmdList["AUTOBG"] = function(msg)
         local target = (arg == "arena" and ARENA) or (string.find(arg, "wsg") and "Warsong Gulch") or (string.find(arg, "ab") and "Arathi Basin") or (string.find(arg, "av") and "Alterac Valley") or (string.find(arg, "tg") and "Thorn Gorge") or (AutoBG_Settings and AutoBG_Settings.LastPlayedBG) or lastPlayedBG
         if target then
             if AutoBG_Settings then AutoBG_Settings.LastPlayedBG = target end
-            AutoBG_Print("Quick-queue triggered for |cFFFFFF00" .. target .. "|r...", true)
+            AutoBG_Print("Queueing for " .. Gold(target) .. ".", true)
             AutoBG_TriggerBattlegroundFinder(target)
         else
-            AutoBG_Print("No previous BG recorded. Opening the battleground menu...", true)
+            AutoBG_Print("No battleground played yet: here is the battleground menu.", true)
             TWMiniMapBattlefieldFrame:Click()
         end
     elseif cmd == "delay" or cmd == "acceptdelay" then
         local val = tonumber(arg)
         if val then
             AutoBG_Settings.AutoAcceptDelay = math.max(0, math.min(AutoBG_MAX_ENTER_DELAY, math.floor(val)))
-            AutoBG_Print("Auto-Accept Enter Delay set to |cFFFFFF00" .. (AutoBG_Settings.AutoAcceptDelay == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r", true)
             if AutoBG_Options_Refresh then AutoBG_Options_Refresh() end
-        else
-            AutoBG_Print("Current Auto-Accept Enter Delay: |cFFFFFF00" .. ((AutoBG_Settings.AutoAcceptDelay or 0) == 0 and "Instant (0s)" or (AutoBG_Settings.AutoAcceptDelay .. "s")) .. "|r", true)
         end
+        local delay = AutoBG_Settings.AutoAcceptDelay or 0
+        AutoBG_Print("Enter delay: " .. Gold(delay == 0 and "instant" or (delay .. "s")) .. ".", true)
     elseif cmd == "efc" or cmd == "tar" then
         if AutoBG_TargetCarrier then AutoBG_TargetCarrier("enemy") end
     elseif cmd == "ffc" then
@@ -1216,9 +1225,9 @@ SlashCmdList["AUTOBG"] = function(msg)
     elseif cmd == "focus" then
         if AutoBG_FocusCarrier then AutoBG_FocusCarrier("enemy") end
     elseif cmd == "reset" then
-        AutoBG_Settings = nil; AutoBG_Print("Settings reset to default. Reloading UI...", true); ReloadUI()
+        AutoBG_Settings = nil; AutoBG_Print("Settings back to their defaults; reloading.", true); ReloadUI()
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG Commands:|r /abg, /abg aq [now|cancel], /abg q [ab|wsg|av|tg|arena|all], /abg cancel, /abg targets, /abg arena, /abg spy, /abg spy kos|ignore [name], /abg spy stats, /abg spy raids, /abg a, /abg delay <sec>, /abg l, /abg j, /abg r, /abg efc, /abg ffc, /abg focus, /abg test, /abg reset", true)
+        for i = 1, #HELP do AutoBG_Print(HELP[i], true) end
     else
         AutoBG_OpenOptions("general")
     end
@@ -1236,12 +1245,12 @@ SlashCmdList["BATTLEGROUNDTARGETS"] = function(msg)
         if AutoBG_Targets and AutoBG_Targets.ToggleTestMode then
             local sz = tonumber(arg)
             AutoBG_Targets:ToggleTestMode(sz)
-            AutoBG_Print("Enemy frames preview " .. (AutoBG_Targets.isConfig and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
+            AutoBG_Print("Enemy frame preview: " .. OnOff(AutoBG_Targets.isConfig), true)
         end
     elseif cmd == "spy" then
         if AutoBG_Spy and AutoBG_Spy.ToggleTestMode then
             AutoBG_Spy:ToggleTestMode()
-            AutoBG_Print("Spy radar preview " .. (AutoBG_Spy.isTestMode and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"), true)
+            AutoBG_Print("Spy preview: " .. OnOff(AutoBG_Spy.isTestMode), true)
         end
     elseif cmd == "reset" then
         if AutoBG_Targets and AutoBG_Targets.ResetPosition then
@@ -1250,9 +1259,9 @@ SlashCmdList["BATTLEGROUNDTARGETS"] = function(msg)
         if AutoBG_Spy and AutoBG_Spy.ResetPosition then
             AutoBG_Spy:ResetPosition()
         end
-        AutoBG_Print("Enemy frames and Spy positions reset to defaults.", true)
+        AutoBG_Print("The enemy frames and the Spy list are back in their places.", true)
     elseif cmd == "help" then
-        AutoBG_Print("|cFF00FF00AutoBG enemy frames:|r /bgt, /bgt test [10|15|40], /bgt spy, /bgt reset", true)
+        AutoBG_Print("/bgt: enemy frame settings  |  /bgt test [10|15|40]: preview  |  /bgt spy: Spy preview  |  /bgt reset: their places", true)
     else
         AutoBG_OpenOptions("targets")
     end

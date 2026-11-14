@@ -589,7 +589,7 @@ local btnResetAll = UI.Button("AutoBG_BtnResetAll", panel, "Reset positions", 0,
 	if Targets and Targets.ResetPosition then Targets:ResetPosition() end
 	if Spy and Spy.ResetPosition then Spy:ResetPosition() end
 	if FlagAlert then FlagAlert:ResetPosition() end
-	AutoBG_Print("All frame positions reset to defaults.", true)
+	AutoBG_Print("Every frame is back in its place.", true)
 end)
 btnResetAll:ClearAllPoints()
 btnResetAll:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 186, 18)

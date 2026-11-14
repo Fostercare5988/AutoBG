@@ -486,7 +486,7 @@ local function SelectCarrierByRole(which, focus)
     local friendly = which and (string.lower(which) == "friendly" or string.lower(which) == "ffc")
     local target = friendly and AutoBG_GetFriendlyCarrier() or AutoBG_GetEnemyCarrier()
     if not target or target == "" then
-        AutoBG_Print("No " .. (friendly and "friendly" or "enemy") .. " flag carrier detected.")
+        AutoBG_Print("No " .. (friendly and "friendly" or "enemy") .. " flag carrier right now.")
         return false
     end
     local frame = (target == carrierAlliance and AllianceFC) or (target == carrierHorde and HordeFC)
