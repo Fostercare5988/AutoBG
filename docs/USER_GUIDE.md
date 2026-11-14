@@ -84,8 +84,10 @@ Open `/abg targets` or `/bgt`. Pick the battleground size at the top (10v10,
 it. Inside a match the page edits the size you are playing.
 
 The left column is for that size alone: **Show the frames**, **Hide realm
-names**, the **PvP trinket cooldown** (counted 3 minutes from a use you saw) and
-which side it sits on. Its **size** has three presets, Compact, Standard and
+names**, the **PvP trinket cooldown** and which side it sits on. A used trinket
+darkens with a sweep that drains as it comes back, like your own trinkets in
+GearRack, and counts "2:25", then "38"; it counts 3 minutes from a use AutoBG
+saw, so one used out of your sight still looks ready. Its **size** has three presets, Compact, Standard and
 Large, and sliders for text size, scale, width, height and opacity in between.
 
 The right column, **Every size**:

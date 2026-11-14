@@ -706,6 +706,22 @@ local function ClearAllStealth()
 	end
 end
 
+-- The trinket's clock reads like the timer bars: "2:25", then "38".
+local trinketClock
+local function TrinketClock()
+	if not trinketClock then
+		local R = Enum.NumericRuleFormatRounding
+		local look = C_StringUtil.CreateNumericRuleFormatter()
+		look:SetBreakpoints({
+			{ threshold = 0, step = 1, rounding = R.Up, format = "%d" },
+			{ threshold = 59, step = 1, rounding = R.Up, format = "%d:%02d",
+			  components = { { div = 60, step = 1, rounding = R.Down }, { mod = 60 } } },
+		})
+		trinketClock = { { property = Enum.DurationTextBindingProperty.RemainingDuration, formatter = look } }
+	end
+	return trinketClock
+end
+
 local function UpdateRowTrinketVisual(index, name)
 	local btn = Targets.TargetButton and Targets.TargetButton[index]
 	if not btn or not btn.Trinket then return end
@@ -713,8 +729,7 @@ local function UpdateRowTrinketVisual(index, name)
 	local o = AutoBG_Settings and AutoBG_Settings.Targets
 	local size = currentSize
 	local exp = name and trinketCooldown[name]
-	local now = GetTime()
-	if exp and exp <= now then trinketCooldown[name] = nil; exp = nil end
+	if exp and exp <= GetTime() then trinketCooldown[name] = nil; exp = nil end
 	if (o and o.ShowTrinket and o.ShowTrinket[size] == false) or not name then
 		if btn.trinketShown ~= false then btn.Trinket:Hide(); btn.trinketShown = false end
 		return
@@ -727,33 +742,30 @@ local function UpdateRowTrinketVisual(index, name)
 		btn.Trinket.Icon:SetTexture(texture)
 	end
 
-	if exp and exp > now then
-		local rem = exp - now
-		local seconds = math.floor(rem)
-		if btn.trinketSeconds ~= seconds then
-			btn.trinketSeconds = seconds
-			if rem >= 60 then
-				local m = math.floor(rem / 60)
-				local s = seconds % 60
-				btn.Trinket.Text:SetText(string.format("%d:%02d", m, s))
-			else
-				btn.Trinket.Text:SetText(tostring(seconds))
-			end
-		end
-		if btn.trinketCooling ~= true then
-			btn.trinketCooling = true
-			-- A dark icon under a big, bright countdown reads at a glance.
-			btn.Trinket.Icon:SetVertexColor(0.25, 0.25, 0.25, 0.85)
-			btn.Trinket.Text:SetTextColor(1, 0.92, 0.35, 1)
-		end
+	-- Written only when a use starts or ends: the engine drains the sweep and
+	-- writes the clock (ClassicAPI Cooldown and duration text binding).
+	if btn.trinketExp == exp then return end
+	btn.trinketExp = exp
+	local trinket = btn.Trinket
+	if exp then
+		trinket.Cooldown:SetCooldown(exp - TRINKET_COOLDOWN, TRINKET_COOLDOWN)
+		trinket.Span:SetTimeSpan(exp - TRINKET_COOLDOWN, exp)
+		trinket.Clock:SetDuration(trinket.Span)
+		trinket.Clock:SetTextFormat("{}", TrinketClock())
+		trinket.Clock:SetEnabled(true)
 	else
-		if btn.trinketCooling ~= false then
-			btn.trinketCooling = false
-			btn.trinketSeconds = nil
-			btn.Trinket.Icon:SetVertexColor(1, 1, 1, 1)
-			btn.Trinket.Text:SetText("")
-		end
+		trinket.Cooldown:Clear()
+		trinket.Clock:SetEnabled(false)
+		trinket.Text:SetText("")
 	end
+end
+
+-- The sweep ended: the trinket is ready again.
+local function Trinket_OnCooldownDone(self)
+	local btn = (self or this).owner
+	local name = btn.targetName
+	if name and trinketCooldown[name] == btn.trinketExp then trinketCooldown[name] = nil end
+	UpdateRowTrinketVisual(btn.buttonNum, name)
 end
 
 -- -------------------------------------------------------------------------- --
@@ -945,7 +957,7 @@ local function UpdateObservedTimers()
 	if not Targets.TargetButton then return end
 	UpdateRowStatus()
 	CheckCasts()
-	if not next(stealthedState) and not next(trinketCooldown) then return end
+	if not next(stealthedState) then return end
 	local now = GetTime()
 	for name, entry in pairs(stealthedState) do
 		if entry.expireTime and now >= entry.expireTime then SetUnitStealth(name, false) end
@@ -967,11 +979,6 @@ local function UpdateObservedTimers()
 			if not Targets.isConfig and stealth and not stealth.alerted and AutoBG_Spy then
 				local guid = nameToGUID[name] or stealth.observedGUID or btn.targetGUID
 				stealth.alerted = AutoBG_Spy:NotifyStealth(name, stealth.spellName, btn.classToken, guid, true, stealth.observedGUID) and true or false
-			end
-			local exp = trinketCooldown[name]
-			if exp then
-				if Targets.MainFrame:IsShown() then UpdateRowTrinketVisual(i, name)
-				elseif exp <= now then trinketCooldown[name] = nil end
 			end
 		end
 	end
@@ -1067,10 +1074,10 @@ local function ClearAllTrinkets()
 		for i = 1, MAX_ENEMIES do
 			local btn = Targets.TargetButton[i]
 			if btn and btn.Trinket then
+				btn.Trinket.Cooldown:Clear()
+				btn.Trinket.Clock:SetEnabled(false)
 				btn.Trinket.Text:SetText("")
-				btn.Trinket.Icon:SetVertexColor(1, 1, 1, 1)
-				btn.trinketCooling = false
-				btn.trinketSeconds = nil
+				btn.trinketExp = nil
 			end
 		end
 	end
@@ -1357,10 +1364,32 @@ function Targets:CreateFrames()
 		trinket.Icon:SetTexture(GetEnemyTrinketTexture())
 		trinket.Icon:SetMask(ROUNDED_MASK)
 
-		trinket.Text = trinket:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		-- A used trinket: the native cooldown sweep darkens what is left, in
+		-- the icon's rounded shape, as GearRack's and the action bars' do. The
+		-- game's own numbers stay hidden (they follow a CVar of the player's);
+		-- the clock above is a duration text binding. Nothing runs in Lua
+		-- while it counts.
+		local cd = CreateFrame("Cooldown", "AutoBG_TargetTrinketCD" .. i, trinket)
+		cd:SetAllPoints(trinket.Icon)
+		cd:SetDrawEdge(false)
+		cd:SetDrawBling(false)
+		cd:SetSwipeTexture(ROUNDED_MASK)
+		cd:SetSwipeColor(0, 0, 0, 0.75)
+		cd:SetHideCountdownNumbers(true)
+		cd.owner = btn
+		cd:SetScript("OnCooldownDone", Trinket_OnCooldownDone)
+		trinket.Cooldown = cd
+		-- UNVERIFIED: test in game that a used enemy trinket darkens with a rounded sweep and counts "2:25", "38"
+		local top = CreateFrame("Frame", nil, trinket)
+		top:SetAllPoints(trinket)
+		top:SetFrameLevel(cd:GetFrameLevel() + 1)
+		trinket.Text = top:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		trinket.Text:SetPoint("CENTER", trinket, "CENTER", 0, 0)
 		trinket.Text:SetFont(FONT, 9, "OUTLINE")
-		trinket.Text:SetTextColor(1, 0.85, 0.2, 1)
+		trinket.Text:SetTextColor(1, 0.92, 0.35, 1)
+		trinket.Span = C_DurationUtil.CreateDuration()
+		trinket.Clock = C_DurationUtil.CreateDurationTextBinding()
+		trinket.Clock:SetFontString(trinket.Text)
 
 		btn.Name = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 		btn.Name:SetPoint("LEFT", btn, "LEFT", 4, 0)
