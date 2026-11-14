@@ -1938,13 +1938,21 @@ end
 -- with UnitXP, by stepping through the nearby enemies (UnitXP("target",
 -- "nextEnemyInCycle") selects the next one and returns true). That moves your
 -- target, so it runs only while you have none, and clears it again at the end.
+-- The other team is as big as yours (your group): once that many enemies are
+-- listed there is nobody left to find, and the stepping rests (it cost 7 ms a
+-- pass every second, /lag 2026-11-14).
 local SWEEP_STEPS = 10
 local sweepSeen = {}
+local function ArenaTeamSize()
+	local raid = GetNumRaidMembers()
+	return raid > 0 and raid or GetNumPartyMembers() + 1
+end
 function SweepArena()
 	for i = 1, 4 do ObserveUnit("party" .. i .. "target") end
 	ObserveUnit("targettarget")
 	local arena = AutoBG_ArenaOptions()
-	if not UnitXP or UnitExists("target") or (arena and arena.Scan == false) then return end
+	if not UnitXP or UnitExists("target") or (arena and arena.Scan == false)
+		or seenEnemyCount >= ArenaTeamSize() then return end
 	table.wipe(sweepSeen)
 	for _ = 1, SWEEP_STEPS do
 		local ok, found = pcall(UnitXP, "target", "nextEnemyInCycle")
