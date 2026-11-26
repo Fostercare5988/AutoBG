@@ -1,0 +1,17 @@
+## Interface: 11200
+## Title: |cffff9e38AutoBG|r |cffffd6a8[Fostercare5988]|r
+## Notes: Battlegrounds and arenas with less clicking: queues, timers, flag carriers, enemy frames and an open-world enemy list
+## Author: Fostercare5988
+## X-Maintainer: Fostercare5988
+## Version: 1.0.0
+## SavedVariables: AutoBGDB
+## LoadSavedVariablesFirst: 1
+Core.lua
+Bars.lua
+Queue.lua
+Objectives.lua
+Carriers.lua
+Enemies.lua
+FlagWatch.lua
+Spy.lua
+Pages.lua
