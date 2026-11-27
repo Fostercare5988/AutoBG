@@ -218,67 +218,6 @@ end
 A.PCT = {}
 for i = 0, 100 do A.PCT[i] = i .. "%" end
 
--- Rounded corners at any size (### frame:CreateMaskTexture, ### texture:AddMaskTexture):
--- a square cap at each end, as high as the shape. Past its edge a mask repeats
--- its edge pixels, so the opaque inner edge keeps the middle whole.
-local CAP = { "Interface\\AddOns\\AutoBG\\Textures\\CapLeft", "Interface\\AddOns\\AutoBG\\Textures\\CapRight" }
-A.WHITE = "Interface\\Buttons\\WHITE8X8"
-function A.Round(f, inset)
-    local masks = { inset = inset or 0 }
-    for i, side in ipairs({ "LEFT", "RIGHT" }) do
-        local m = f:CreateMaskTexture()
-        m:SetTexture(CAP[i])
-        local x = i == 1 and masks.inset or -masks.inset
-        m:SetPoint("TOP" .. side, f, "TOP" .. side, x, -masks.inset)
-        m:SetPoint("BOTTOM" .. side, f, "BOTTOM" .. side, x, masks.inset)
-        masks[i] = m
-    end
-    return masks
-end
-function A.RoundHeight(masks, h)
-    masks[1]:SetWidth(h - 2 * masks.inset)
-    masks[2]:SetWidth(h - 2 * masks.inset)
-end
--- A flat texture clipped to the masks; the fill of a StatusBar is clipped the same way.
-function A.Fill(f, layer, masks, r, g, b, a, tex)
-    tex = tex or f:CreateTexture(nil, layer)
-    if layer then
-        tex:SetTexture(A.WHITE)
-        tex:SetPoint("TOPLEFT", f, "TOPLEFT", masks.inset, -masks.inset)
-        tex:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -masks.inset, masks.inset)
-        tex:SetVertexColor(r, g, b, a)
-    end
-    tex:AddMaskTexture(masks[1])
-    tex:AddMaskTexture(masks[2])
-    return tex
-end
--- The yards chip: a dark rounded chip with the yards in their colour, bigger and
--- bold (the player, 2026-11-27: "make them more visible"). Hidden with no text.
-function A.Chip(parent)
-    local c = CreateFrame("Frame", nil, parent)
-    c.masks = A.Round(c)
-    A.Fill(c, "BACKGROUND", c.masks, 0, 0, 0, 0.72)
-    c.text = A.Text(c, 12)
-    c.text:SetPoint("CENTER", c, "CENTER", 0, 0)
-    c.shown = ""
-    c:Hide()
-    return c
-end
--- Wide enough for "188 yd" in Arial Narrow at this size, so the chip holds still.
-function A.ChipSize(c, size, h)
-    c.text:SetFont("Fonts\\ARIALN.TTF", size, "THICKOUTLINE")
-    c:SetWidth(math.ceil(size * 2.6) + 8)
-    c:SetHeight(h)
-    A.RoundHeight(c.masks, h)
-end
-function A.ChipText(c, text)
-    text = text or ""
-    if c.shown == text then return end
-    c.shown = text
-    c.text:SetText(text)
-    c:SetShown(text ~= "")
-end
-
 -- A warning card: icon, title and text; hides after 4.5 s. A click selects the
 -- enemy, Ctrl-click announces.
 function A.Card(name, y)
@@ -347,21 +286,29 @@ function A.Yards(unit)
     local d, known = UnitDistanceSquared(unit)
     if known then return math.sqrt(d) end
 end
--- "24 yd" in green to 30, gold to 60, orange beyond; each text made once (it is
--- written twice a second for every enemy, carrier and Spy row in view).
--- Grey when a wall or hill is between you (line of sight, as the Nampower Spy
--- colours its distances).
-local YARD_TEXT, YARD_BLOCKED = {}, {}
-function A.YardText(yards, blocked)
+-- "24 yd", each text made once (it is written twice a second for every enemy,
+-- carrier and Spy row in view). The battleground frames: white to 150 yards,
+-- orange beyond (the player, 2026-11-27). Spy's list: green to 30, gold to 60,
+-- orange beyond. Grey when a wall or hill is between you (line of sight, as the
+-- Nampower Spy colours its distances).
+local YARD_TEXT, YARD_BLOCKED = { [false] = {}, [true] = {} }, {}
+function A.YardText(yards, blocked, spy)
     if not yards then return "" end
     local n = math.floor(yards + 0.5)
-    local cache = blocked and YARD_BLOCKED or YARD_TEXT
+    local cache = blocked and YARD_BLOCKED or YARD_TEXT[spy and true or false]
     local text = cache[n]
     if not text then
-        text = (blocked and "|cff808080" or n <= 30 and "|cff59ff72" or n <= 60 and "|cffffd100" or "|cffff7733") .. n .. " yd|r"
+        local color = blocked and "|cff808080" or spy and (n <= 30 and "|cff59ff72" or n <= 60 and "|cffffd100" or "|cffff7733")
+            or (n <= 150 and "|cffffffff" or "|cffff7733")
+        text = color .. n .. " yd|r"
         if n <= 300 then cache[n] = text end
     end
     return text
+end
+-- The yards on the battleground frames: two sizes over the text, bold.
+function A.YardFont(fs, size)
+    fs:SetFont("Fonts\\ARIALN.TTF", size, "THICKOUTLINE")
+    return fs
 end
 -- UnitXP's line of sight (dllmain.cpp "inSight": true, false, or nil when it
 -- cannot tell). UNVERIFIED: that UnitXP takes a GUID for the unit, as the

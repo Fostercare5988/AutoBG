@@ -125,11 +125,10 @@ local function Row(main, i)
     -- group's target count, then the yards (player's layout, 2026-11-23).
     r.status = A.Text(r.health, 12)
     r.status:SetPoint("LEFT", r.name, "RIGHT", 6, 0)
-    r.chip = A.Chip(r.health)
-    r.chip:SetPoint("RIGHT", r, "RIGHT", -2, 0)
-    r.yards = r.chip.text
+    r.yards = A.Text(r.health, 12)
+    r.yards:SetPoint("RIGHT", r, "RIGHT", -4, 0)
     r.count = A.Text(r.health, 12)
-    r.count:SetPoint("RIGHT", r.chip, "LEFT", -4, 0)
+    r.count:SetPoint("RIGHT", r.yards, "LEFT", -6, 0)
     r.count:SetTextColor(1, 0.6, 0.1)
     r.mark = r.health:CreateTexture(nil, "OVERLAY")
     r.mark:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
@@ -172,7 +171,7 @@ local function Layout(key)
         r:ClearAllPoints()
         r:SetPoint("TOPLEFT", main, "TOPLEFT", 0, -18 - (i - 1) * (h + 3))
         for _, fs in ipairs({ r.name, r.status, r.count }) do fs:SetFont("Fonts\\ARIALN.TTF", s.text, "OUTLINE") end
-        A.ChipSize(r.chip, s.text + 2, math.max(h - 4, s.text + 2))
+        A.YardFont(r.yards, s.text + 2)
         r.cast.text:SetFont("Fonts\\ARIALN.TTF", math.max(8, s.text - 3), "OUTLINE")
         r.mark:SetWidth(h)
         r.mark:SetHeight(h)
@@ -271,7 +270,7 @@ DrawRow = function(e)
             or PCT[math.floor(e.hp * 100 + 0.5)] or "")
     end
     r.count:SetText(e.count and e.count > 0 and NUM[e.count] or "")
-    A.ChipText(r.chip, s.yards and not e.dead and (e.visible and A.YardText(e.yards, e.blocked)
+    r.yards:SetText(s.yards and not e.dead and (e.visible and A.YardText(e.yards, e.blocked)
         or not e.visible and e.lastYards and LastText(e.lastYards)) or "")
     r.stripe:SetShown(e.inRange and e.visible and true or false)
     if e.mark then SetRaidTargetIconTexture(r.mark, e.mark); r.mark:Show() else r.mark:Hide() end
@@ -475,7 +474,7 @@ local function Range()
             if n ~= e.lastYards then
                 e.lastYards = n
                 local r = show and RowOf(e)
-                if r then A.ChipText(r.chip, n and LastText(n)) end
+                if r then r.yards:SetText(n and LastText(n) or "") end
             end
         end
         local yards = e.visible and e.guid and A.Yards(e.guid)
@@ -489,7 +488,7 @@ local function Range()
         if n ~= e.yards or blocked ~= e.blocked then
             e.yards, e.blocked = n, blocked
             local r = show and not e.dead and e.visible and RowOf(e)
-            if r then A.ChipText(r.chip, A.YardText(n, blocked)) end
+            if r then r.yards:SetText(A.YardText(n, blocked)) end
         end
     end
     if changed then Title() end

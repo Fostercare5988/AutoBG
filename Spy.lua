@@ -109,7 +109,7 @@ local function DrawEntry(r, e)
     r.health:SetStatusBarColor(cc and cc.r or 0.5, cc and cc.g or 0.5, cc and cc.b or 0.5)
     r.health:SetValue(e.hp)
     r.name:SetText(e.label)
-    r.yards:SetText(e.visible and A.YardText(e.yards, e.blocked) or "")
+    r.yards:SetText(e.visible and A.YardText(e.yards, e.blocked, true) or "")
     r:SetAlpha((e.visible or GetTime() - e.seen < DIM) and 1 or 0.45)
     A.Bind(r, not e.sample and e.guid or nil)
 end
@@ -147,7 +147,7 @@ local function Look()
             if n ~= e.shownYards or e.blocked ~= e.shownBlocked then
                 e.shownYards, e.shownBlocked = n, e.blocked
                 local r = e.row
-                if r and r.entry == e then r.yards:SetText(A.YardText(e.yards, e.blocked)) end
+                if r and r.entry == e then r.yards:SetText(A.YardText(e.yards, e.blocked, true)) end
             end
         end
     end

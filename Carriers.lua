@@ -10,10 +10,11 @@ local frame = CreateFrame("Frame")
 local EVENTS = { "UNIT_HEALTH", "UNIT_AURA_DELTA", "UNIT_VISIBILITY_CHANGED" }
 local ASSAULT = { "Focused Assault", "Brutal Assault" } -- the stacking debuffs on a carrier
 
--- A card (the player's choice, 2026-11-27): rounded, the bar in the carrier's
--- class colour as on the enemy frames, the flag he carries, white name and
--- health, the Assault stacks and the yards chip.
-local W, H = 190, 32
+-- A card: the old black see-through card, more see-through, the bar in the
+-- side's colour (the player, 2026-11-27: the rounded class-colour card "looks
+-- like crap", both were blue). The flag he holds, a white name and his health,
+-- the Assault stacks and the yards, big and bold.
+local W, H = 180, 30
 -- The flag icons of the client's own replay bar (FrameXML OctoReplayBar.lua:94).
 -- The Alliance's carrier holds the Horde flag (KP-37).
 local FLAG_ICON = { Alliance = "Interface\\WorldStateFrame\\HordeFlag", Horde = "Interface\\WorldStateFrame\\AllianceFlag" }
@@ -24,33 +25,29 @@ local function Card(side, x)
     c:SetPoint("TOP", UIParent, "TOP", x, -120)
     A.Movable(c)
     A.UnitButton(c)
-    local outer = A.Round(c)
-    A.RoundHeight(outer, H)
-    A.Fill(c, "BACKGROUND", outer, 0, 0, 0, 0.85) -- the one-pixel black edge
+    A.Surface(c, 0.45)
     c.health = CreateFrame("StatusBar", nil, c)
-    c.health:SetAllPoints(c)
     c.health:SetStatusBarTexture(A.GLOSS)
+    c.health:SetPoint("TOPLEFT", c, "TOPLEFT", 1, -1)
+    c.health:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -1, 1)
     c.health:SetMinMaxValues(0, 1)
-    local inner = A.Round(c.health, 1)
-    A.RoundHeight(inner, H)
-    c.back = A.Fill(c.health, "BACKGROUND", inner, 0, 0, 0, 0.9)
-    -- UNVERIFIED: that the fill takes masks as any texture does (### texture:AddMaskTexture).
-    A.Fill(c.health, nil, inner, nil, nil, nil, nil, c.health:GetStatusBarTexture())
+    local color = A.COLORS[side]
+    -- See-through as the game's own skill bars are (FrameXML Blizzard_CraftUI.lua:184).
+    c.health:SetStatusBarColor(color[1], color[2], color[3], 0.5)
     c.flag = c.health:CreateTexture(nil, "OVERLAY")
     c.flag:SetTexture(FLAG_ICON[side])
-    c.flag:SetWidth(18)
-    c.flag:SetHeight(18)
-    c.flag:SetPoint("LEFT", c, "LEFT", 6, 0)
-    c.name = A.Text(c.health, 14)
-    c.name:SetPoint("LEFT", c.flag, "RIGHT", 3, 0)
+    -- Big, so the side reads at a glance (the player, 2026-11-27: two shamans).
+    c.flag:SetWidth(26)
+    c.flag:SetHeight(26)
+    c.flag:SetPoint("LEFT", c, "LEFT", 2, 0)
+    c.name = A.Text(c.health, 13)
+    c.name:SetPoint("LEFT", c.flag, "RIGHT", 2, 0)
     c.pct = A.Text(c.health, 12)
     c.pct:SetPoint("LEFT", c.name, "RIGHT", 5, 0)
-    c.chip = A.Chip(c.health)
-    A.ChipSize(c.chip, 15, H - 8)
-    c.chip:SetPoint("RIGHT", c, "RIGHT", -4, 0)
-    c.yards = c.chip.text
-    c.stacks = A.Text(c.health, 13)
-    c.stacks:SetPoint("RIGHT", c.chip, "LEFT", -4, 0)
+    c.yards = A.YardFont(A.Text(c.health, 15), 15)
+    c.yards:SetPoint("RIGHT", c, "RIGHT", -4, 0)
+    c.stacks = A.Text(c.health, 12)
+    c.stacks:SetPoint("RIGHT", c.yards, "LEFT", -5, 0)
     c.stacks:SetTextColor(1, 0.47, 0.2)
     -- A unit button's click with no verb of its own reaches this with no arguments
     -- (ClassicAPI's chained OnClick; seen in play 2026-11-23): the frame from the
@@ -73,7 +70,7 @@ local function Info(c, k)
     local n = k.stacks or 0
     if n > 0 and not STACKS[n] then STACKS[n] = n .. "x" end
     c.stacks:SetText(STACKS[n] or "")
-    A.ChipText(c.chip, A.YardText(k.guid and A.Yards(k.guid), k.blocked))
+    c.yards:SetText(A.YardText(k.guid and A.Yards(k.guid), k.blocked))
 end
 local function Stacks(k)
     k.stacks = 0
@@ -89,12 +86,6 @@ local function Draw(side)
         return c:Hide()
     end
     local guid = k.guid
-    local class = A.Enemies.ClassOf(k.name) or (guid and UnitExists(guid) and select(2, UnitClass(guid)))
-    local cc = class and RAID_CLASS_COLORS[class]
-    local r, g, b
-    if cc then r, g, b = cc.r, cc.g, cc.b else r, g, b = unpack(A.COLORS[side]) end
-    c.health:SetStatusBarColor(r, g, b)
-    c.back:SetVertexColor(r * 0.25, g * 0.25, b * 0.25, 0.9)
     c.name:SetText(A.StripRealm(k.name))
     Health(c, guid)
     Info(c, k)
@@ -250,14 +241,12 @@ end)
 function C.Preview(on)
     for side, name in pairs({ Alliance = "Brightblade", Horde = "Gruktar" }) do
         if on then
-            local c, cc = cards[side], RAID_CLASS_COLORS[side == "Horde" and "WARRIOR" or "PALADIN"]
+            local c = cards[side]
             c.name:SetText(name)
             c.health:SetValue(0.7)
-            c.health:SetStatusBarColor(cc.r, cc.g, cc.b)
-            c.back:SetVertexColor(cc.r * 0.25, cc.g * 0.25, cc.b * 0.25, 0.9)
             c.pct:SetText(A.PCT[70])
             c.stacks:SetText("3x")
-            A.ChipText(c.chip, A.YardText(side == "Horde" and 24 or 71))
+            c.yards:SetText(A.YardText(side == "Horde" and 24 or 171))
             cards[side]:Show()
         else
             Draw(side)
