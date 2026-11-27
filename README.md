@@ -31,8 +31,9 @@ The arena frames and the arena stealth tracker are their own addon,
   targets, right click focuses.
 - **Flag warnings** in Arathi Basin: an enemy opening a flag, or coming out of
   stealth at one.
-- **Stealth warnings** when you see an enemy stealth, vanish, prowl or turn
-  invisible within 40 yards, in sight: click the card to target him.
+- **Stealth warnings** when you detect a hidden enemy yourself (stealth, vanish,
+  prowl, meld or invisibility), at any distance or behind a wall: click the card
+  to target him.
 - **Spy list** in the open world: the enemy players around you, with level,
   class, health and distance.
 

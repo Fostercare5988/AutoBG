@@ -9,37 +9,48 @@ A.Spy = S
 local KEEP, DIM, FORGET = 20, 5, 30
 local list, byGUID, notEnemy = {}, {}, {}
 
--- The warning card pops only when you see an enemy go into hiding, so you can
--- target and Sap him (the player, 2026-11-27: "only POP when I literally SEE a
--- stealth/prowl/invis"): the cast or the newly added aura (never an aura read
--- again, as on coming into view), within 40 yards and in line of sight. One
--- farther, behind a wall or already hidden shows on his row and in the list,
--- with no card and no sound. The card names the distance and targets him on a
--- click while the game still shows him. 3 s between cards, so one stealth seen
--- as a cast and as an aura warns once. The sound always in a battleground,
--- elsewhere with Warning sounds. Shadowmeld shows on the rows only.
-local DANGER = 40
-local SEEN = { STEALTH = true, VANISH = true, PROWL = true, ["INVIS POT"] = true, CLOAK = true }
+-- The warning card pops when you detect a hidden enemy yourself: the game
+-- shows you a stealthed, prowling, invisible or melded enemy, so you can target
+-- and Sap him (the player, 2026-11-27: "it must only pop when we actually detect
+-- an enemy ourselves. That is the whole point. Also if we detect an enemy behind
+-- a wall"). Any distance, any wall: detection decides. One card per detection;
+-- he pops again once he has left your view or come out of hiding. The card names
+-- the distance and targets him on a click. The sound always in a battleground,
+-- elsewhere with Warning sounds. AutoArena's card follows the same rule.
 local card = A.Card("AutoBG_SpyAlertWindow", -180)
-local lastWarn = 0
 local STEALTH_ICON = { STEALTH = "Ability_Stealth", VANISH = "Ability_Vanish", PROWL = "Ability_Ambush",
     MELD = "Ability_Ambush", ["INVIS POT"] = "INV_Potion_25", CLOAK = "INV_Misc_Cape_18" }
 local function Colored(name, class)
     local cc = class and RAID_CLASS_COLORS[class]
     return (cc and string.format("|cff%02x%02x%02x", cc.r * 255, cc.g * 255, cc.b * 255) or "") .. A.StripRealm(name) .. "|r"
 end
-function A.StealthWarn(name, guid, label, class, inBG)
-    if not SEEN[label] then return end
+local function Warn(name, guid, label, class, inBG)
     local yards = guid and A.Yards(guid)
-    if guid and not (yards and yards <= DANGER) or guid and A.Blocked(guid) then return end
-    local now = GetTime()
-    if now - lastWarn < 3 then return end
-    lastWarn = now
     card:Warn("|cffff4040" .. label .. "|r", Colored(name, class)
         .. " is stealthed " .. (yards and math.floor(yards + 0.5) .. " yd away" or "nearby"),
         "Interface\\Icons\\" .. (STEALTH_ICON[label] or "Ability_Stealth"),
         name, guid, A.StripRealm(name) .. " is stealthed near me")
     if inBG or db.spySounds then PlaySound("RaidWarning") end
+end
+-- GAP: no event says you detect a hidden unit; a DLL should give one
+-- (UNIT_STEALTH_DETECTED). A hider still in your view a moment after he hid is
+-- one you detect: the server takes one you cannot detect out of your view.
+-- UNVERIFIED: that OctoWoW does so within a second. Called on every change of
+-- an entry's stealth, view or death.
+local CONFIRM = 1
+function A.Detect(e, inBG)
+    if e.sample or not (e.stealth and e.visible and not e.dead) then e.detected, e.detectAt = nil, nil; return end
+    if e.detected or e.detectAt then return end
+    local at = GetTime()
+    e.detectAt = at
+    C_Timer.NewTimer(CONFIRM, function()
+        if e.detectAt ~= at then return end
+        e.detectAt = nil
+        if e.stealth and e.visible and not e.dead then
+            e.detected = true
+            Warn(e.name, e.guid, e.stealth, e.class, inBG)
+        end
+    end)
 end
 
 -- The list ---------------------------------------------------------------------
@@ -188,7 +199,16 @@ function S.Follow()
     end
     Schedule()
 end
-local buf = {}
+local buf, slots = {}, {}
+-- His hiding aura now, read whole: a stealth heard far away is not trusted.
+local function Hidden(e, guid)
+    e.stealth, e.stealthID = nil, nil
+    C_UnitAuras.GetAuraSlots(guid, "HELPFUL", nil, nil, slots)
+    for i = 1, slots.n do
+        local spell, _, _, _, _, _, instance = select(10, C_UnitAuras.UnitAuraBySlot(guid, slots[i]))
+        if A.STEALTH[spell] then e.stealth, e.stealthID = A.STEALTH[spell], instance end
+    end
+end
 watch:SetScript("OnEvent", function(_, event, guid, a2)
     local e = byGUID[guid]
     if not e then return end
@@ -200,7 +220,8 @@ watch:SetScript("OnEvent", function(_, event, guid, a2)
         return
     elseif event == "UNIT_VISIBILITY_CHANGED" then
         e.visible, e.seen = a2 and true or nil, GetTime()
-        if not a2 then e.yards = nil end
+        if a2 then Hidden(e, guid) else e.yards = nil end
+        A.Detect(e, false)
         Schedule()
     elseif event == "UNIT_AURA_DELTA" then
         local added = a2.addedAuraInstanceIDs
@@ -208,13 +229,13 @@ watch:SetScript("OnEvent", function(_, event, guid, a2)
             local a = C_UnitAuras.GetAuraDataByAuraInstanceID(guid, added[i], buf)
             if a and A.STEALTH[a.spellId] then
                 e.stealth, e.stealthID = A.STEALTH[a.spellId], added[i]
-                A.StealthWarn(e.name, guid, e.stealth, e.class, false)
             end
         end
         local removed = a2.removedAuraInstanceIDs
         for i = 1, removed and #removed or 0 do
             if removed[i] == e.stealthID then e.stealth, e.stealthID = nil, nil end
         end
+        A.Detect(e, false)
         return
     end
     Draw()
@@ -300,7 +321,7 @@ plates:SetScript("OnEvent", function(_, event, a1, a2, a3, _, _, _, a7)
         if a7 == 0 and A.STEALTH[a3] then
             Far(a1)
             local e = byGUID[a1]
-            if e and UnitIsVisible(a1) then e.stealth = A.STEALTH[a3]; A.StealthWarn(e.name, a1, e.stealth, e.class, false) end
+            if e and UnitIsVisible(a1) then e.visible = true; Hidden(e, a1); A.Detect(e, false) end
         end
     end
 end)
@@ -331,8 +352,7 @@ function S.Preview(on)
                 hp = 1 - i * 0.2, seen = GetTime(), visible = i < 3, yards = 20 * i }
         end
         Draw()
-        A.StealthWarn("Zoe", nil, "STEALTH", "ROGUE", false)
-        lastWarn = 0
+        Warn("Zoe", nil, "STEALTH", "ROGUE", false)
     else
         for i = #list, 1, -1 do list[i] = nil end
         S.Sync()
