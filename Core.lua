@@ -214,6 +214,71 @@ function A.Text(parent, size, layer)
     return fs
 end
 
+-- Health as text, built once: a redraw on every health change makes no strings.
+A.PCT = {}
+for i = 0, 100 do A.PCT[i] = i .. "%" end
+
+-- Rounded corners at any size (### frame:CreateMaskTexture, ### texture:AddMaskTexture):
+-- a square cap at each end, as high as the shape. Past its edge a mask repeats
+-- its edge pixels, so the opaque inner edge keeps the middle whole.
+local CAP = { "Interface\\AddOns\\AutoBG\\Textures\\CapLeft", "Interface\\AddOns\\AutoBG\\Textures\\CapRight" }
+A.WHITE = "Interface\\Buttons\\WHITE8X8"
+function A.Round(f, inset)
+    local masks = { inset = inset or 0 }
+    for i, side in ipairs({ "LEFT", "RIGHT" }) do
+        local m = f:CreateMaskTexture()
+        m:SetTexture(CAP[i])
+        local x = i == 1 and masks.inset or -masks.inset
+        m:SetPoint("TOP" .. side, f, "TOP" .. side, x, -masks.inset)
+        m:SetPoint("BOTTOM" .. side, f, "BOTTOM" .. side, x, masks.inset)
+        masks[i] = m
+    end
+    return masks
+end
+function A.RoundHeight(masks, h)
+    masks[1]:SetWidth(h - 2 * masks.inset)
+    masks[2]:SetWidth(h - 2 * masks.inset)
+end
+-- A flat texture clipped to the masks; the fill of a StatusBar is clipped the same way.
+function A.Fill(f, layer, masks, r, g, b, a, tex)
+    tex = tex or f:CreateTexture(nil, layer)
+    if layer then
+        tex:SetTexture(A.WHITE)
+        tex:SetPoint("TOPLEFT", f, "TOPLEFT", masks.inset, -masks.inset)
+        tex:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -masks.inset, masks.inset)
+        tex:SetVertexColor(r, g, b, a)
+    end
+    tex:AddMaskTexture(masks[1])
+    tex:AddMaskTexture(masks[2])
+    return tex
+end
+-- The yards chip: a dark rounded chip with the yards in their colour, bigger and
+-- bold (the player, 2026-11-27: "make them more visible"). Hidden with no text.
+function A.Chip(parent)
+    local c = CreateFrame("Frame", nil, parent)
+    c.masks = A.Round(c)
+    A.Fill(c, "BACKGROUND", c.masks, 0, 0, 0, 0.72)
+    c.text = A.Text(c, 12)
+    c.text:SetPoint("CENTER", c, "CENTER", 0, 0)
+    c.shown = ""
+    c:Hide()
+    return c
+end
+-- Wide enough for "188 yd" in Arial Narrow at this size, so the chip holds still.
+function A.ChipSize(c, size, h)
+    c.text:SetFont("Fonts\\ARIALN.TTF", size, "THICKOUTLINE")
+    c:SetWidth(math.ceil(size * 2.6) + 8)
+    c:SetHeight(h)
+    A.RoundHeight(c.masks, h)
+end
+function A.ChipText(c, text)
+    text = text or ""
+    if c.shown == text then return end
+    c.shown = text
+    c.text:SetText(text)
+    c:SetShown(text ~= "")
+end
+
 -- A warning card: icon, title and text; hides after 4.5 s. A click selects the
 -- enemy, Ctrl-click announces.
 function A.Card(name, y)

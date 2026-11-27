@@ -23,7 +23,7 @@ The arena frames and the arena stealth tracker are their own addon,
   announces one.
 - **Arathi Basin estimate:** win or loss, when, the final scores and the bases
   you need. The tick rates are learned from the matches you play.
-- **Warsong Gulch carriers:** both carriers with health, assault stacks and
+- **Warsong Gulch carriers:** both carriers with the flag, health, assault stacks and
   distance. Click to target, right-click to focus.
 - **Enemy frames** for 10, 15 and 40 players: health, cast bar, PvP trinket and
   racial cooldowns, distance and line of sight, stealth, death, raid mark, your
