@@ -284,9 +284,11 @@ DrawRow = function(e)
     if racial and db.racials[RACIAL_KEY[racial]] == false then racial = nil end
     r.racial:SetShown(racial and true or false)
     if racial then r.racial.tex:SetTexture(SpellIcon(racial)) end
-    if r.racialAt ~= e.racialAt then
-        r.racialAt = e.racialAt
-        if e.racialAt then r.racial.cd:SetCooldown(e.racialAt, RACIAL[racial]) else r.racial.cd:Clear() end
+    -- A racial switched off has no sweep either.
+    local racialAt = racial and e.racialAt or nil
+    if r.racialAt ~= racialAt then
+        r.racialAt = racialAt
+        if racialAt then r.racial.cd:SetCooldown(racialAt, RACIAL[racial]) else r.racial.cd:Clear() end
     end
     if e.castTo and e.castTo > GetTime() and e.visible and not e.dead then
         r.cast.span:SetTimeSpan(e.castFrom, e.castTo)
