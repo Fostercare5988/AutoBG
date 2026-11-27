@@ -9,18 +9,17 @@ A.Spy = S
 local KEEP, DIM, FORGET = 20, 5, 30
 local list, byGUID, notEnemy = {}, {}, {}
 
--- The warning card: live danger only (the player, 2026-11-23: "just a warning
--- when there is a player I see in front of me"): an enemy going into stealth,
--- or seen stealthed, within 40 yards. A farther one shows on his row and in the
--- list, with no card and no sound. The card names the distance and targets him
--- on a click while the game still shows him. Each new stealth warns, as the
--- Nampower Spy's do; 3 s between cards, so one stealth seen as a cast and as
--- an aura warns once. The sound always in a battleground, elsewhere with
--- Warning sounds. Only the stalking stealths warn, as Spy's do ("enemy
--- stealthing (Stealth, Vanish, Prowl)", Spy Forever, about 40 yards); Shadowmeld,
--- the potions and the cloak hide or flee, and show on the rows only.
+-- The warning card pops only when you see an enemy go into hiding, so you can
+-- target and Sap him (the player, 2026-11-27: "only POP when I literally SEE a
+-- stealth/prowl/invis"): the cast or the newly added aura (never an aura read
+-- again, as on coming into view), within 40 yards and in line of sight. One
+-- farther, behind a wall or already hidden shows on his row and in the list,
+-- with no card and no sound. The card names the distance and targets him on a
+-- click while the game still shows him. 3 s between cards, so one stealth seen
+-- as a cast and as an aura warns once. The sound always in a battleground,
+-- elsewhere with Warning sounds. Shadowmeld shows on the rows only.
 local DANGER = 40
-local STALKING = { STEALTH = true, VANISH = true, PROWL = true }
+local SEEN = { STEALTH = true, VANISH = true, PROWL = true, ["INVIS POT"] = true, CLOAK = true }
 local card = A.Card("AutoBG_SpyAlertWindow", -180)
 local lastWarn = 0
 local STEALTH_ICON = { STEALTH = "Ability_Stealth", VANISH = "Ability_Vanish", PROWL = "Ability_Ambush",
@@ -30,9 +29,9 @@ local function Colored(name, class)
     return (cc and string.format("|cff%02x%02x%02x", cc.r * 255, cc.g * 255, cc.b * 255) or "") .. A.StripRealm(name) .. "|r"
 end
 function A.StealthWarn(name, guid, label, class, inBG)
-    if not STALKING[label] then return end
+    if not SEEN[label] then return end
     local yards = guid and A.Yards(guid)
-    if guid and not (yards and yards <= DANGER) then return end
+    if guid and not (yards and yards <= DANGER) or guid and A.Blocked(guid) then return end
     local now = GetTime()
     if now - lastWarn < 3 then return end
     lastWarn = now

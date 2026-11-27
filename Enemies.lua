@@ -570,7 +570,9 @@ Sight = function(unit)
 end
 E.Sight = Sight
 -- Following by GUID -------------------------------------------------------------
-local function Stealth(e, label, id, seconds, spell)
+-- seen: you saw him go into hiding (the cast, a newly added aura); a stealth
+-- read again, as on coming into view, marks the row only.
+local function Stealth(e, label, id, seconds, spell, seen)
     e.stealth, e.stealthID, e.stealthSpell, e.stealthSeen = label, id, spell or e.stealthSpell, GetTime()
     if e.stealthTimer then e.stealthTimer:Cancel(); e.stealthTimer = nil end
     if seconds then
@@ -578,7 +580,7 @@ local function Stealth(e, label, id, seconds, spell)
     end
     if e.visible and e.guid then Spot(e, e.guid) end
     DrawRow(e)
-    if e.visible then A.StealthWarn(e.name, e.guid, label, e.class, true) end
+    if seen and e.visible then A.StealthWarn(e.name, e.guid, label, e.class, true) end
 end
 local function Unstealth(e)
     if e.stealthTimer then e.stealthTimer:Cancel(); e.stealthTimer = nil end
@@ -611,7 +613,7 @@ local function Auras(e, info)
     for i = 1, added and #added or 0 do
         local a = C_UnitAuras.GetAuraDataByAuraInstanceID(e.guid, added[i], buf)
         if a then
-            if STEALTH[a.spellId] then Stealth(e, STEALTH[a.spellId], added[i], TIMED[a.spellId], a.spellId) end
+            if STEALTH[a.spellId] then Stealth(e, STEALTH[a.spellId], added[i], TIMED[a.spellId], a.spellId, true) end
             if TRINKET[a.spellId] then Trinket(e) end
             A.Carriers.Aura(e.name, e.guid, a.spellId, added[i])
         end
@@ -675,7 +677,7 @@ local HANDLE = {
     UNIT_SPELLCAST_INTERRUPTED = StopCast,
     UNIT_SPELLCAST_CHANNEL_STOP = StopCast,
     UNIT_SPELLCAST_SUCCEEDED = function(e, _, spell)
-        if HIDES[spell] then Stealth(e, HIDES[spell], e.stealthID, TIMED[spell], spell) end
+        if HIDES[spell] then Stealth(e, HIDES[spell], e.stealthID, TIMED[spell], spell, true) end
         if TRINKET[spell] then Trinket(e) end
         if RACIAL[spell] then e.racial, e.racialAt = spell, GetTime(); DrawRow(e) end
     end,
