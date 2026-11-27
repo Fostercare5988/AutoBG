@@ -248,15 +248,16 @@ function A.Card(name, y)
         end
     end)
     c:Hide()
-    function c:Warn(title, text, icon, who, guid, say)
+    -- hold: the card stands until it is hidden (the stealth card).
+    function c:Warn(title, text, icon, who, guid, say, hold)
         self.title:SetText(title)
         self.line:SetText(text)
         self.icon:SetTexture(icon)
         self.who, self.guid, self.say = who, guid, say
         A.Bind(self, guid)
         self:Show()
-        if self.timer then self.timer:Cancel() end
-        self.timer = C_Timer.NewTimer(4.5, function() self.timer = nil; self:Hide() end)
+        if self.timer then self.timer:Cancel(); self.timer = nil end
+        if not hold then self.timer = C_Timer.NewTimer(4.5, function() self.timer = nil; self:Hide() end) end
     end
     return c
 end

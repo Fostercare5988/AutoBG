@@ -391,6 +391,7 @@ local function Remove(name)
     if not e then return end
     byName[name] = nil
     if e.guid then byGUID[e.guid] = nil end
+    A.Undetect(e)
     for i = 1, #roster do
         if roster[i] == e then
             for j = i, #roster do roster[j] = roster[j + 1] end
@@ -491,6 +492,7 @@ local function Range()
             e.yards, e.blocked = n, blocked
             local r = show and not e.dead and e.visible and RowOf(e)
             if r then r.yards:SetText(A.YardText(n, blocked)) end
+            if e.detected then A.DetectYards(e) end
         end
     end
     if changed then Title() end
@@ -809,7 +811,7 @@ end)
 
 -- A match begins and ends at a loading screen.
 local function Reset()
-    for i = #roster, 1, -1 do roster[i] = nil end
+    for i = #roster, 1, -1 do A.Undetect(roster[i]); roster[i] = nil end
     for _, t in ipairs({ byName, byGUID, friendly, classes, colored, counts }) do
         table.wipe(t)
     end

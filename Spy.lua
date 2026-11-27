@@ -9,14 +9,14 @@ A.Spy = S
 local KEEP, DIM, FORGET = 20, 5, 30
 local list, byGUID, notEnemy = {}, {}, {}
 
--- The warning card pops when you detect a hidden enemy yourself: the game
--- shows you a stealthed, prowling, invisible or melded enemy, so you can target
--- and Sap him (the player, 2026-11-27: "it must only pop when we actually detect
--- an enemy ourselves. That is the whole point. Also if we detect an enemy behind
--- a wall"). Any distance, any wall: detection decides. One card per detection;
--- he pops again once he has left your view or come out of hiding. The card names
--- the distance and targets him on a click. The sound always in a battleground,
--- elsewhere with Warning sounds. AutoArena's card follows the same rule.
+-- The stealth card stands while you see a hidden enemy and goes when you no
+-- longer do (the player, 2026-11-27: "often I play with no sound or my attention
+-- is elsewhere... make the popup go away if we cant see the enemy, and make it
+-- appear WHENEVER we see them"). Seeing is the game showing him to you: any
+-- distance, any wall. With several, the newest seen is on the card and the next
+-- takes his place when he goes. His yards follow on the card. A click targets
+-- him. The sound when one is newly seen: always in a battleground, elsewhere with
+-- Warning sounds. AutoArena's card follows the same rule.
 local card = A.Card("AutoBG_SpyAlertWindow", -180)
 local STEALTH_ICON = { STEALTH = "Ability_Stealth", VANISH = "Ability_Vanish", PROWL = "Ability_Ambush",
     MELD = "Ability_Ambush", ["INVIS POT"] = "INV_Potion_25", CLOAK = "INV_Misc_Cape_18" }
@@ -24,33 +24,49 @@ local function Colored(name, class)
     local cc = class and RAID_CLASS_COLORS[class]
     return (cc and string.format("|cff%02x%02x%02x", cc.r * 255, cc.g * 255, cc.b * 255) or "") .. A.StripRealm(name) .. "|r"
 end
-local function Warn(name, guid, label, class, inBG)
-    local yards = guid and A.Yards(guid)
-    card:Warn("|cffff4040" .. label .. "|r", Colored(name, class)
-        .. " is stealthed " .. (yards and math.floor(yards + 0.5) .. " yd away" or "nearby"),
-        "Interface\\Icons\\" .. (STEALTH_ICON[label] or "Ability_Stealth"),
-        name, guid, A.StripRealm(name) .. " is stealthed near me")
-    if inBG or db.spySounds then PlaySound("RaidWarning") end
+local seen, onCard = {}, nil
+local function Line(e)
+    local yards = e.guid and A.Yards(e.guid)
+    return Colored(e.name, e.class) .. " is stealthed " .. (yards and math.floor(yards + 0.5) .. " yd away" or "nearby")
 end
--- GAP: no event says you detect a hidden unit; a DLL should give one
--- (UNIT_STEALTH_DETECTED). A hider still in your view a moment after he hid is
--- one you detect: the server takes one you cannot detect out of your view.
--- UNVERIFIED: that OctoWoW does so within a second. Called on every change of
--- an entry's stealth, view or death.
-local CONFIRM = 1
+local function Hold(e)
+    onCard = e
+    if not e then return card:Hide() end
+    e.onCardAs = e.stealth
+    card:Warn("|cffff4040" .. e.stealth .. "|r", Line(e), "Interface\\Icons\\" .. (STEALTH_ICON[e.stealth] or "Ability_Stealth"),
+        e.name, e.guid, A.StripRealm(e.name) .. " is stealthed near me", true)
+end
+-- Called on every change of an entry's stealth, view or death.
 function A.Detect(e, inBG)
-    if e.sample or not (e.stealth and e.visible and not e.dead) then e.detected, e.detectAt = nil, nil; return end
-    if e.detected or e.detectAt then return end
-    local at = GetTime()
-    e.detectAt = at
-    C_Timer.NewTimer(CONFIRM, function()
-        if e.detectAt ~= at then return end
-        e.detectAt = nil
-        if e.stealth and e.visible and not e.dead then
-            e.detected = true
-            Warn(e.name, e.guid, e.stealth, e.class, inBG)
+    local on = not e.sample and e.stealth and e.visible and not e.dead and true or nil
+    if on == e.detected then
+        if on and onCard == e and e.onCardAs ~= e.stealth then Hold(e) end -- Stealth became Vanish
+        return
+    end
+    e.detected = on
+    if on then
+        seen[#seen + 1] = e
+        Hold(e)
+        if inBG or db.spySounds then PlaySound("RaidWarning") end
+    else
+        -- Shifted by hand: table.remove stops shrinking a table grown by
+        -- t[#t + 1] on Lua 5.0 (wowlua.py, seen in play).
+        for i = #seen, 1, -1 do
+            if seen[i] == e then
+                for j = i, #seen do seen[j] = seen[j + 1] end
+            end
         end
-    end)
+        if onCard == e then Hold(seen[#seen]) end
+    end
+end
+-- His yards on the card, written when the whole yard changes (the distance look).
+function A.DetectYards(e)
+    if onCard == e then card.line:SetText(Line(e)) end
+end
+-- An entry that leaves its list leaves the card.
+function A.Undetect(e)
+    e.stealth = nil
+    A.Detect(e)
 end
 
 -- The list ---------------------------------------------------------------------
@@ -137,7 +153,7 @@ Draw = function()
     f:SetShown(#list > 0 and S.active or S.preview or false)
 end
 local function Clear()
-    for i = #list, 1, -1 do byGUID[list[i].guid or ""] = nil; list[i] = nil end
+    for i = #list, 1, -1 do A.Undetect(list[i]); byGUID[list[i].guid or ""] = nil; list[i] = nil end
     S.Follow()
     Draw()
 end
@@ -158,6 +174,7 @@ local function Look()
                 e.shownYards, e.shownBlocked = n, e.blocked
                 local r = e.row
                 if r and r.entry == e then r.yards:SetText(A.YardText(e.yards, e.blocked, true)) end
+                if e.detected then A.DetectYards(e) end
             end
         end
     end
@@ -352,7 +369,8 @@ function S.Preview(on)
                 hp = 1 - i * 0.2, seen = GetTime(), visible = i < 3, yards = 20 * i }
         end
         Draw()
-        Warn("Zoe", nil, "STEALTH", "ROGUE", false)
+        card:Warn("|cffff4040STEALTH|r", Colored("Zoe", "ROGUE") .. " is stealthed 40 yd away",
+            "Interface\\Icons\\Ability_Stealth", "Zoe")
     else
         for i = #list, 1, -1 do list[i] = nil end
         S.Sync()
