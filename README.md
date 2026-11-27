@@ -48,6 +48,8 @@ have not moved a frame uses the place it has outside.
 - `/abg q` queues everything ticked; `/abg q wsg`, `ab`, `av` or `arena` queues one.
 - `/abg leave` leaves your queues.
 - `/abg efc` targets the enemy flag carrier.
+- `/abg sap` casts Sap on the enemy on the stealth card, your target kept. A
+  macro with `/abg sap` and `/aa sap` on one key works everywhere.
 
 ## DLLs it calls
 

@@ -171,6 +171,8 @@ SlashCmdList.AUTOBG = function(msg)
         A.Queue.LeaveQueues()
     elseif word == "efc" then
         A.Carriers.TargetEnemy()
+    elseif word == "sap" then
+        A.SapCard()
     elseif category then
         Settings.OpenToCategory(category:GetID())
     end

@@ -45,6 +45,12 @@ local function Hold(e)
 end
 -- The switch changed: the card on screen follows it.
 function A.SapClick() if onCard then Hold(onCard) end end
+-- /abg sap: Sap on the enemy on the stealth card, your target kept (the player,
+-- 2026-11-27: "that very thing on a Keybind"). With "/aa sap" one macro serves
+-- battlegrounds, the open world and arenas; quiet with no card, as the other line may have one.
+function A.SapCard()
+    if onCard and onCard.guid then C_Spell.CastAtUnit("Sap", onCard.guid) end
+end
 -- Called on every change of an entry's stealth, view or death.
 function A.Detect(e, inBG)
     local on = not e.sample and e.stealth and e.visible and not e.dead and true or nil
