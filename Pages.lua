@@ -129,7 +129,7 @@ SettingsRegistrar:AddRegistrant(function()
     Settings.CreateCheckbox(frames, Proxy("hideRealm", "Hide realm names", Settings.VarType.Boolean),
         "Thandril, not Thandril-NZ."):SetParentInitializer(show, shown)
     Settings.CreateCheckbox(frames, Proxy("yards", "Distance in yards", Settings.VarType.Boolean),
-        "How far each enemy in view is: green to 30 yards, gold to 60, orange beyond; grey when a wall or hill is between you."):SetParentInitializer(show, shown)
+        "How far each enemy in view is: white to 150 yards, orange beyond; grey when a wall or hill is between you."):SetParentInitializer(show, shown)
     Slider(frames, Proxy("width", "Width", Settings.VarType.Number), 100, 320, 1, nil, show, shown)
     Slider(frames, Proxy("height", "Height", Settings.VarType.Number), 14, 48, 1, nil, show, shown)
     Slider(frames, Proxy("text", "Text size", Settings.VarType.Number), 8, 28, 1, nil, show, shown)
@@ -149,6 +149,11 @@ SettingsRegistrar:AddRegistrant(function()
     rows:SetValueChangedCallback(function() A.Spy.Layout() end)
     Slider(spy, rows, 3, 20, 1, nil, list, function() return db.spy end)
     Switch(spy, "spySounds", "Warning sounds", "The stealth warning's sound and a ping for each new enemy.", list)
+    -- Rogues only: no other class can Sap (the player, 2026-11-27).
+    Section(sl, "Stealth card")
+    Switch(spy, "sapClick", "Sap on click", "A left click on the stealth card casts Sap on him; your target stays."
+        .. " Off: the click targets him."):AddShownPredicate(function() return select(2, UnitClass("player")) == "ROGUE" end)
+    Settings.GetSetting("AutoBG_sapClick"):SetValueChangedCallback(function() A.SapClick() end)
 end)
 
 SLASH_AUTOBG1 = "/abg"

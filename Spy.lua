@@ -35,7 +35,16 @@ local function Hold(e)
     e.onCardAs = e.stealth
     card:Warn("|cffff4040" .. e.stealth .. "|r", Line(e), "Interface\\Icons\\" .. (STEALTH_ICON[e.stealth] or "Ability_Stealth"),
         e.name, e.guid, A.StripRealm(e.name) .. " is stealthed near me", true)
+    -- Sap on click, a Rogue's choice (the player, 2026-11-27: off by default, as
+    -- other classes cannot Sap): cast on his GUID, your target kept
+    -- (### frame:SetAttribute, verb "spell", C_Spell.CastAtUnit).
+    if e.guid and db.sapClick and select(2, UnitClass("player")) == "ROGUE" then
+        card:SetAttribute("type1", "spell")
+        card:SetAttribute("spell1", "Sap")
+    end
 end
+-- The switch changed: the card on screen follows it.
+function A.SapClick() if onCard then Hold(onCard) end end
 -- Called on every change of an entry's stealth, view or death.
 function A.Detect(e, inBG)
     local on = not e.sample and e.stealth and e.visible and not e.dead and true or nil

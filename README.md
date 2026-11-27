@@ -34,6 +34,7 @@ The arena frames and the arena stealth tracker are their own addon,
 - **Stealth card** while you see a hidden enemy (stealth, vanish, prowl, meld or
   invisibility), at any distance or behind a wall, with his distance; it goes
   when you no longer see him. A sound when he comes into sight; click to target.
+  Rogues can switch on Sap on click (Spy page): the click casts Sap on him.
 - **Spy list** in the open world: the enemy players around you, with level,
   class, health and distance.
 

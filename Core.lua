@@ -13,7 +13,7 @@ A.db = db
 -- Claude's choices.
 A.DEFAULTS = { queueWSG = false, queueAB = false, queueAV = true, teamsWSG = "fa", teamsAB = "fa",
     queueArena = false, arenaType = "skirmish", queueOnLogin = true, popAlert = true, leave = true, rejoin = true, release = true,
-    barWidth = 200, barHeight = 22, spy = true, spyRows = 10, spySounds = true }
+    barWidth = 200, barHeight = 22, spy = true, spyRows = 10, spySounds = true, sapClick = false }
 A.SIZE_DEFAULTS = {
     [10] = { show = true, hideRealm = true, yards = true, width = 195, height = 25, text = 20 },
     [15] = { show = true, hideRealm = true, yards = true, width = 145, height = 20, text = 15 },
