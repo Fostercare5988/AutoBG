@@ -188,8 +188,10 @@ function A.Drop(f)
     A.Place(f)
 end
 -- A movable frame of ours, dragged with the left button, placed where this
--- battleground has it each time it shows and at each zone.
-function A.Movable(f)
+-- battleground has it each time it shows and at each zone. layer: its strata.
+function A.Movable(f, layer)
+    f.layer = layer or "MEDIUM"
+    f:SetFrameStrata(f.layer)
     f:SetMovable(true)
     f:SetClampedToScreen(true)
     f:EnableMouse(true)
@@ -202,6 +204,12 @@ function A.Movable(f)
     A.Place(f)
 end
 A.OnZone(function() for i = 1, #movables do A.Place(movables[i]) end end)
+-- The preview lifts every frame over the Settings window, which is HIGH and
+-- toplevel (ClassicAPI Settings/Blizzard_SettingsPanel.xml:19): under it, the
+-- cards could not be seen or dragged (the player, 2026-11-28).
+function A.Lift(on)
+    for i = 1, #movables do movables[i]:SetFrameStrata(on and "DIALOG" or movables[i].layer) end
+end
 function A.Surface(f, alpha)
     local back = f:CreateTexture(nil, "BACKGROUND")
     back:SetAllPoints(f)
@@ -225,8 +233,7 @@ function A.Card(name, y)
     c:SetWidth(240)
     c:SetHeight(44)
     c:SetPoint("TOP", UIParent, "TOP", 0, y)
-    c:SetFrameStrata("HIGH")
-    A.Movable(c)
+    A.Movable(c, "HIGH")
     A.UnitButton(c)
     A.Surface(c, 0.75)
     c.icon = c:CreateTexture(nil, "ARTWORK")

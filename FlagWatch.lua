@@ -111,6 +111,8 @@ A.On("PLAYER_ENTERING_WORLD", function()
     if ticker then ticker:Cancel(); ticker = nil end
     card:Hide()
 end)
+-- The sample card stands until the preview ends, to be dragged.
 function FW.Preview(on)
-    if on then card:Warn("Flag: Stables", "Thandril is opening the Stables", A.NodeIcon("Stables", "Horde")) end
+    if not on then return card:Hide() end
+    card:Warn("Flag: Stables", "Thandril is opening the Stables", A.NodeIcon("Stables", "Horde"), nil, nil, nil, true)
 end

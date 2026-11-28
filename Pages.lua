@@ -6,9 +6,11 @@ local db = A.db
 local E = A.Enemies
 
 -- The preview: every frame with samples, to drag; it ends when the window closes.
+A.previewing = false
 function A.Preview(on)
     if A.previewing == on then return end
     A.previewing = on
+    A.Lift(on)
     A.Objectives.Preview(on)
     A.Carriers.Preview(on)
     A.FlagWatch.Preview(on)

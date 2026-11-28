@@ -384,10 +384,12 @@ function S.Preview(on)
                 hp = 1 - i * 0.2, seen = GetTime(), visible = i < 3, yards = 20 * i }
         end
         Draw()
+        -- The sample card stands until the preview ends, to be dragged.
         card:Warn("|cffff4040STEALTH|r", Colored("Zoe", "ROGUE") .. " is stealthed 40 yd away",
-            "Interface\\Icons\\Ability_Stealth", "Zoe")
+            "Interface\\Icons\\Ability_Stealth", "Zoe", nil, nil, true)
     else
         for i = #list, 1, -1 do list[i] = nil end
         S.Sync()
+        Hold(seen[#seen]) -- a hidden enemy still seen in a battleground, or none
     end
 end
